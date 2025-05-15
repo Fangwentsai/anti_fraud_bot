@@ -5,7 +5,9 @@ from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage, FlexSendMessage,
-    QuickReply, QuickReplyButton, MessageAction
+    QuickReply, QuickReplyButton, MessageAction, 
+    BubbleContainer, BoxComponent, ButtonComponent, TextComponent,
+    CarouselContainer, URIAction
 )
 from dotenv import load_dotenv
 import openai
@@ -262,6 +264,9 @@ def parse_fraud_analysis(analysis_result):
 # ChatGPT檢測詐騙訊息函數
 def detect_fraud_with_chatgpt(user_message):
     try:
+        # 檢查是否是網址分析
+        is_url_analysis = "網址是否安全" in user_message or any(domain in user_message for domain in [".com", ".tw", ".org", ".net", "http", "www"])
+        
         # 创建提示，包含用户消息和已知詐騙類型信息
         fraud_info = ""
         for fraud_type, details in fraud_tactics.items():
@@ -270,7 +275,21 @@ def detect_fraud_with_chatgpt(user_message):
                 fraud_info += "常見話術:\n" + "\n".join([f"- {tactic}" for tactic in details.get("常見話術", [])])
                 fraud_info += "\n\n"
         
-        prompt = f"""
+        if is_url_analysis:
+            prompt = f"""
+作為網路安全專家，請分析以下網址是否安全，是否可能是釣魚網站或詐騙相關。
+
+網址/內容:
+{user_message}
+
+請提供:
+1. 安全評估 (安全/可疑/危險)
+2. 分析理由
+3. 使用建議
+4. 如果有風險，說明可能的詐騙類型
+            """
+        else:
+            prompt = f"""
 作為防詐騙顧問，請分析以下訊息是否包含詐騙跡象。請以關懷、支持的語氣回應，提供詳細分析。
 
 用戶訊息:
@@ -287,7 +306,7 @@ def detect_fraud_with_chatgpt(user_message):
 3. 識別出的可疑跡象或說明為什麼不是詐騙
 4. 防範建議和下一步行動
 5. 一句鼓勵或支持的話
-        """
+            """
         
         response = openai.chat.completions.create(
             model=os.environ.get('OPENAI_MODEL', 'gpt-3.5-turbo'),
@@ -367,10 +386,69 @@ def handle_message(event):
     
     # 檢查是否要查詢詐騙類型
     elif "詐騙類型" in user_message or "類型" in user_message or "有哪些詐騙" in user_message:
-        types_text = "目前已收集的詐騙類型有：\n"
-        for fraud_type, info in fraud_types.items():
-            types_text += f"- {fraud_type}：{info['description']}\n"
-        response_text = types_text
+        # 創建詐騙類型的Flex Message按鈕選單
+        bubbles = []
+        
+        # 將詐騙類型分組，每組4個
+        fraud_types_list = list(fraud_types.keys())
+        for i in range(0, len(fraud_types_list), 4):
+            group = fraud_types_list[i:i+4]
+            buttons = []
+            
+            for ft in group:
+                buttons.append(
+                    ButtonComponent(
+                        style="primary",
+                        color="#0078D7",
+                        action=MessageAction(
+                            label=ft[:12] + "..." if len(ft) > 12 else ft,
+                            text=ft
+                        ),
+                        margin="sm"
+                    )
+                )
+            
+            bubble = BubbleContainer(
+                body=BoxComponent(
+                    layout="vertical",
+                    contents=[
+                        TextComponent(text="詐騙類型選單", weight="bold", size="xl", margin="md"),
+                        TextComponent(text="請選擇您想了解的詐騙類型", size="sm", color="#888888", margin="md"),
+                        BoxComponent(
+                            layout="vertical",
+                            margin="lg",
+                            contents=buttons
+                        )
+                    ]
+                )
+            )
+            bubbles.append(bubble)
+        
+        # 創建Carousel容器
+        carousel = CarouselContainer(contents=bubbles)
+        
+        # 發送Flex Message
+        line_bot_api.reply_message(
+            event.reply_token,
+            [
+                TextSendMessage(text="請選擇您想了解的詐騙類型："),
+                FlexSendMessage(alt_text="詐騙類型選單", contents=carousel)
+            ]
+        )
+        
+        # 記錄用戶互動
+        firebase_manager.save_user_interaction(
+            user_id=user_id,
+            display_name=display_name,
+            message=user_message,
+            response="詐騙類型選單",
+            is_fraud_related=False,
+            fraud_type=None,
+            risk_level=None
+        )
+        
+        # 直接返回，不執行後面的回覆訊息
+        return
     
     # 檢查是否要分析詐騙風險
     elif "分析" in user_message or "檢查" in user_message or "是否詐騙" in user_message or "這是詐騙" in user_message:
@@ -380,7 +458,7 @@ def handle_message(event):
             content_to_analyze = content_to_analyze.replace(cmd, "").strip()
         
         if len(content_to_analyze) < 5:
-            response_text = f"{display_name}，請提供更多內容讓我分析是否含有詐騙跡象。您可以分享收到的可疑訊息、電話內容或網站連結等。"
+            response_text = f"{display_name}，請提供更多內容讓我分析是否含有詐騙跡象。您可以輸入「分析」+可疑訊息，例如：\n\n分析 您好，我們是XX銀行，您的帳戶需要重新認證，請點擊連結更新資料..."
         else:
             # 使用ChatGPT進行詐騙分析
             analysis_result = detect_fraud_with_chatgpt(content_to_analyze)
@@ -457,17 +535,27 @@ def handle_message(event):
                 is_fraud_related = True
                 break
     
-    # 如果都不符合，提供一般幫助訊息
+    # 如果都不符合，嘗試分析用戶輸入
     else:
-        help_text = f"{display_name}，我是防詐騙小助手，可以提供以下協助：\n\n"
-        help_text += "1. 查詢「詐騙類型」列表\n"
-        help_text += "2. 輸入特定詐騙類型查看相關資訊\n"
-        help_text += "3. 查詢特定詐騙類型的「案例」\n"
-        help_text += "4. 查詢特定詐騙類型的「處理方法」或「SOP」\n"
-        help_text += "5. 輸入「分析」+訊息內容，檢查是否含有詐騙跡象\n"
-        help_text += "6. 輸入「我的紀錄」查看您的詐騙分析歷史\n\n"
-        help_text += "若您遇到可疑情況，請立即撥打165反詐騙專線尋求協助！"
-        response_text = help_text
+        # 檢查是否是網址或簡短內容
+        if len(user_message) < 30 and ("http" in user_message or "www" in user_message or ".com" in user_message or ".tw" in user_message):
+            # 看起來是網址，進行分析
+            analysis_result = detect_fraud_with_chatgpt(f"這個網址是否安全: {user_message}")
+            response_text = analysis_result
+            
+            # 解析分析結果，判斷是否與詐騙相關
+            risk_level, fraud_type = parse_fraud_analysis(analysis_result)
+            is_fraud_related = risk_level is not None
+        else:
+            help_text = f"{display_name}，我是防詐騙小助手，可以提供以下協助：\n\n"
+            help_text += "1. 查詢「詐騙類型」列表\n"
+            help_text += "2. 輸入特定詐騙類型查看相關資訊\n"
+            help_text += "3. 查詢特定詐騙類型的「案例」\n"
+            help_text += "4. 查詢特定詐騙類型的「處理方法」或「SOP」\n"
+            help_text += "5. 輸入「分析」+訊息內容，檢查是否含有詐騙跡象\n"
+            help_text += "6. 輸入「我的紀錄」查看您的詐騙分析歷史\n\n"
+            help_text += "若您遇到可疑情況，請立即撥打165反詐騙專線尋求協助！"
+            response_text = help_text
     
     # 回覆訊息（加入快速回覆按鈕）
     line_bot_api.reply_message(
