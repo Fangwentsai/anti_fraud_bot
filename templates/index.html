@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>防詐騙小助手管理平台</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .fraud-card {
+            margin-bottom: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .fraud-card-header {
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            padding: 15px;
+            border-radius: 10px 10px 0 0;
+        }
+        .fraud-card-body {
+            padding: 20px;
+        }
+        .section-title {
+            margin-top: 15px;
+            margin-bottom: 10px;
+            color: #495057;
+        }
+        .main-title {
+            color: #343a40;
+            margin-bottom: 30px;
+        }
+        .example-text {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        .sop-item {
+            padding: 8px 0;
+            border-bottom: 1px dashed #e9ecef;
+        }
+        .sop-item:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center main-title">防詐騙小助手管理平台</h1>
+        
+        <div class="row">
+            {% for fraud_type, info in fraud_types.items() %}
+            <div class="col-md-6">
+                <div class="card fraud-card">
+                    <div class="fraud-card-header">
+                        <h2>{{ fraud_type }}</h2>
+                        <p>{{ info.description }}</p>
+                    </div>
+                    <div class="fraud-card-body">
+                        <h4 class="section-title">詐騙案例</h4>
+                        {% if info.examples %}
+                            {% for example in info.examples %}
+                                <div class="example-text">{{ example }}</div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-muted">尚未收集案例</p>
+                        {% endif %}
+                        
+                        <h4 class="section-title">防詐處理方法</h4>
+                        {% if info.sop %}
+                            <ul class="list-unstyled">
+                                {% for step in info.sop %}
+                                    <li class="sop-item">{{ step }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p class="text-muted">尚未設定處理方法</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 
