@@ -3,7 +3,10 @@ import json
 from flask import Flask, request, abort, render_template
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage, FlexSendMessage
+from linebot.models import (
+    MessageEvent, TextMessage, TextSendMessage, FlexSendMessage,
+    QuickReply, QuickReplyButton, MessageAction
+)
 from dotenv import load_dotenv
 import openai
 import logging
@@ -268,7 +271,7 @@ def detect_fraud_with_chatgpt(user_message):
                 fraud_info += "\n\n"
         
         prompt = f"""
-作為防詐騙顧問，請分析以下訊息是否包含詐騙跡象。參考已知詐騙類型和話術，提供詳細分析。
+作為防詐騙顧問，請分析以下訊息是否包含詐騙跡象。請以關懷、支持的語氣回應，提供詳細分析。
 
 用戶訊息:
 {user_message}
@@ -276,27 +279,30 @@ def detect_fraud_with_chatgpt(user_message):
 已知詐騙類型和話術:
 {fraud_info}
 
+如果訊息不是詐騙相關，請友善地說明為什麼，並提供一些相關建議。如果是日常生活問題，請簡單回應並引導用戶回到詐騙防範主題。
+
 請提供:
-1. 詐騙風險評估 (高/中/低)
+1. 詐騙風險評估 (高/中/低/無風險)
 2. 可能的詐騙類型 (如果有)
-3. 識別出的可疑跡象
+3. 識別出的可疑跡象或說明為什麼不是詐騙
 4. 防範建議和下一步行動
+5. 一句鼓勵或支持的話
         """
         
         response = openai.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model=os.environ.get('OPENAI_MODEL', 'gpt-3.5-turbo'),
             messages=[
-                {"role": "system", "content": "你是一位專業的防詐騙顧問，協助用戶識別可能的詐騙風險並提供適當建議。"},
+                {"role": "system", "content": "你是一位專業且親切的防詐騙顧問，協助用戶識別可能的詐騙風險並提供適當建議。你的回應應該既專業又有人情味，讓用戶感到被支持和理解。"},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.3,
+            temperature=0.4,
             max_tokens=800
         )
         
         return response.choices[0].message.content.strip()
     except Exception as e:
         logger.error(f"ChatGPT詐騙檢測失敗: {e}")
-        return "無法分析訊息，請嘗試其他方式獲取協助或直接撥打165反詐騙專線。"
+        return "很抱歉，我暫時無法分析這則訊息。若您擔心可能遇到詐騙，請立即撥打165反詐騙專線尋求專業協助。"
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -328,7 +334,7 @@ def handle_message(event):
     
     # 獲取用戶個人資料
     profile = get_user_profile(user_id)
-    display_name = profile.display_name if profile else "未知用戶"
+    display_name = profile.display_name if profile else "朋友"
     
     # 初始化響應變數
     response_text = ""
@@ -336,18 +342,45 @@ def handle_message(event):
     fraud_type = None
     risk_level = None
     
-    if "詐騙類型" in user_message:
+    # 創建快速回覆按鈕
+    quick_reply = QuickReply(
+        items=[
+            QuickReplyButton(action=MessageAction(label="詐騙類型", text="詐騙類型")),
+            QuickReplyButton(action=MessageAction(label="分析訊息", text="分析")),
+            QuickReplyButton(action=MessageAction(label="我的紀錄", text="我的紀錄"))
+        ]
+    )
+    
+    # 檢查是否是打招呼
+    greetings = ["你好", "哈囉", "嗨", "hi", "hello", "hey"]
+    if any(greeting in user_message.lower() for greeting in greetings):
+        response_text = f"您好，{display_name}！很高興能幫助您。我是防詐騙小助手，可以提供以下協助：\n\n"
+        response_text += "1. 查詢「詐騙類型」列表\n"
+        response_text += "2. 輸入特定詐騙類型查看相關資訊\n"
+        response_text += "3. 查詢特定詐騙類型的「案例」\n"
+        response_text += "4. 查詢特定詐騙類型的「處理方法」或「SOP」\n"
+        response_text += "5. 輸入「分析」+訊息內容，檢查是否含有詐騙跡象\n"
+        response_text += "6. 輸入「我的紀錄」查看您的詐騙分析歷史\n\n"
+        response_text += "若您遇到可疑情況，請立即撥打165反詐騙專線尋求協助！"
+        
+        # 您可以直接點擊下方按鈕快速使用功能
+    
+    # 檢查是否要查詢詐騙類型
+    elif "詐騙類型" in user_message or "類型" in user_message or "有哪些詐騙" in user_message:
         types_text = "目前已收集的詐騙類型有：\n"
         for fraud_type, info in fraud_types.items():
             types_text += f"- {fraud_type}：{info['description']}\n"
         response_text = types_text
     
-    elif "分析" in user_message or "檢查" in user_message or "是否詐騙" in user_message:
+    # 檢查是否要分析詐騙風險
+    elif "分析" in user_message or "檢查" in user_message or "是否詐騙" in user_message or "這是詐騙" in user_message:
         # 移除指令部分，只分析主要内容
-        content_to_analyze = user_message.replace("分析", "").replace("檢查", "").replace("是否詐騙", "").strip()
+        content_to_analyze = user_message
+        for cmd in ["分析", "檢查", "是否詐騙", "這是詐騙"]:
+            content_to_analyze = content_to_analyze.replace(cmd, "").strip()
         
         if len(content_to_analyze) < 5:
-            response_text = "請提供更多內容讓我分析是否含有詐騙跡象。"
+            response_text = f"{display_name}，請提供更多內容讓我分析是否含有詐騙跡象。您可以分享收到的可疑訊息、電話內容或網站連結等。"
         else:
             # 使用ChatGPT進行詐騙分析
             analysis_result = detect_fraud_with_chatgpt(content_to_analyze)
@@ -357,7 +390,8 @@ def handle_message(event):
             risk_level, fraud_type = parse_fraud_analysis(analysis_result)
             is_fraud_related = risk_level is not None
     
-    elif "我的紀錄" in user_message or "查詢紀錄" in user_message:
+    # 檢查是否要查詢紀錄
+    elif "我的紀錄" in user_message or "查詢紀錄" in user_message or "歷史紀錄" in user_message:
         # 獲取用戶詐騙報告歷史
         reports = firebase_manager.get_user_fraud_reports(user_id)
         
@@ -369,14 +403,15 @@ def handle_message(event):
                 response_text += f"   風險等級: {report.get('risk_level', '未評估')}\n"
                 response_text += f"   訊息: {report.get('message', '')[:30]}...\n\n"
         else:
-            response_text = f"{display_name}，您目前還沒有詐騙分析記錄。"
-        
-    elif any(fraud_type in user_message for fraud_type in fraud_types):
-        # 找出用戶提到的詐騙類型
-        for ft, info in fraud_types.items():
-            if ft in user_message:
-                fraud_type = ft
-                if "案例" in user_message:
+            response_text = f"{display_name}，您目前還沒有詐騙分析記錄。若有可疑訊息，可以輸入「分析」+內容，我會幫您評估風險。"
+    
+    # 檢查是否要查詢案例
+    elif "案例" in user_message:
+        if any(fraud_type in user_message for fraud_type in fraud_types):
+            # 找出用戶提到的詐騙類型
+            for ft, info in fraud_types.items():
+                if ft in user_message:
+                    fraud_type = ft
                     if info["examples"]:
                         examples_text = f"{ft}的案例：\n"
                         for i, example in enumerate(info["examples"], 1):
@@ -384,7 +419,18 @@ def handle_message(event):
                         response_text = examples_text
                     else:
                         response_text = f"目前還沒有收集到{ft}的案例，敬請期待。"
-                elif "處理方法" in user_message or "SOP" in user_message:
+                    is_fraud_related = True
+                    break
+        else:
+            response_text = f"{display_name}，您想了解哪種詐騙類型的案例呢？可以輸入「詐騙類型」查看所有類型，再選擇特定類型查詢案例，例如「網路購物詐騙案例」。"
+    
+    # 檢查是否要查詢處理方法
+    elif "處理方法" in user_message or "SOP" in user_message or "怎麼處理" in user_message:
+        if any(fraud_type in user_message for fraud_type in fraud_types):
+            # 找出用戶提到的詐騙類型
+            for ft, info in fraud_types.items():
+                if ft in user_message:
+                    fraud_type = ft
                     if info["sop"]:
                         sop_text = f"{ft}的處理方法：\n"
                         for i, step in enumerate(info["sop"], 1):
@@ -392,30 +438,41 @@ def handle_message(event):
                         response_text = sop_text
                     else:
                         response_text = f"目前還沒有收集到{ft}的處理方法，敬請期待。"
-                else:
-                    info_text = f"{ft}：{info['description']}\n\n"
-                    info_text += "您可以詢問相關案例或處理方法。"
-                    response_text = info_text
-                
-                # 標記為詐騙相關查詢
+                    is_fraud_related = True
+                    break
+        else:
+            response_text = f"{display_name}，您想了解哪種詐騙類型的處理方法呢？可以輸入「詐騙類型」查看所有類型，再選擇特定類型查詢處理方法，例如「網路購物詐騙處理方法」。"
+    
+    # 檢查是否提到特定詐騙類型
+    elif any(fraud_type in user_message for fraud_type in fraud_types):
+        # 找出用戶提到的詐騙類型
+        for ft, info in fraud_types.items():
+            if ft in user_message:
+                fraud_type = ft
+                info_text = f"{ft}：{info['description']}\n\n"
+                info_text += "您可以詢問相關案例或處理方法，例如：\n"
+                info_text += f"• {ft}案例\n"
+                info_text += f"• {ft}處理方法"
+                response_text = info_text
                 is_fraud_related = True
                 break
-                    
+    
+    # 如果都不符合，提供一般幫助訊息
     else:
-        help_text = f"您好，{display_name}！我是防詐騙小助手，可以提供以下協助：\n"
+        help_text = f"{display_name}，我是防詐騙小助手，可以提供以下協助：\n\n"
         help_text += "1. 查詢「詐騙類型」列表\n"
         help_text += "2. 輸入特定詐騙類型查看相關資訊\n"
         help_text += "3. 查詢特定詐騙類型的「案例」\n"
         help_text += "4. 查詢特定詐騙類型的「處理方法」或「SOP」\n"
         help_text += "5. 輸入「分析」+訊息內容，檢查是否含有詐騙跡象\n"
-        help_text += "6. 輸入「我的紀錄」查看您的詐騙分析歷史\n"
-        help_text += "\n若您遇到可疑情況，請立即撥打165反詐騙專線尋求協助！"
+        help_text += "6. 輸入「我的紀錄」查看您的詐騙分析歷史\n\n"
+        help_text += "若您遇到可疑情況，請立即撥打165反詐騙專線尋求協助！"
         response_text = help_text
     
-    # 回覆訊息
+    # 回覆訊息（加入快速回覆按鈕）
     line_bot_api.reply_message(
         event.reply_token,
-        TextSendMessage(text=response_text)
+        TextSendMessage(text=response_text, quick_reply=quick_reply)
     )
     
     # 記錄用戶互動
