@@ -91,6 +91,141 @@
       "source": "165反詐騙資料庫",
       "keywords": ["AI算法", "自動交易", "穩定獲利", "財務自由", "限時優惠", "體驗金"],
       "explanation": "承諾「穩定高報酬」的投資幾乎都是詐騙。正規投資管道會強調風險，不會宣稱有穩賺不賠的系統。"
+    },
+    {
+      "id": 11,
+      "fraud_message": "【交通部通知】您有一筆交通罰鍰逾期未繳，為避免影響您的信用，請立即點擊連結處理：https://mvdis-gov.vip/penalty",
+      "fraud_type": "釣魚簡訊詐騙",
+      "difficulty": "easy",
+      "source": "165反詐騙資料庫",
+      "keywords": ["交通部", "罰鍰", "逾期未繳", "信用", "連結"],
+      "explanation": "政府機關不會使用.vip等非官方網域發送通知。交通罰鍰應至監理服務網或官方App查詢繳納。"
+    },
+    {
+      "id": 12,
+      "fraud_message": "您的帳戶因安全問題已被暫時鎖定，請立即登入網路銀行進行解鎖，否則將永久停用：https://ebank-reset.com/login",
+      "fraud_type": "釣魚郵件詐騙",
+      "difficulty": "medium",
+      "source": "165反詐騙資料庫",
+      "keywords": ["帳戶鎖定", "網路銀行", "解鎖", "永久停用"],
+      "explanation": "這是典型的釣魚郵件，企圖騙取您的網銀帳號密碼。請勿點擊不明郵件中的連結，應由銀行官方網站登入。"
+    },
+    {
+      "id": 13,
+      "fraud_message": "【求職快訊】誠徵打字員，在家工作，日薪$3000-$5000，免經驗，工作輕鬆。意者請加LINE: easyjob888 詳談。",
+      "fraud_type": "假求職詐騙",
+      "difficulty": "easy",
+      "source": "165反詐騙資料庫",
+      "keywords": ["求職", "打字員", "在家工作", "日薪高", "免經驗", "LINE"],
+      "explanation": "號稱高薪、低門檻、工作輕鬆的職缺，多半是詐騙。可能會要求您提供存摺、提款卡作為人頭帳戶。"
+    },
+    {
+      "id": 14,
+      "fraud_message": "【點數到期通知】親愛的會員，您有588點OPENPOINT點數即將於明日到期，請立即點擊連結兌換商品，以免權益受損：https://openpoint-gift.me/exchange",
+      "fraud_type": "釣魚簡訊詐騙",
+      "difficulty": "medium",
+      "source": "165反詐騙資料庫",
+      "keywords": ["點數到期", "OPENPOINT", "兌換商品", "權益受損"],
+      "explanation": "詐騙集團常冒用知名超商或點數平台名義發送釣魚簡訊。請透過官方App或網站查詢點數狀態。"
+    },
+    {
+      "id": 15,
+      "fraud_message": "【中油通知】恭喜您獲得加油金回饋資格，儲值$5000送$2000，請點擊活動連結參加：https://cpc-tw-event.org/bonus",
+      "fraud_type": "假冒企業詐騙",
+      "difficulty": "medium",
+      "source": "165反詐騙資料庫",
+      "keywords": ["中油", "加油金", "回饋", "儲值優惠"],
+      "explanation": "中油等大型企業的官方活動都會在官方網站或App公告，不會使用非官方網域的連結。儲值金額與贈送金額不成比例，也是常見的詐騙特徵。"
+    },
+    {
+      "id": 16,
+      "fraud_message": "我是區公所社會局人員，關於您申請的育兒津貼，因資料有誤無法撥款。請提供您的銀行帳號、身分證字號以便重新核對。",
+      "fraud_type": "假冒政府詐騙",
+      "difficulty": "easy",
+      "source": "165反詐騙資料庫",
+      "keywords": ["區公所", "社會局", "育兒津貼", "資料有誤", "銀行帳號", "身分證字號"],
+      "explanation": "公家機關承辦人員不會主動以電話或簡訊要求民眾提供銀行帳號或身分證等敏感個資。"
+    },
+    {
+      "id": 17,
+      "fraud_message": "【電費催繳】台電提醒您，您本期尚有電費$1,280元未繳，為避免停電，請點此連結進行線上繳費：https://taipower-pay.info/bill",
+      "fraud_type": "釣魚簡訊詐騙",
+      "difficulty": "medium",
+      "source": "165反詐騙資料庫",
+      "keywords": ["電費", "催繳", "台電", "停電", "線上繳費"],
+      "explanation": "台電的官方網址是 `https://www.taipower.com.tw`。任何其他可疑網域都可能是釣魚網站。"
+    },
+    {
+      "id": 18,
+      "fraud_message": "您好，這裡是郵局包裹處理中心，您有一件國際快捷郵件因地址不符無法投遞，請加LINE ID: postoffice_cs 與客服聯繫更改地址。",
+      "fraud_type": "假冒機構詐騙",
+      "difficulty": "easy",
+      "source": "165反詐騙資料庫",
+      "keywords": ["郵局", "包裹處理中心", "國際快捷", "地址不符", "LINE客服"],
+      "explanation": "郵局不會要求民眾加入LINE私下聯繫處理郵務問題。應透過官方網站或電話查詢。"
+    },
+    {
+      "id": 19,
+      "fraud_message": "【股票內線】獨家飆股資訊，保證每月獲利30%以上！名額有限，請立即加入老師的LINE群組：stock_master88",
+      "fraud_type": "假投資詐騙",
+      "difficulty": "hard",
+      "source": "165反詐騙資料庫",
+      "keywords": ["股票", "內線", "飆股", "保證獲利", "LINE群組", "老師"],
+      "explanation": "宣稱有內線消息、保證獲利的股票投資都是詐騙。投資應循合法管道，並注意風險。"
+    },
+    {
+      "id": 20,
+      "fraud_message": "【遊戲橘子】您的GASH點數帳戶有異常登入記錄，為確保安全，請點擊連結修改密碼：https://gashpoint-security.net/reset",
+      "fraud_type": "釣魚郵件詐騙",
+      "difficulty": "medium",
+      "source": "165反詐騙資料庫",
+      "keywords": ["遊戲橘子", "GASH", "異常登入", "修改密碼"],
+      "explanation": "遊戲公司不會主動要求玩家點擊郵件中的連結修改密碼。應直接從官方網站登入操作。"
+    },
+    {
+      "id": 21,
+      "fraud_message": "您在「旋轉拍賣」刊登的商品已被下單，但買家表示無法完成付款。請加入LINE客服ID: carousell_pay協助處理。",
+      "fraud_type": "網路購物詐騙",
+      "difficulty": "medium",
+      "source": "165反詐騙資料庫",
+      "keywords": ["旋轉拍賣", "下單", "無法付款", "LINE客服"],
+      "explanation": "這是常見的「假買家」詐騙手法，誘騙賣家脫離平台私下聯繫，再以各種理由要求匯款或操作ATM。"
+    },
+    {
+      "id": 22,
+      "fraud_message": "【防疫補助金】最後機會！政府將發放$5000元防疫補助，請點擊連結登記，24小時後截止：https://health-bonus.com/register",
+      "fraud_type": "假冒政府詐騙",
+      "difficulty": "easy",
+      "source": "165反詐騙資料庫",
+      "keywords": ["防疫補助金", "最後機會", "登記", "24小時截止"],
+      "explanation": "政府發放補助金都會有正式公告，不會以限時、緊急的方式透過簡訊通知。"
+    },
+    {
+      "id": 23,
+      "fraud_message": "誠徵家庭代工，手工串珠/包裝，論件計酬，材料免費，在家輕鬆賺外快。詳情請洽LINE: handmade_easy",
+      "fraud_type": "假求職詐騙",
+      "difficulty": "easy",
+      "source": "165反詐騙資料庫",
+      "keywords": ["家庭代工", "手工", "論件計酬", "材料免費", "輕鬆賺外快"],
+      "explanation": "許多家庭代工詐騙會要求先支付保證金或材料費，或是騙取個資。應選擇有信譽的平台或公司。"
+    },
+    {
+      "id": 24,
+      "fraud_message": "【遠通電收ETC】您有通行費$45元未繳，為避免產生罰單，請點此連結補繳：https://fetc-service.online/payment",
+      "fraud_type": "釣魚簡訊詐騙",
+      "difficulty": "medium",
+      "source": "165反詐騙資料庫",
+      "keywords": ["遠通電收", "ETC", "通行費未繳", "罰單", "補繳"],
+      "explanation": "遠通電收的官方網址是 `https://www.fetc.net.tw/`。詐騙簡訊常使用相似但非官方的網址。"
+    },
+    {
+      "id": 25,
+      "fraud_message": "親愛的用戶，您的Facebook帳號被偵測到異常活動，疑似遭盜用。請點擊以下連結驗證您的身份，否則帳號將被永久停用：https://facebook-security-check.info/verify",
+      "fraud_type": "釣魚郵件詐騙",
+      "difficulty": "medium",
+      "source": "165反詐騙資料庫",
+      "keywords": ["Facebook", "異常活動", "盜用", "驗證身份", "永久停用"],
+      "explanation": "社群平台不會透過郵件要求用戶點擊連結驗證身份。若有安全疑慮，應直接從官方App或網站登入檢查。"
     }
   ]
 } 
