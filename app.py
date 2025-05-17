@@ -616,8 +616,10 @@ def handle_message(event):
         return
 
     # 遊戲觸發
-    game_trigger_keywords = ["選哪顆土豆", "玩遊戲", "開始遊戲", "選土豆", "potato game"]
-    if text_message.lower() in game_trigger_keywords:
+    game_trigger_keywords = ["選哪顆土豆", "玩遊戲", "開始遊戲", "選土豆", "potato game", 
+                           "我要玩選土豆", "我要玩選土豆遊戲", "想玩選土豆", "選土豆遊戲", 
+                           "玩選土豆", "玩選哪顆土豆", "我要玩選哪顆土豆", "來玩選土豆"]
+    if any(keyword in text_message.lower() for keyword in game_trigger_keywords):
         logger.info(f"User {user_id} triggered potato game.")
         firebase_manager.save_user_interaction(
             user_id, display_name, text_message, 
