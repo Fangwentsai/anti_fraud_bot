@@ -5,6 +5,7 @@ import datetime
 from typing import Dict, List, Any, Optional
 import firebase_admin
 from firebase_admin import credentials, firestore
+import random
 
 logger = logging.getLogger(__name__)
 
@@ -241,6 +242,38 @@ class FirebaseManager:
             logger.error(f"獲取詐騙統計數據失敗: {e}")
             return {}
 
+    def get_random_fraud_report_for_game(self) -> Optional[Dict[str, Any]]:
+        """
+        從 'fraud_reports' 隨機獲取一份報告用於遊戲題目
+        """
+        if not self.db:
+            logger.error("Firebase未初始化，無法獲取遊戲題目")
+            return None
+        try:
+            # 限制最多取最近的100條來選，並按時間倒序，讓較新的詐騙優先
+            reports_ref = self.db.collection('fraud_reports').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(100).stream()
+            reports_list = []
+            for doc in reports_ref:
+                report = doc.to_dict()
+                # 確保選中的報告包含必要欄位 (message 存在且不為空, fraud_type 存在)
+                if report.get('message') and report.get('fraud_type'):
+                    reports_list.append({
+                        'message': report['message'],
+                        'fraud_type': report.get('fraud_type', '未知類型')
+                        # 您可以根據需要添加更多字段，如 risk_level，用於更詳細的解釋
+                    })
+            
+            if not reports_list:
+                logger.info("fraud_reports 中沒有符合條件的數據來生成遊戲題目 (message 和 fraud_type 不能为空)")
+                return None
+            
+            selected_report = random.choice(reports_list)
+            return selected_report
+
+        except Exception as e:
+            logger.error(f"為遊戲獲取隨機詐騙報告失敗: {e}")
+            return None
+
     def save_emerging_fraud_report(self, user_id: str, display_name: str, user_message: str,
                                    chatgpt_analysis: str, status: str = "pending_review") -> bool:
         """
@@ -265,4 +298,66 @@ class FirebaseManager:
         
         except Exception as e:
             logger.error(f"保存新興詐騙回報失敗: {e}")
+            return False
+
+    def get_pending_emerging_reports(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """
+        獲取所有待審核 (pending_review) 的新興詐騙報告
+        Args:
+            limit: 最大返回報告數量
+        Returns:
+            待審核報告列表，每個報告包含ID和數據
+        """
+        if not self.db:
+            logger.error("Firebase未初始化，無法獲取待審核報告")
+            return []
+        
+        try:
+            query = (self.db.collection('emerging_fraud_reports')
+                     .where('status', '==', 'pending_review')
+                     .order_by('timestamp', direction=firestore.Query.ASCENDING)
+                     .limit(limit))
+            
+            reports = []
+            for doc in query.stream():
+                report_data = doc.to_dict()
+                report_data['id'] = doc.id # 將文檔ID也加入到數據中
+                if 'timestamp' in report_data and isinstance(report_data['timestamp'], datetime.datetime):
+                    report_data['timestamp'] = report_data['timestamp'].strftime('%Y-%m-%d %H:%M:%S')
+                reports.append(report_data)
+            
+            logger.info(f"獲取到 {len(reports)} 筆待審核的新興詐騙報告")
+            return reports
+        except Exception as e:
+            logger.error(f"獲取待審核新興詐騙報告失敗: {e}")
+            return []
+
+    def update_emerging_report_status(self, report_id: str, new_status: str, processed_data: Optional[Dict[str, Any]] = None) -> bool:
+        """
+        更新特定新興詐騙報告的狀態，並可選擇性存儲處理後的結構化數據
+        Args:
+            report_id: 要更新的報告文檔ID
+            new_status: 新的狀態 (e.g., 'categorized', 'rejected', 'needs_more_info')
+            processed_data: (可選) AI處理後的結構化詐騙資訊
+        Returns:
+            是否成功更新
+        """
+        if not self.db:
+            logger.error("Firebase未初始化，無法更新報告狀態")
+            return False
+        
+        try:
+            report_ref = self.db.collection('emerging_fraud_reports').document(report_id)
+            update_payload = {
+                'status': new_status,
+                'last_updated': datetime.datetime.now()
+            }
+            if processed_data:
+                update_payload['processed_structured_info'] = processed_data
+            
+            report_ref.update(update_payload)
+            logger.info(f"成功更新報告 {report_id} 狀態為 {new_status}")
+            return True
+        except Exception as e:
+            logger.error(f"更新報告 {report_id} 狀態失敗: {e}")
             return False 
