@@ -14,6 +14,7 @@ import openai
 import logging
 from firebase_manager import FirebaseManager
 import random
+import datetime  # 導入datetime用於時間比較
 
 load_dotenv()
 
@@ -35,6 +36,21 @@ firebase_manager = FirebaseManager.get_instance()
 
 # 用戶遊戲狀態
 user_game_state = {}
+
+# 用戶最後聊天時間記錄
+user_last_chat_time = {}
+
+# 定義防詐小知識
+anti_fraud_tips = [
+    "🔍 收到不明連結？先確認發信人身分，再三思而後行。點擊前問自己：這真的必要嗎？",
+    "🔐 請定期更換密碼，並避免在不同平台使用相同的密碼組合。建議使用密碼管理工具！",
+    "📱 接到自稱銀行、警方的電話？掛斷後，主動撥打官方電話確認，不要回撥對方提供的號碼。",
+    "💰 投資報酬率高得不合理？記住：天下沒有白吃的午餐，高報酬必有高風險！",
+    "🤝 網路交友要謹慎，短時間內就談及金錢往來的「好友」很可能是詐騙集團。",
+    "🏦 真正的銀行絕不會請你操作ATM「解除設定」、「升級系統」或「確認身分」。",
+    "🛒 網購只用正規平台，交易時留在平台內完成，切勿私下交易或提前付款。",
+    "🎮 購買遊戲點數前，先確認用途，若是給陌生人或解凍帳戶使用，極可能是詐騙！"
+]
 
 # 詐騙類型分類
 fraud_types = {
@@ -564,10 +580,38 @@ def handle_message(event):
     user_id = event.source.user_id
     text_message = event.message.text.strip()
     reply_token = event.reply_token # Get reply_token
-
+    
     profile = get_user_profile(user_id)
     display_name = profile.display_name if profile and profile.display_name else "使用者"
     logger.info(f"接收到來自 {display_name}({user_id}) 的訊息: {text_message}")
+    
+    # 檢查是否需要重新開始對話（超過5分鐘）
+    current_time = datetime.datetime.now()
+    should_reset_conversation = False
+    
+    if user_id in user_last_chat_time:
+        time_diff = current_time - user_last_chat_time[user_id]
+        if time_diff.total_seconds() > 300:  # 5分鐘 = 300秒
+            should_reset_conversation = True
+            logger.info(f"用戶 {user_id} 超過5分鐘沒有互動，重新開始對話")
+    
+    # 更新最後聊天時間
+    user_last_chat_time[user_id] = current_time
+    
+    # 如果需要重新開始對話，發送問候
+    if should_reset_conversation and text_message not in ["詐騙類型列表", "有哪些詐騙", "選哪顆土豆", "玩遊戲", "開始遊戲", "選土豆", "potato game"]:
+        # 隨機選擇一個防詐小知識
+        tip = random.choice(anti_fraud_tips)
+        greeting_text = f"{display_name}您好！很高興再次與您交流。\n\n今日防詐小知識：\n{tip}\n\n有什麼我能幫您的嗎？"
+        
+        quick_reply = QuickReply(items=[
+            QuickReplyButton(action=MessageAction(label="看看詐騙類型", text="詐騙類型列表")),
+            QuickReplyButton(action=MessageAction(label="玩「選土豆」遊戲", text="選哪顆土豆")),
+        ])
+        
+        line_bot_api.reply_message(reply_token, TextSendMessage(text=greeting_text, quick_reply=quick_reply))
+        firebase_manager.save_user_interaction(user_id, display_name, text_message, "自動重新開始對話並提供防詐小知識", is_fraud_related=False)
+        return
 
     # 遊戲觸發
     game_trigger_keywords = ["選哪顆土豆", "玩遊戲", "開始遊戲", "選土豆", "potato game"]
@@ -674,6 +718,29 @@ def handle_message(event):
         firebase_manager.save_user_interaction(user_id, display_name, text_message, "回覆問候語與功能選單")
         return
         
+    # 如果不是任何特定指令，視為閒聊並有機會回覆防詐小知識
+    if not any(keyword in text_message for keyword in ["詐騙類型", "我想了解", "選哪顆土豆", "玩遊戲"]):
+        # 30%機率回覆防詐小知識，70%機率正常分析
+        if random.random() < 0.3:
+            tip = random.choice(anti_fraud_tips)
+            reply_text = f"{display_name}，和您聊天很愉快！順便分享一則防詐小知識：\n\n{tip}\n\n您想了解更多防詐資訊嗎？"
+            
+            quick_reply = QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label="看看詐騙類型", text="詐騙類型列表")),
+                QuickReplyButton(action=MessageAction(label="玩「選土豆」遊戲", text="選哪顆土豆")),
+            ])
+            
+            firebase_manager.save_user_interaction(
+                user_id, display_name, text_message, 
+                reply_text, is_fraud_related=False
+            )
+            
+            line_bot_api.reply_message(
+                reply_token, 
+                TextSendMessage(text=reply_text, quick_reply=quick_reply)
+            )
+            return
+    
     # 預設使用ChatGPT進行分析
     logger.info(f"將訊息傳送給ChatGPT進行分析: {text_message}")
     analysis_result_text = detect_fraud_with_chatgpt(text_message, display_name)
