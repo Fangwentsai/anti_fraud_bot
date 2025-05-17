@@ -396,16 +396,21 @@ def send_potato_game_question(user_id, reply_token):
         return
 
     false_potato_text = report_data['message']
-    true_potato_text = "這是一個相對安全的提示或做法：保持警惕，仔細核實信息來源，不要輕易透露個人敏感資料或進行轉帳操作。遇到可疑情況請與家人朋友商量或報警。"
     
-    options_display_texts = [false_potato_text, true_potato_text]
+    # 創建兩個不同的安全訊息（真土豆）
+    true_potato_text1 = "這是安全的做法：保持警惕，仔細核實信息來源，不要輕易透露個人敏感資料或進行轉帳操作。遇到可疑情況請與家人朋友商量或報警。"
+    true_potato_text2 = "這是保障安全的建議：定期更新密碼，使用雙重認證，不要在公共Wi-Fi下登入銀行賬戶，收到可疑訊息時先聯絡官方客服核實，不要點擊不明來源的連結。"
+    
+    # 打亂三個選項的順序
+    options_display_texts = [false_potato_text, true_potato_text1, true_potato_text2]
     random.shuffle(options_display_texts)
 
     user_game_state[user_id] = {
         'false_potato_original': false_potato_text,
         'fraud_type_for_explanation': report_data['fraud_type'],
         'option_A_text': options_display_texts[0],
-        'option_B_text': options_display_texts[1]
+        'option_B_text': options_display_texts[1],
+        'option_C_text': options_display_texts[2]
     }
 
     flex_message_content = BubbleContainer(
@@ -420,6 +425,9 @@ def send_potato_game_question(user_id, reply_token):
                 SeparatorComponent(margin='lg'),
                 TextComponent(text='選項 B:', weight='bold', size='md', margin='lg'),
                 TextComponent(text=options_display_texts[1][:250] + '...' if len(options_display_texts[1]) > 250 else options_display_texts[1], wrap=True, size='sm', margin='sm'),
+                SeparatorComponent(margin='lg'),
+                TextComponent(text='選項 C:', weight='bold', size='md', margin='lg'),
+                TextComponent(text=options_display_texts[2][:250] + '...' if len(options_display_texts[2]) > 250 else options_display_texts[2], wrap=True, size='sm', margin='sm'),
             ]
         ),
         footer=BoxComponent(
@@ -437,6 +445,12 @@ def send_potato_game_question(user_id, reply_token):
                     color='#A0522D', 
                     height='sm',
                     action=PostbackAction(label='選 B', data=f'action=potato_game_answer&chosen_option_id=B&uid={user_id}')
+                ),
+                ButtonComponent(
+                    style='primary',
+                    color='#8B4513', 
+                    height='sm',
+                    action=PostbackAction(label='選 C', data=f'action=potato_game_answer&chosen_option_id=C&uid={user_id}')
                 )
             ]
         )
@@ -469,6 +483,8 @@ def handle_potato_game_answer(user_id, reply_token, data_params):
         chosen_text = game_data['option_A_text']
     elif chosen_option_id == 'B':
         chosen_text = game_data['option_B_text']
+    elif chosen_option_id == 'C':
+        chosen_text = game_data['option_C_text']
     else:
         line_bot_api.reply_message(reply_token, TextSendMessage(text="選擇出錯了，請重新玩一次哦。"))
         return
