@@ -250,24 +250,64 @@ class FirebaseManager:
             logger.error("Firebase未初始化，無法獲取遊戲題目")
             return None
         try:
-            # 限制最多取最近的100條來選，並按時間倒序，讓較新的詐騙優先
-            reports_ref = self.db.collection('fraud_reports').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(100).stream()
-            reports_list = []
-            for doc in reports_ref:
+            # 嘗試獲取風險等級為 '中' 或 '高' 的報告，增加獲取數量以提高篩選基數
+            query = (
+                self.db.collection('fraud_reports')
+                .where('risk_level', 'in', ['中', '高'])
+                .order_by('timestamp', direction=firestore.Query.DESCENDING)
+                .limit(200) # 增加limit以獲取更多候選
+            )
+            reports_stream = query.stream()
+            
+            valid_reports_for_game = []
+            generic_fraud_types = ['未知', '未知類型', '非詐騙相關', '不確定']
+            min_message_length = 10 # 訊息最小長度
+
+            for doc in reports_stream:
                 report = doc.to_dict()
-                # 確保選中的報告包含必要欄位 (message 存在且不為空, fraud_type 存在)
-                if report.get('message') and report.get('fraud_type'):
-                    reports_list.append({
-                        'message': report['message'],
-                        'fraud_type': report.get('fraud_type', '未知類型')
-                        # 您可以根據需要添加更多字段，如 risk_level，用於更詳細的解釋
+                message_text = report.get('message')
+                fraud_type = report.get('fraud_type')
+                risk_level = report.get('risk_level') # 確保也獲取risk_level來判斷
+
+                # 嚴格的過濾條件
+                if (message_text and 
+                    isinstance(message_text, str) and 
+                    len(message_text.strip()) > min_message_length and
+                    fraud_type and
+                    fraud_type not in generic_fraud_types and
+                    risk_level in ['中', '高']): # 再次確認 risk_level
+                    valid_reports_for_game.append({
+                        'message': message_text,
+                        'fraud_type': fraud_type
                     })
             
-            if not reports_list:
-                logger.info("fraud_reports 中沒有符合條件的數據來生成遊戲題目 (message 和 fraud_type 不能为空)")
+            if not valid_reports_for_game:
+                logger.warning("在 'fraud_reports' 中未找到符合遊戲條件的詐騙報告 (風險中/高, 明確詐騙類型, 訊息長度 > 10)。嘗試放寬條件查詢所有報告。")
+                # 如果嚴格條件下找不到，嘗試從所有報告中篩選，但仍應用基本過濾
+                all_reports_stream = self.db.collection('fraud_reports').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(300).stream()
+                for doc in all_reports_stream:
+                    report = doc.to_dict()
+                    message_text = report.get('message')
+                    fraud_type = report.get('fraud_type')
+                    # 放寬條件：至少訊息長度和詐騙類型需要有意義
+                    if (message_text and 
+                        isinstance(message_text, str) and 
+                        len(message_text.strip()) > min_message_length and
+                        fraud_type and
+                        fraud_type not in generic_fraud_types):
+                        valid_reports_for_game.append({
+                            'message': message_text,
+                            'fraud_type': fraud_type
+                        })
+                        if len(valid_reports_for_game) >= 50: # 避免過多候選
+                            break 
+            
+            if not valid_reports_for_game:
+                logger.error("即使放寬條件後，fraud_reports 中仍沒有符合遊戲條件的數據 (message長度>10, fraud_type非模糊)。遊戲可能無題目可出。")
                 return None
             
-            selected_report = random.choice(reports_list)
+            selected_report = random.choice(valid_reports_for_game)
+            logger.info(f"為遊戲選取的詐騙報告: fraud_type='{selected_report['fraud_type']}', message='{selected_report['message'][:30]}...'" )
             return selected_report
 
         except Exception as e:
