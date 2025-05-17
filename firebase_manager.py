@@ -250,45 +250,59 @@ class FirebaseManager:
             logger.error("Firebase未初始化，無法獲取遊戲題目")
             return None
         try:
-            # 嘗試獲取風險等級為 '中' 或 '高' 的報告，增加獲取數量以提高篩選基數
-            query = (
-                self.db.collection('fraud_reports')
-                .where('risk_level', 'in', ['中', '高'])
-                .order_by('timestamp', direction=firestore.Query.DESCENDING)
-                .limit(200) # 增加limit以獲取更多候選
-            )
-            reports_stream = query.stream()
-            
             valid_reports_for_game = []
             generic_fraud_types = ['未知', '未知類型', '非詐騙相關', '不確定']
-            min_message_length = 10 # 訊息最小長度
-
-            for doc in reports_stream:
-                report = doc.to_dict()
-                message_text = report.get('message')
-                fraud_type = report.get('fraud_type')
-                risk_level = report.get('risk_level') # 確保也獲取risk_level來判斷
-
-                # 嚴格的過濾條件
-                if (message_text and 
-                    isinstance(message_text, str) and 
-                    len(message_text.strip()) > min_message_length and
-                    fraud_type and
-                    fraud_type not in generic_fraud_types and
-                    risk_level in ['中', '高']): # 再次確認 risk_level
-                    valid_reports_for_game.append({
-                        'message': message_text,
-                        'fraud_type': fraud_type
-                    })
+            min_message_length = 10  # 訊息最小長度
             
-            if not valid_reports_for_game:
-                logger.warning("在 'fraud_reports' 中未找到符合遊戲條件的詐騙報告 (風險中/高, 明確詐騙類型, 訊息長度 > 10)。嘗試放寬條件查詢所有報告。")
-                # 如果嚴格條件下找不到，嘗試從所有報告中篩選，但仍應用基本過濾
-                all_reports_stream = self.db.collection('fraud_reports').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(300).stream()
-                for doc in all_reports_stream:
+            # 使用簡單查詢，避免需要複合索引
+            try:
+                # 先嘗試簡單查詢，只獲取最近的報告，然後在應用層過濾
+                simple_query = (
+                    self.db.collection('fraud_reports')
+                    .order_by('timestamp', direction=firestore.Query.DESCENDING)
+                    .limit(200)
+                )
+                reports_stream = simple_query.stream()
+                
+                for doc in reports_stream:
                     report = doc.to_dict()
                     message_text = report.get('message')
                     fraud_type = report.get('fraud_type')
+                    risk_level = report.get('risk_level')
+                    
+                    # 在應用層進行過濾
+                    if (message_text and 
+                        isinstance(message_text, str) and 
+                        len(message_text.strip()) > min_message_length and
+                        fraud_type and
+                        fraud_type not in generic_fraud_types and
+                        risk_level in ['中', '高']):
+                        valid_reports_for_game.append({
+                            'message': message_text,
+                            'fraud_type': fraud_type
+                        })
+                        if len(valid_reports_for_game) >= 50:  # 找到足夠多的候選就停止
+                            break
+            
+            except Exception as e:
+                logger.warning(f"使用簡單查詢獲取遊戲題目時出錯: {e}")
+                # 繼續執行，嘗試備選方案
+            
+            if not valid_reports_for_game:
+                logger.warning("未找到符合遊戲條件的詐騙報告 (風險中/高)。嘗試放寬條件。")
+                # 如果沒有中高風險的，就放寬條件，不限風險等級
+                backup_query = (
+                    self.db.collection('fraud_reports')
+                    .order_by('timestamp', direction=firestore.Query.DESCENDING)
+                    .limit(300)
+                )
+                backup_reports_stream = backup_query.stream()
+                
+                for doc in backup_reports_stream:
+                    report = doc.to_dict()
+                    message_text = report.get('message')
+                    fraud_type = report.get('fraud_type')
+                    
                     # 放寬條件：至少訊息長度和詐騙類型需要有意義
                     if (message_text and 
                         isinstance(message_text, str) and 
@@ -299,12 +313,27 @@ class FirebaseManager:
                             'message': message_text,
                             'fraud_type': fraud_type
                         })
-                        if len(valid_reports_for_game) >= 50: # 避免過多候選
-                            break 
+                        if len(valid_reports_for_game) >= 50:  # 避免過多候選
+                            break
             
             if not valid_reports_for_game:
-                logger.error("即使放寬條件後，fraud_reports 中仍沒有符合遊戲條件的數據 (message長度>10, fraud_type非模糊)。遊戲可能無題目可出。")
-                return None
+                # 最後備選：如果還是找不到，返回幾個預設的詐騙示例
+                logger.warning("在數據庫中找不到合適的遊戲題目，使用預設題目")
+                default_examples = [
+                    {
+                        'message': "您好，我是蝦皮官方客服。您的訂單有問題需要退款，請加入我們的LINE群組處理：@shipping123",
+                        'fraud_type': "網購詐騙"
+                    },
+                    {
+                        'message': "恭喜您獲得iPhone 15抽獎資格！請點擊連結填寫收件資料：https://bit.ly/claim-prize",
+                        'fraud_type': "網路釣魚"
+                    },
+                    {
+                        'message': "您的包裹無法投遞，請至以下網址確認您的地址：https://delivery-check.site/verify",
+                        'fraud_type': "物流詐騙"
+                    }
+                ]
+                return random.choice(default_examples)
             
             selected_report = random.choice(valid_reports_for_game)
             logger.info(f"為遊戲選取的詐騙報告: fraud_type='{selected_report['fraud_type']}', message='{selected_report['message'][:30]}...'" )
@@ -312,7 +341,13 @@ class FirebaseManager:
 
         except Exception as e:
             logger.error(f"為遊戲獲取隨機詐騙報告失敗: {e}")
-            return None
+            # 發生錯誤時，返回預設題目
+            default_example = {
+                'message': "您好，我是蝦皮官方客服。您的訂單有問題需要退款，請加入我們的LINE群組處理：@shipping123",
+                'fraud_type': "網購詐騙"
+            }
+            logger.info("由於錯誤，返回預設詐騙題目")
+            return default_example
 
     def save_emerging_fraud_report(self, user_id: str, display_name: str, user_message: str,
                                    chatgpt_analysis: str, status: str = "pending_review") -> bool:
