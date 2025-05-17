@@ -741,6 +741,30 @@ def handle_message(event):
         firebase_manager.save_user_interaction(user_id, display_name, text_message, "回覆功能說明", is_fraud_related=False)
         return
         
+    # 處理需要追問的情況
+    follow_up_patterns = [
+        "我被詐騙了", "我是不是被詐騙了", "這是詐騙嗎", "我可能被騙了", 
+        "有人騙我", "我被騙", "我被騙了嗎", "我被騙錢", "這個是真的嗎",
+        "這是詐騙訊息嗎"
+    ]
+    
+    if any(pattern in text_message.lower() for pattern in follow_up_patterns):
+        reply_text = f"{display_name}您好！我理解您可能正在擔心是否遇到詐騙情況。\\n\\n" \
+                     f"為了能更準確地幫助您分析，請您告訴我更多詳細情況：\\n\\n" \
+                     f"• 您收到了什麼可疑訊息或電話？\\n" \
+                     f"• 對方提出了什麼要求？\\n" \
+                     f"• 您是否已經提供個人資料或進行付款？\\n\\n" \
+                     f"請將可疑內容分享給我，我會立即為您分析風險！"
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
+        # 更新用戶最後互動時間
+        user_last_chat_time[user_id] = datetime.datetime.now()
+        # 保存互動記錄到Firebase
+        firebase_manager.save_user_interaction(
+            user_id, display_name, text_message, reply_text,
+            is_fraud_related=False
+        )
+        return
+    
     # 如果不是任何特定指令，視為閒聊並有機會回覆防詐小知識
     if not any(keyword in text_message for keyword in ["詐騙類型", "我想了解", "選哪顆土豆", "玩遊戲"]):
         # 30%機率回覆防詐小知識，70%機率正常分析
