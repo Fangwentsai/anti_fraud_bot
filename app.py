@@ -7,7 +7,7 @@ from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage, FlexSendMessage,
     QuickReply, QuickReplyButton, MessageAction, PostbackEvent,
     BubbleContainer, BoxComponent, ButtonComponent, TextComponent,
-    CarouselContainer, URIAction
+    CarouselContainer, URIAction, SeparatorComponent
 )
 from dotenv import load_dotenv
 import openai
