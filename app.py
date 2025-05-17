@@ -41,6 +41,7 @@ user_game_state = {}
 # 用戶最後聊天時間記錄
 user_last_chat_time = {}
 user_pending_analysis = {} # 用於追蹤等待用戶澄清的分析請求
+first_time_chatters = set()  # 追蹤首次聊天的用戶
 
 CHAT_TIP_PROBABILITY = 0.3 # 閒聊時回覆防詐小知識的機率
 
@@ -312,7 +313,7 @@ def parse_fraud_analysis(analysis_result):
     風險等級：[高/中/低/無風險/不確定]
     可能詐騙類型：[類型1, 類型2, ... 或 不適用]
     說明：[具體說明]
-    建議：[具體建議]
+    建議：[具體建議] 
     新興手法：[是/否] (可選)
     """
     if not analysis_result:
@@ -786,6 +787,12 @@ def handle_message(event):
 
     logger.info(f"Received message from {display_name} ({user_id}): {text_message}")
 
+    # 檢查是否為首次對話的用戶
+    is_first_time = user_id not in first_time_chatters
+    if is_first_time:
+        first_time_chatters.add(user_id)
+        logger.info(f"User {user_id} is chatting for the first time")
+
     # 更新用戶最後聊天時間
     user_last_chat_time[user_id] = current_time
 
@@ -991,16 +998,26 @@ def handle_message(event):
             
             chat_reply = chat_response.choices[0].message.content.strip()
             
-            # 添加功能介紹
-            introduction = f"\n\n我是防詐騙機器人「土豆」，能幫您：\n1️⃣ 分析可疑訊息\n2️⃣ 測試您的防詐騙能力\n3️⃣ 查詢各類詐騙手法"
-            reply_text = chat_reply + introduction
+            # 只在首次聊天時添加功能介紹
+            if is_first_time:
+                introduction = f"\n\n我是防詐騙機器人「土豆」，能幫您：\n1️⃣ 分析可疑訊息\n2️⃣ 測試您的防詐騙能力\n3️⃣ 查詢各類詐騙手法"
+                reply_text = chat_reply + introduction
+            else:
+                reply_text = chat_reply
+            
             is_fraud_related = False
             
         except Exception as e:
             logger.error(f"閒聊回應錯誤: {e}")
             # 如果閒聊回應失敗，使用簡單的問候
             greetings = ["您好！", "嗨！", "哈囉！", "很高興見到您！", "您好呀！"]
-            reply_text = f"{random.choice(greetings)}有什麼我能幫您的嗎？您可以輸入「功能」來了解我能做什麼。"
+            
+            # 只在首次聊天時添加功能介紹
+            if is_first_time:
+                reply_text = f"{random.choice(greetings)}有什麼我能幫您的嗎？您可以輸入「功能」來了解我能做什麼。"
+            else:
+                reply_text = f"{random.choice(greetings)}有什麼我能幫您的嗎？"
+            
             is_fraud_related = False
     
     # 添加功能按鈕到所有回覆
