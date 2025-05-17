@@ -226,6 +226,231 @@
       "source": "165反詐騙資料庫",
       "keywords": ["Facebook", "異常活動", "盜用", "驗證身份", "永久停用"],
       "explanation": "社群平台不會透過郵件要求用戶點擊連結驗證身份。若有安全疑慮，應直接從官方App或網站登入檢查。"
+    },
+    {
+      "id": 26,
+      "fraud_message": "【國稅局通知】您的綜合所得稅試算結果有退稅款$8,750元，請點擊連結確認您的帳戶資料以便撥款：https://nta-refund-gov.com/confirm",
+      "fraud_type": "假冒政府詐騙",
+      "difficulty": "medium",
+      "source": "165反詐騙資料庫",
+      "keywords": ["國稅局", "退稅", "撥款", "確認帳戶資料"],
+      "explanation": "國稅局不會主動以簡訊或郵件通知退稅，並要求點擊連結提供帳戶資料。退稅通常會直接撥入您申報時指定的帳戶。"
+    },
+    {
+      "id": 27,
+      "fraud_message": "【包裹簽收提醒】您有一份DHL國際快遞將於今日下午送達，由於疫情關係需線上簽收，請點擊：https://dhl-express-sign.online",
+      "fraud_type": "釣魚簡訊詐騙",
+      "difficulty": "medium",
+      "source": "165反詐騙資料庫",
+      "keywords": ["DHL", "國際快遞", "線上簽收"],
+      "explanation": "詐騙集團常冒充DHL、FedEx等國際快遞公司發送釣魚簡訊，誘騙民眾點擊惡意連結。"
+    },
+    {
+      "id": 28,
+      "fraud_message": "我是之前在蝦皮跟你買東西的買家，我不小心設定到分期付款了，店家說要我去ATM解除，可以教我一下嗎？",
+      "fraud_type": "ATM解除分期付款詐騙",
+      "difficulty": "easy",
+      "source": "165反詐騙資料庫",
+      "keywords": ["蝦皮", "買家", "分期付款", "ATM解除"],
+      "explanation": "ATM沒有解除分期付款的功能！這是典型的詐騙手法，切勿聽從指示操作ATM。"
+    },
+    {
+      "id": 29,
+      "fraud_message": "【衛福部公告】全民普發$6000元現金補助，請立即上網登記，領取資格至本週日截止：https://6000gov.com.tw/apply",
+      "fraud_type": "假冒政府詐騙",
+      "difficulty": "easy",
+      "source": "165反詐騙資料庫",
+      "keywords": ["衛福部", "全民普發", "現金補助", "上網登記", "截止"],
+      "explanation": "政府普發現金等政策都會有正式的官方網站及宣導，不會使用非官方網域或製造急迫感。"
+    },
+    {
+      "id": 30,
+      "fraud_message": "您的Apple ID由於安全原因已被鎖定。為了重新獲得訪問權限，請點擊此處驗證您的帳戶詳細信息：https://iforgot.apple-id-support.com",
+      "fraud_type": "釣魚郵件詐騙",
+      "difficulty": "medium",
+      "source": "165反詐騙資料庫",
+      "keywords": ["Apple ID", "鎖定", "驗證帳戶"],
+      "explanation": "蘋果官方不會透過郵件要求您點擊連結驗證Apple ID。請直接前往蘋果官方網站或設定中查看帳戶狀態。"
+    },
+    {
+      "id": 31,
+      "fraud_message": "【借貸廣告】急用錢？免保人、免聯徵、快速放款！30萬內當天可拿，利息超低。加LINE: cashfast999",
+      "fraud_type": "假借貸詐騙",
+      "difficulty": "easy",
+      "source": "165反詐騙資料庫",
+      "keywords": ["借貸", "免保人", "免聯徵", "快速放款", "利息低", "LINE"],
+      "explanation": "宣稱條件過於寬鬆、放款快速的借貸廣告多為詐騙，可能要求先支付手續費或騙取個資。"
+    },
+    {
+      "id": 32,
+      "fraud_message": "【中華電信通知】您的手機門號積分即將到期，可兌換最新款iPhone或等值家電，請點擊連結查看：https://cht-rewards-center.net/redeem",
+      "fraud_type": "釣魚簡訊詐騙",
+      "difficulty": "medium",
+      "source": "165反詐騙資料庫",
+      "keywords": ["中華電信", "積分到期", "兌換iPhone", "家電"],
+      "explanation": "電信公司的積分兌換活動通常會在官方App或網站進行，不會使用非官方網域的連結。"
+    },
+    {
+      "id": 33,
+      "fraud_message": "我是戶政事務所王主任，您家人的戶籍資料有問題，需要本人親自來一趟。若不方便，可加我LINE:戶政服務A01，我線上協助您處理。",
+      "fraud_type": "假冒政府詐騙",
+      "difficulty": "easy",
+      "source": "165反詐騙資料庫",
+      "keywords": ["戶政事務所", "戶籍資料", "LINE線上協助"],
+      "explanation": "戶政事務所等公務機關不會要求民眾加入承辦人員的私人LINE帳號處理事務。"
+    },
+    {
+      "id": 34,
+      "fraud_message": "【虛擬貨幣投資】跟上財富列車！比特幣/以太幣短期高報酬，專業分析師帶單，保證翻倍。立即註冊：https://crypto-invest-pro.io",
+      "fraud_type": "假投資詐騙",
+      "difficulty": "hard",
+      "source": "165反詐騙資料庫",
+      "keywords": ["虛擬貨幣", "比特幣", "以太幣", "高報酬", "專業分析師", "保證翻倍"],
+      "explanation": "虛擬貨幣投資風險高，宣稱保證獲利、穩賺不賠的平台多為詐騙。"
+    },
+    {
+      "id": 35,
+      "fraud_message": "【Costco通知】恭喜您在會員回饋活動中抽中$5000元禮券，請點擊連結並填寫寄送資料：https://costco-winner-club.com/prize",
+      "fraud_type": "假中獎通知詐騙",
+      "difficulty": "easy",
+      "source": "165反詐騙資料庫",
+      "keywords": ["Costco", "會員回饋", "抽中禮券", "填寫資料"],
+      "explanation": "大型賣場的抽獎活動通常會在店內或官方網站公布，不會單獨以簡訊或郵件通知中獎並要求點擊不明連結。"
+    },
+    {
+      "id": 36,
+      "fraud_message": "您的Google帳戶偵測到來自不明裝置的登入嘗試。為保護您的帳戶安全，請立即點擊以下連結確認您的活動：https://myaccount.google-security-alert.org/verify",
+      "fraud_type": "釣魚郵件詐騙",
+      "difficulty": "medium",
+      "source": "165反詐騙資料庫",
+      "keywords": ["Google帳戶", "不明裝置登入", "帳戶安全", "確認活動"],
+      "explanation": "Google的安全通知會直接顯示在您的帳戶活動中，或透過官方App發送。請勿點擊可疑郵件中的連結。"
+    },
+    {
+      "id": 37,
+      "fraud_message": "【求才】誠徵線上客服人員，無需經驗，彈性工時，薪優。主要工作為回覆客戶訊息，引導儲值。意者請洽 Telegram: @OnlineCSRecruit",
+      "fraud_type": "假求職詐騙",
+      "difficulty": "medium",
+      "source": "165反詐騙資料庫",
+      "keywords": ["線上客服", "無需經驗", "彈性工時", "引導儲值", "Telegram"],
+      "explanation": "要求引導他人儲值的工作內容，極可能是協助博弈或詐騙平台。應徵工作需注意工作內容的合法性。"
+    },
+    {
+      "id": 38,
+      "fraud_message": "【水費催收】貴戶本期水費$650元已逾期，為免停水，請點此連結完成繳費：https://water-bill-tw.info/pay",
+      "fraud_type": "釣魚簡訊詐騙",
+      "difficulty": "easy",
+      "source": "165反詐騙資料庫",
+      "keywords": ["水費", "催收", "逾期", "停水", "繳費"],
+      "explanation": "自來水公司的官方網站通常是 `.gov.tw` 或 `.com.tw` 結尾，應注意辨識釣魚網站的網址。"
+    },
+    {
+      "id": 39,
+      "fraud_message": "您好，我是地方法院書記官，您因涉及一起洗錢案件，名下帳戶將被凍結。請將帳戶內資金轉至指定安全帳戶以配合調查，LINE ID: CourtSafeGuard",
+      "fraud_type": "假檢警詐騙",
+      "difficulty": "hard",
+      "source": "165反詐騙資料庫",
+      "keywords": ["地方法院", "書記官", "洗錢", "帳戶凍結", "安全帳戶", "LINE"],
+      "explanation": "法院或檢警單位絕不會要求民眾將資金轉至「安全帳戶」或透過LINE辦案。"
+    },
+    {
+      "id": 40,
+      "fraud_message": "【LINE活動】恭喜您抽中限定版貼圖及$1000元儲值金！請點擊連結領取：https://line-event-gift.me/rewards",
+      "fraud_type": "假中獎通知詐騙",
+      "difficulty": "easy",
+      "source": "165反詐騙資料庫",
+      "keywords": ["LINE活動", "抽中貼圖", "儲值金", "領取"],
+      "explanation": "LINE官方的活動通常會在LINE App內的「貼圖小舖」或「官方帳號」中宣傳。"
+    },
+    {
+      "id": 41,
+      "fraud_message": "您的PayPal帳戶有可疑交易，為了您的帳戶安全，我們已暫時限制您的帳戶。請登錄以解除限制：https://paypal-resolve-issue.com/login",
+      "fraud_type": "釣魚郵件詐騙",
+      "difficulty": "medium",
+      "source": "165反詐騙資料庫",
+      "keywords": ["PayPal", "可疑交易", "限制帳戶", "解除限制"],
+      "explanation": "PayPal的官方通知會透過其安全訊息中心發送。請勿點擊郵件中的可疑連結。"
+    },
+    {
+      "id": 42,
+      "fraud_message": "【Netflix優惠】限時三天！年費方案半價優惠，再送三個月免費觀看！立即升級：https://netflix-promo-deal.org/upgrade",
+      "fraud_type": "假冒企業詐騙",
+      "difficulty": "medium",
+      "source": "165反詐騙資料庫",
+      "keywords": ["Netflix優惠", "限時", "年費半價", "免費觀看"],
+      "explanation": "串流平台的優惠活動通常會在官方網站或App內公告，不會使用非官方網域的連結。"
+    },
+    {
+      "id": 43,
+      "fraud_message": "【徵求模特兒】無經驗可，薪優，拍攝時長2-3小時，風格多樣。有興趣者請傳送個人清晰照片及三圍至LINE: modelagency_tw",
+      "fraud_type": "假求職詐騙",
+      "difficulty": "easy",
+      "source": "165反詐騙資料庫",
+      "keywords": ["模特兒", "無經驗可", "薪優", "傳送照片", "三圍", "LINE"],
+      "explanation": "徵求模特兒的詐騙常要求提供私密照片或個資，甚至誘騙至不明地點。應選擇正規經紀公司。"
+    },
+    {
+      "id": 44,
+      "fraud_message": "【銀行通知】偵測到您的信用卡於海外有異常刷卡紀錄，為安全起見已暫停您的卡片。請致電客服009-XXXX-XXXX確認。",
+      "fraud_type": "假冒機構詐騙",
+      "difficulty": "medium",
+      "source": "165反詐騙資料庫",
+      "keywords": ["銀行通知", "海外刷卡", "異常紀錄", "暫停卡片", "客服電話"],
+      "explanation": "詐騙電話常使用「+」或「00」開頭的號碼冒充國際電話。銀行客服電話應以卡片背面所列為準。"
+    },
+    {
+      "id": 45,
+      "fraud_message": "我是你遠房表舅，最近手頭比較緊，可以先借我兩萬塊嗎？下個月發薪水馬上還你。我的帳號是：郵局700 0012345 0678910",
+      "fraud_type": "親友借款詐騙",
+      "difficulty": "easy",
+      "source": "165反詐騙資料庫",
+      "keywords": ["表舅", "手頭緊", "借錢", "郵局帳號"],
+      "explanation": "接到親友透過通訊軟體借錢的訊息，務必先以電話或其他方式聯繫本人確認，以防帳號被盜。"
+    },
+    {
+      "id": 46,
+      "fraud_message": "【刷卡換現金】急需用錢？信用卡額度可變現，手續費低，安全保密。加LINE: cash_for_card_service",
+      "fraud_type": "假借貸詐騙",
+      "difficulty": "medium",
+      "source": "165反詐騙資料庫",
+      "keywords": ["刷卡換現金", "信用卡額度變現", "手續費低", "LINE"],
+      "explanation": "「刷卡換現金」可能涉及違法行為，且手續費通常很高，並有洩漏個資的風險。"
+    },
+    {
+      "id": 47,
+      "fraud_message": "您好，我是電信公司專員，恭喜您符合VIP資格，可免費升級5G吃到飽方案，並贈送最新款手機。請提供您的身分證字號及信用卡號以便辦理。",
+      "fraud_type": "假冒企業詐騙",
+      "difficulty": "easy",
+      "source": "165反詐騙資料庫",
+      "keywords": ["電信公司", "VIP資格", "免費升級5G", "贈送手機", "身分證", "信用卡號"],
+      "explanation": "電信公司升級方案或贈送手機，通常需要親自到門市辦理或透過官方網站驗證，不會在電話中索取完整信用卡號。"
+    },
+    {
+      "id": 48,
+      "fraud_message": "【投資APP推薦】保證獲利，輕鬆月入數十萬！下載XX投資APP，由老師親自帶領操作，穩賺不賠。下載連結：https://super-invest-app.com",
+      "fraud_type": "假投資詐騙",
+      "difficulty": "hard",
+      "source": "165反詐騙資料庫",
+      "keywords": ["投資APP", "保證獲利", "月入數十萬", "老師帶領", "穩賺不賠"],
+      "explanation": "宣稱保證獲利、穩賺不賠的投資APP多為詐騙，目的是誘騙您投入資金後捲款潛逃。"
+    },
+    {
+      "id": 49,
+      "fraud_message": "【停車費通知】您有一筆$50元停車費逾期未繳，請點擊連結完成線上繳費，以免產生高額罰款：https://parking-fee-gov.net/pay",
+      "fraud_type": "釣魚簡訊詐騙",
+      "difficulty": "easy",
+      "source": "165反詐騙資料庫",
+      "keywords": ["停車費", "逾期未繳", "線上繳費", "高額罰款"],
+      "explanation": "停車費繳納應透過官方App或網站，或至超商繳納。不明連結可能導致個資外洩或手機中毒。"
+    },
+    {
+      "id": 50,
+      "fraud_message": "您好，我們是XXX市場調查公司，現正進行一項關於消費習慣的問卷調查，完成問卷即可獲得$500元禮券。問卷連結：https://survey-rewards-now.org/start",
+      "fraud_type": "假問卷調查詐騙",
+      "difficulty": "easy",
+      "source": "165反詐騙資料庫",
+      "keywords": ["市場調查", "消費習慣", "問卷調查", "禮券"],
+      "explanation": "部分假問卷調查的目的是騙取個資，或在問卷結束後要求支付「手續費」才能領取獎品。應注意問卷來源的可靠性。"
     }
   ]
 } 
