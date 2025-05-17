@@ -717,6 +717,27 @@ def handle_message(event):
         line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
         firebase_manager.save_user_interaction(user_id, display_name, text_message, "回覆問候語與功能選單")
         return
+
+    # 處理功能相關詢問
+    function_inquiry_keywords = ["有什麼功能", "還有什麼功能", "可以做什麼", "會做什麼", "怎麼使用", "如何使用", "使用方法"]
+    if any(keyword in text_message for keyword in function_inquiry_keywords):
+        reply_text = f"{display_name}您好！我是防詐騙小幫手，我的功能包括：\n\n" \
+                    f"1️⃣ 詐騙風險分析：我可以分析您收到的可疑訊息，評估是否為詐騙\n\n" \
+                    f"2️⃣ 詐騙類型查詢：您可以輸入「詐騙類型列表」查看各種常見詐騙\n\n" \
+                    f"3️⃣ 「選哪顆土豆」小遊戲：通過遊戲學習辨識詐騙訊息\n\n" \
+                    f"4️⃣ 防詐小知識：與我聊天時，我會不定時分享實用的防詐技巧\n\n" \
+                    f"5️⃣ 閒聊功能：當您只是想跟我聊聊天時，我也樂意陪伴您\n\n" \
+                    f"您想嘗試哪個功能呢？"
+        
+        quick_reply = QuickReply(items=[
+            QuickReplyButton(action=MessageAction(label="看看詐騙類型", text="詐騙類型列表")),
+            QuickReplyButton(action=MessageAction(label="玩「選土豆」遊戲", text="選哪顆土豆")),
+            QuickReplyButton(action=MessageAction(label="分析可疑訊息", text="我收到這個：")),
+        ])
+        
+        line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
+        firebase_manager.save_user_interaction(user_id, display_name, text_message, "回覆功能說明", is_fraud_related=False)
+        return
         
     # 如果不是任何特定指令，視為閒聊並有機會回覆防詐小知識
     if not any(keyword in text_message for keyword in ["詐騙類型", "我想了解", "選哪顆土豆", "玩遊戲"]):
