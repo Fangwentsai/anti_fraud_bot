@@ -1,0 +1,96 @@
+{
+  "version": "1.0",
+  "last_updated": "2025-05-17",
+  "questions": [
+    {
+      "id": 1,
+      "fraud_message": "您好，我是蝦皮官方客服。抱歉通知您，您的商品因為違規已被下架，需要您進行身分驗證。請加入官方LINE群組：line.me/ti/g/xxxx處理此問題，否則帳號將於24小時內被凍結。",
+      "fraud_type": "網路購物詐騙",
+      "difficulty": "easy",
+      "source": "165反詐騙資料庫",
+      "keywords": ["客服", "違規", "身分驗證", "LINE群組", "帳號凍結"],
+      "explanation": "真正的電商平台不會要求用戶加入LINE群組處理問題，而是會通過官方APP或網站內的通知系統聯繫用戶。"
+    },
+    {
+      "id": 2,
+      "fraud_message": "恭喜您成為本月iPhone15抽獎幸運得主！請於48小時內填寫以下表單完成領獎手續，逾期將視為自動放棄：https://bit.ly/claim-iph0ne15",
+      "fraud_type": "假中獎通知詐騙",
+      "difficulty": "easy",
+      "source": "165反詐騙資料庫",
+      "keywords": ["恭喜", "幸運得主", "iPhone", "48小時", "表單", "領獎"],
+      "explanation": "未參加任何抽獎活動卻收到中獎通知，且使用縮短網址，都是明顯的詐騙跡象。"
+    },
+    {
+      "id": 3,
+      "fraud_message": "您的郵件包裹(編號:TW78542196)因無人簽收，即將退回原寄地。若需重新配送，請點擊確認地址：http://tw-post-service.co/redelivery",
+      "fraud_type": "釣魚簡訊詐騙",
+      "difficulty": "medium",
+      "source": "165反詐騙資料庫",
+      "keywords": ["包裹", "無人簽收", "退回", "重新配送", "確認地址"],
+      "explanation": "這是常見的物流詐騙，連結通常指向假冒的物流網站，目的是騙取個人資料或詐騙金錢。"
+    },
+    {
+      "id": 4,
+      "fraud_message": "您好，我是台北富邦銀行客服中心。您的信用卡存在異常消費，懷疑被盜刷。請立即撥打專線 02-2756XXXX 與專員聯繫，確認是否凍結卡片。",
+      "fraud_type": "假檢警詐騙",
+      "difficulty": "medium",
+      "source": "165反詐騙資料庫",
+      "keywords": ["銀行客服", "信用卡", "異常消費", "盜刷", "專線", "凍結"],
+      "explanation": "銀行不會以電話方式要求客戶提供個人資料或操作ATM。若有信用卡異常，應主動撥打卡片背面的官方客服電話查詢。"
+    },
+    {
+      "id": 5,
+      "fraud_message": "【緊急通知】您的健保卡已遭盜用，產生高額醫療費用！警方已立案調查，為了查明真相並確保您的清白，請立即與承辦檢察官聯繫：LINE ID: TW_Procurator",
+      "fraud_type": "假檢警詐騙",
+      "difficulty": "medium",
+      "source": "165反詐騙資料庫",
+      "keywords": ["健保卡", "盜用", "醫療費用", "警方", "立案調查", "檢察官", "LINE"],
+      "explanation": "司法單位不會要求民眾加LINE私下聯繫，這是典型的詐騙手法，目的是製造恐慌並騙取金錢。"
+    },
+    {
+      "id": 6,
+      "fraud_message": "Hello! 我是Lisa，在交友軟體上看到你的資料，覺得很有緣分！我們聊聊吧？我現在在國外工作，是新加坡的金融投資顧問，可以教你一些穩賺的投資方法，加我LINE：lisa_fin888",
+      "fraud_type": "假交友投資詐騙",
+      "difficulty": "hard",
+      "source": "165反詐騙資料庫",
+      "keywords": ["交友", "國外工作", "金融投資", "穩賺", "投資方法", "LINE"],
+      "explanation": "結合交友與投資話術的複合式詐騙，對方會先建立感情連結，再引導進行所謂的「穩賺」投資，實際上是詐騙。"
+    },
+    {
+      "id": 7,
+      "fraud_message": "親愛的用戶，您的Netflix帳戶即將到期，為避免服務中斷，請點擊以下連結更新付款資料：https://netflix-account-verify.com",
+      "fraud_type": "釣魚簡訊詐騙",
+      "difficulty": "medium",
+      "source": "165反詐騙資料庫",
+      "keywords": ["Netflix", "帳戶到期", "服務中斷", "更新付款", "連結"],
+      "explanation": "這是常見的釣魚詐騙，連結會導向假冒的Netflix網站，目的是騙取信用卡資料。正確做法是直接登入官方App或網站查詢。"
+    },
+    {
+      "id": 8,
+      "fraud_message": "因應疫情紓困，政府提供每人$15,000元補助金，限時3天申請，請點連結填寫資料：https://tw-gov-subsidy.site/apply",
+      "fraud_type": "假冒政府詐騙",
+      "difficulty": "easy",
+      "source": "165反詐騙資料庫",
+      "keywords": ["疫情紓困", "政府", "補助金", "限時", "填寫資料"],
+      "explanation": "政府不會透過簡訊發送補助金申請連結，且申請時間不會如此短暫。政府補助都會透過官方管道公告，不會用壓力話術。"
+    },
+    {
+      "id": 9,
+      "fraud_message": "我是海關關務人員，您有一份包裹因涉嫌違禁品已被扣留。若想詳細了解情況並解除扣押，請加此Line帳號：customs_service_tw 聯繫處理。",
+      "fraud_type": "假檢警詐騙",
+      "difficulty": "hard",
+      "source": "165反詐騙資料庫",
+      "keywords": ["海關", "關務人員", "包裹", "違禁品", "扣留", "Line"],
+      "explanation": "海關若扣留包裹會寄發正式公文，不會使用Line聯繫，且不會要求當事人主動加入特定通訊軟體聯繫。"
+    },
+    {
+      "id": 10,
+      "fraud_message": "【最新投資機會】AI算法自動交易，每日穩定獲利5-8%！我們的系統已幫助1000+投資者成功實現財務自由。限時優惠，現在加入送$3,000體驗金，加Line ID: ai_trade_pro諮詢。",
+      "fraud_type": "假投資詐騙",
+      "difficulty": "medium",
+      "source": "165反詐騙資料庫",
+      "keywords": ["AI算法", "自動交易", "穩定獲利", "財務自由", "限時優惠", "體驗金"],
+      "explanation": "承諾「穩定高報酬」的投資幾乎都是詐騙。正規投資管道會強調風險，不會宣稱有穩賺不賠的系統。"
+    }
+  ]
+} 

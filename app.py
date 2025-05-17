@@ -426,17 +426,32 @@ def send_potato_game_question(user_id, reply_token):
     """
     global user_game_state
     
-    report_data = firebase_manager.get_random_fraud_report_for_game()
+    # 優先從預設題庫選取題目
+    if potato_game_questions:
+        # 從題庫中隨機選取一道題目
+        question = random.choice(potato_game_questions)
+        
+        # 詐騙訊息（假土豆）
+        false_potato_text = question['fraud_message']
+        fraud_type = question['fraud_type']
+        explanation = question.get('explanation', '這是一則詐騙訊息，請保持警覺。')
+        
+    else:
+        # 如果沒有預設題庫，則回退到從Firebase中獲取
+        logger.warning("使用Firebase資料庫作為備選題目來源")
+        report_data = firebase_manager.get_random_fraud_report_for_game()
 
-    if not report_data:
-        line_bot_api.reply_message(
-            reply_token,
-            TextSendMessage(text="抱歉，目前題庫裡沒有題目了，稍後再試試吧！")
-        )
-        return
+        if not report_data:
+            line_bot_api.reply_message(
+                reply_token,
+                TextSendMessage(text="抱歉，目前題庫裡沒有題目了，稍後再試試吧！")
+            )
+            return
 
-    # 詐騙訊息（假土豆）
-    false_potato_text = report_data['message']
+        # 詐騙訊息（假土豆）
+        false_potato_text = report_data['message']
+        fraud_type = report_data['fraud_type']
+        explanation = ""
     
     # 創建兩個明顯安全的訊息（真土豆）
     true_potato_texts = [
@@ -456,7 +471,8 @@ def send_potato_game_question(user_id, reply_token):
 
     user_game_state[user_id] = {
         'false_potato_original': false_potato_text,
-        'fraud_type_for_explanation': report_data['fraud_type'],
+        'fraud_type_for_explanation': fraud_type,
+        'custom_explanation': explanation if potato_game_questions else "",
         'option_A_text': options_display_texts[0],
         'option_B_text': options_display_texts[1],
         'option_C_text': options_display_texts[2]
@@ -526,6 +542,7 @@ def handle_potato_game_answer(user_id, reply_token, data_params):
     game_data = user_game_state[user_id]
     false_potato_original_text = game_data['false_potato_original']
     fraud_type_for_explanation = game_data['fraud_type_for_explanation']
+    custom_explanation = game_data.get('custom_explanation', '')
     
     chosen_text = ""
     if chosen_option_id == 'A':
@@ -540,8 +557,11 @@ def handle_potato_game_answer(user_id, reply_token, data_params):
 
     reply_messages = []
     
-    # 獲取詐騙特徵說明
-    fraud_features = get_fraud_features(fraud_type_for_explanation, false_potato_original_text)
+    # 使用自訂解釋或從通用特徵庫獲取
+    if custom_explanation:
+        fraud_features = f"⚠️ 詐騙特徵說明：\n{custom_explanation}"
+    else:
+        fraud_features = get_fraud_features(fraud_type_for_explanation, false_potato_original_text)
     
     explanation_intro = f"這則訊息屬於【{fraud_type_for_explanation}】類型的詐騙手法。"
     explanation_detail = f"詐騙訊息：\n「{false_potato_original_text[:180]}...」" 
@@ -948,6 +968,30 @@ def handle_postback(event):
         # line_bot_api.reply_message(reply_token, TextSendMessage(text="收到一個我無法處理的指令，請再試一次。"))
         # Decided not to reply for unknown postbacks to avoid interrupting other flows or causing confusion.
         # If specific unhandled postbacks need a reply, add explicit conditions.
+
+# 載入詐騙題庫
+POTATO_GAME_QUESTIONS_DB = "potato_game_questions.json"
+potato_game_questions = []
+
+def load_potato_game_questions():
+    global potato_game_questions
+    try:
+        with open(POTATO_GAME_QUESTIONS_DB, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            potato_game_questions = data.get("questions", [])
+        logger.info(f"成功從 {POTATO_GAME_QUESTIONS_DB} 加載詐騙題庫，共 {len(potato_game_questions)} 道題目")
+    except FileNotFoundError:
+        logger.warning(f"詐騙題庫文件 {POTATO_GAME_QUESTIONS_DB} 未找到。")
+        potato_game_questions = []
+    except json.JSONDecodeError:
+        logger.error(f"解析詐騙題庫文件 {POTATO_GAME_QUESTIONS_DB} 失敗。")
+        potato_game_questions = []
+    except Exception as e:
+        logger.error(f"加載詐騙題庫時發生未知錯誤: {e}")
+        potato_game_questions = []
+
+load_fraud_tactics()
+load_potato_game_questions()  # 加載題庫
 
 if __name__ == "__main__":
     # load_fraud_tactics() # Moved to be loaded once at startup
