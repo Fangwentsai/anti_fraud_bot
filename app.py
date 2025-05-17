@@ -979,6 +979,21 @@ def handle_message(event):
             firebase_manager.save_user_interaction(user_id, display_name, text_message, "Responded to unknown fraud type query", is_fraud_related=False)
             return
 
+    # 檢查是否為請求分析的提示語
+    analysis_prompts = ["請幫我分析這則訊息：", "幫我分析這則訊息", "分析這則訊息", "幫我分析訊息"]
+    if any(text_message.strip() == prompt or text_message.strip() == prompt.rstrip("：") for prompt in analysis_prompts):
+        logger.info(f"User {user_id} requested message analysis but didn't provide message content")
+        prompt_reply = f"{display_name}，您好！請將您想要分析的可疑訊息完整發送給我，我會立即為您進行詐騙風險評估。\n\n例如：\n- 銀行通知您的帳戶異常需要操作ATM\n- 不明網拍賣家要求私下交易\n- 陌生人傳來的投資理財訊息\n等等。"
+        
+        quick_reply = QuickReply(items=[
+            QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text="選哪顆土豆")),
+            QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text="詐騙類型列表"))
+        ])
+        
+        line_bot_api.reply_message(reply_token, TextSendMessage(text=prompt_reply, quick_reply=quick_reply))
+        firebase_manager.save_user_interaction(user_id, display_name, text_message, "Responded to analysis request prompt", is_fraud_related=False)
+        return
+
     # 檢查是否需要對消息進行詐騙分析的邏輯
     def should_perform_fraud_analysis(text_message):
         # 1. 檢查是否包含常見問候詞
