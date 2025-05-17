@@ -238,90 +238,113 @@ def get_user_profile(user_id):
 
 # 分析詐騙風險並解析結果
 def parse_fraud_analysis(analysis_result):
-    """
-    解析ChatGPT詐騙分析結果，提取風險等級和詐騙類型
-    """
     risk_level = None
     fraud_type = None
     
-    # 嘗試找出風險評估
-    if "風險評估" in analysis_result and ("高" in analysis_result or "中" in analysis_result or "低" in analysis_result):
-        if "高風險" in analysis_result:
-            risk_level = "高"
-        elif "中風險" in analysis_result:
-            risk_level = "中"
-        elif "低風險" in analysis_result:
-            risk_level = "低"
+    analysis_lower = analysis_result.lower()
     
-    # 嘗試找出詐騙類型
-    for fraud in fraud_types.keys():
-        if fraud in analysis_result:
-            fraud_type = fraud
-            break
+    # 優先判斷是否為新興詐騙
+    if "新興詐騙手法" in analysis_result or "可能是新手法" in analysis_result or "新的詐騙手法" in analysis_result:
+        fraud_type = "新興詐騙"
+        # 如果明確標示為新興，風險至少是「中」
+        if "高風險" in analysis_lower or "高" == risk_level:
+            risk_level = "高"
+        elif "中風險" in analysis_lower or "中" == risk_level:
+            risk_level = "中"
+        elif "低風險" in analysis_lower or "低" == risk_level: # check if risk_level has already been set
+            risk_level = "低"
+        else:
+            risk_level = "中" # 預設新興詐騙為中風險
+    else:
+        # 再嘗試匹配已知的詐騙類型
+        for ft_key in fraud_types.keys():
+            if ft_key in analysis_result: # 檢查詐騙類型的名稱是否出現在分析結果中
+                fraud_type = ft_key
+                break
+    
+    # 風險等級判斷 (如果上面沒有設定到)
+    if risk_level is None:
+        if "高風險" in analysis_lower:
+            risk_level = "高"
+        elif "中風險" in analysis_lower:
+            risk_level = "中"
+        elif "低風險" in analysis_lower:
+            risk_level = "低"
+        elif "無風險" in analysis_lower:
+            risk_level = "無風險"
+        elif "不確定" in analysis_lower:
+            risk_level = "不確定"
+        elif fraud_type is not None and fraud_type != "新興詐騙": # 如果有匹配到已知類型但無風險等級，設為中
+            risk_level = "中"
+    
+    # 如果都沒有匹配到，但內容可疑，標記為待分類
+    if fraud_type is None and risk_level in ["高", "中"]:
+        fraud_type = "待分類可疑訊息"
     
     return risk_level, fraud_type
 
 # ChatGPT檢測詐騙訊息函數
-def detect_fraud_with_chatgpt(user_message):
+def detect_fraud_with_chatgpt(user_message, display_name="朋友"):
     try:
-        # 檢查是否是網址分析
-        is_url_analysis = "網址是否安全" in user_message or any(domain in user_message for domain in [".com", ".tw", ".org", ".net", "http", "www"])
-        
-        # 创建提示，包含用户消息和已知詐騙類型信息
+        is_url_analysis = ("網址是否安全" in user_message or 
+                           (any(domain in user_message for domain in [".com", ".tw", ".org", ".net", "http://", "https://", "www."]) and len(user_message.split()) < 15))
+
         fraud_info = ""
-        for fraud_type, details in fraud_tactics.items():
+        for fraud_type_key, details in fraud_tactics.items():
             if "常見話術" in details:
-                fraud_info += f"詐騙類型: {fraud_type}\n"
+                fraud_info += f"詐騙類型: {fraud_type_key}\n"
                 fraud_info += "常見話術:\n" + "\n".join([f"- {tactic}" for tactic in details.get("常見話術", [])])
                 fraud_info += "\n\n"
-        
+
         if is_url_analysis:
             prompt = f"""
-作為網路安全專家，請分析以下網址是否安全，是否可能是釣魚網站或詐騙相關。
+作為頂尖的網路安全專家，請分析 {display_name} 提供的以下網址/內容是否安全，是否為釣魚、惡意或詐騙網站。
 
 網址/內容:
 {user_message}
 
-請提供:
-1. 安全評估 (安全/可疑/危險)
-2. 分析理由
-3. 使用建議
-4. 如果有風險，說明可能的詐騙類型
+請提供清晰的回應，包含：
+1.  **安全評估**：[安全/可疑/危險/不確定]
+2.  **主要判斷理由**：[簡述原因]
+3.  **給 {display_name} 的建議**：[操作建議，例如是否可以點擊、要注意什麼]
+4.  **潛在風險類型**：[如果可疑或危險，指出可能的詐騙類型，例如：釣魚網站、惡意軟體下載、假冒官方網站等]
             """
         else:
             prompt = f"""
-作為防詐騙顧問，請分析以下訊息是否包含詐騙跡象。請以關懷、支持的語氣回應，提供詳細分析。
+作為一位專業且極富同理心的防詐騙顧問，請細心分析 {display_name} 提供的以下訊息是否包含詐騙跡象。
 
-用戶訊息:
-{user_message}
+{display_name} 的訊息內容:
+'{user_message}'
 
-已知詐騙類型和話術:
+請參考以下已知的詐騙類型和常見話術資料庫：
+---
 {fraud_info}
+---
 
-如果訊息不是詐騙相關，請友善地說明為什麼，並提供一些相關建議。如果是日常生活問題，請簡單回應並引導用戶回到詐騙防範主題。
+您的分析應包含以下幾點，並請用溫暖且支持的語氣回應：
+1.  **整體風險評估**：[高風險/中風險/低風險/無詐騙風險/尚無法判斷]
+2.  **是否符合已知詐騙類型**：[如果符合，請說明是哪種類型，例如：網路購物詐騙、假投資詐騙等。如果不符合，請跳到第3點。]
+3.  **是否為新興或未記錄的詐騙手法**：[如果您判斷這可能是一種新的、資料庫未記載的詐騙手法，請明確指出，例如："{display_name}，這聽起來可能是一種比較新的詐騙手法，我目前資料庫裡還沒有完全一樣的記錄。"]
+4.  **可疑之處分析**：[詳細說明您判斷的理由、訊息中的哪些部分讓您覺得可疑，或者為什麼覺得它不是詐騙。]
+5.  **給 {display_name} 的具體建議**：[提供清晰、可操作的建議，例如：不要點擊連結、不要提供個資、向誰查證、如何應對等。]
+6.  **鼓勵與關懷**：[用一句溫暖的話作結，讓 {display_name} 感到被支持。例如：「請放心，隨時都可以找我聊聊。」或「您很警覺，這很棒！」]
 
-請提供:
-1. 詐騙風險評估 (高/中/低/無風險)
-2. 可能的詐騙類型 (如果有)
-3. 識別出的可疑跡象或說明為什麼不是詐騙
-4. 防範建議和下一步行動
-5. 一句鼓勵或支持的話
+如果訊息內容明顯與詐騙無關（例如：詢問天氣、日常生活抱怨、商品瑕疵等消費糾紛），請友善告知這比較不屬於詐騙協談的範圍，但可以簡要提供處理該類問題的建議方向（例如找消保官），並溫和地引導回防詐騙主題。
             """
         
         response = openai.chat.completions.create(
             model=os.environ.get('OPENAI_MODEL', 'gpt-3.5-turbo'),
             messages=[
-                {"role": "system", "content": "你是一位專業且親切的防詐騙顧問，協助用戶識別可能的詐騙風險並提供適當建議。你的回應應該既專業又有人情味，讓用戶感到被支持和理解。"},
+                {"role": "system", "content": "你是一位頂尖的防詐騙顧問和網路安全專家，擁有豐富的詐騙案例知識。你的目標是幫助使用者識別風險、提供精準建議，並且在必要時能識別出新型態的詐騙手法。你的回應專業、權威，同時充滿同理心與關懷。"},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.4,
-            max_tokens=800
+            temperature=0.6, # 略微調高以獲得更多樣性和更自然的語言
+            max_tokens=1200 # 增加token以應對更複雜的分析和回覆
         )
-        
         return response.choices[0].message.content.strip()
     except Exception as e:
         logger.error(f"ChatGPT詐騙檢測失敗: {e}")
-        return "很抱歉，我暫時無法分析這則訊息。若您擔心可能遇到詐騙，請立即撥打165反詐騙專線尋求專業協助。"
+        return f"唉呀，{display_name}，真不好意思，我這邊好像有點小狀況，暫時沒辦法幫您分析這則訊息。如果您真的很擔心，建議直接撥打165反詐騙專線問問看，他們最專業了！"
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -350,39 +373,26 @@ def fraud_statistics():
 def handle_message(event):
     user_message = event.message.text
     user_id = event.source.user_id
-    
-    # 獲取用戶個人資料
     profile = get_user_profile(user_id)
     display_name = profile.display_name if profile else "朋友"
     
-    # 初始化響應變數
     response_text = ""
     is_fraud_related = False
-    fraud_type = None
-    risk_level = None
-    
-    # 創建快速回覆按鈕
+    fraud_type_detected = None # 更名以區分
+    risk_level_detected = None # 更名以區分
     quick_reply = QuickReply(
         items=[
-            QuickReplyButton(action=MessageAction(label="詐騙類型", text="詐騙類型")),
-            QuickReplyButton(action=MessageAction(label="分析訊息", text="分析")),
-            QuickReplyButton(action=MessageAction(label="我的紀錄", text="我的紀錄"))
+            QuickReplyButton(action=MessageAction(label="常見詐騙類型", text="詐騙類型")),
+            QuickReplyButton(action=MessageAction(label="幫我分析訊息", text="分析可疑訊息")),
+            QuickReplyButton(action=MessageAction(label="我的查詢紀錄", text="我的紀錄")),
+            QuickReplyButton(action=MessageAction(label="165反詐騙專線", text="撥打165")),
         ]
     )
     
     # 檢查是否是打招呼
     greetings = ["你好", "哈囉", "嗨", "hi", "hello", "hey"]
     if any(greeting in user_message.lower() for greeting in greetings):
-        response_text = f"您好，{display_name}！很高興能幫助您。我是防詐騙小助手，可以提供以下協助：\n\n"
-        response_text += "1. 查詢「詐騙類型」列表\n"
-        response_text += "2. 輸入特定詐騙類型查看相關資訊\n"
-        response_text += "3. 查詢特定詐騙類型的「案例」\n"
-        response_text += "4. 查詢特定詐騙類型的「處理方法」或「SOP」\n"
-        response_text += "5. 輸入「分析」+訊息內容，檢查是否含有詐騙跡象\n"
-        response_text += "6. 輸入「我的紀錄」查看您的詐騙分析歷史\n\n"
-        response_text += "若您遇到可疑情況，請立即撥打165反詐騙專線尋求協助！"
-        
-        # 您可以直接點擊下方按鈕快速使用功能
+        response_text = f"您好，{display_name}！很高興能幫助您。我是防詐騙小助手，我可以：\n1. 提供常見詐騙類型資訊\n2. 幫您分析可疑訊息\n3. 查詢您的歷史紀錄\n\n如果您遇到緊急情況或不確定如何處理，建議直接撥打165反詐騙專線喔！"
     
     # 檢查是否要查詢詐騙類型
     elif "詐騙類型" in user_message or "類型" in user_message or "有哪些詐騙" in user_message:
@@ -451,22 +461,28 @@ def handle_message(event):
         return
     
     # 檢查是否要分析詐騙風險
-    elif "分析" in user_message or "檢查" in user_message or "是否詐騙" in user_message or "這是詐騙" in user_message:
-        # 移除指令部分，只分析主要内容
+    elif "分析" in user_message or "檢查" in user_message or "是否詐騙" in user_message or "這是詐騙" in user_message or "分析可疑訊息" == user_message:
         content_to_analyze = user_message
-        for cmd in ["分析", "檢查", "是否詐騙", "這是詐騙"]:
+        for cmd in ["分析", "檢查", "是否詐騙", "這是詐騙", "可疑訊息"]:
             content_to_analyze = content_to_analyze.replace(cmd, "").strip()
         
-        if len(content_to_analyze) < 5:
-            response_text = f"{display_name}，請提供更多內容讓我分析是否含有詐騙跡象。您可以輸入「分析」+可疑訊息，例如：\n\n分析 您好，我們是XX銀行，您的帳戶需要重新認證，請點擊連結更新資料..."
+        if not content_to_analyze:
+            response_text = f"{display_name}，如果您想分析訊息，請把可疑的訊息內容貼給我，例如：「分析 您好，您的包裹已到倉，請點擊連結認領 http://fakelink.com」。"
+        elif len(content_to_analyze) < 10 and not ("http" in content_to_analyze or "www" in content_to_analyze):
+            response_text = f"{display_name}，您提供的訊息有點太短了，不太好判斷耶。能不能多給我一點內容，像是完整的對話、收到的簡訊，或是對方跟您說了什麼？這樣我比較能幫上忙。"
         else:
-            # 使用ChatGPT進行詐騙分析
-            analysis_result = detect_fraud_with_chatgpt(content_to_analyze)
+            analysis_result = detect_fraud_with_chatgpt(content_to_analyze, display_name)
             response_text = analysis_result
+            risk_level_detected, fraud_type_detected = parse_fraud_analysis(analysis_result)
+            is_fraud_related = risk_level_detected in ["高", "中", "低"]
             
-            # 解析分析結果，判斷是否與詐騙相關
-            risk_level, fraud_type = parse_fraud_analysis(analysis_result)
-            is_fraud_related = risk_level is not None
+            if fraud_type_detected == "新興詐騙":
+                firebase_manager.save_emerging_fraud_report(user_id, display_name, content_to_analyze, analysis_result)
+                # 在ChatGPT的回應中，已經包含了引導詢問，這裡不再重複添加
+                pass 
+            elif fraud_type_detected == "待分類可疑訊息":
+                 # 可以考慮也存到 emerging_fraud_reports 或另一個待處理集合
+                pass
     
     # 檢查是否要查詢紀錄
     elif "我的紀錄" in user_message or "查詢紀錄" in user_message or "歷史紀錄" in user_message:
@@ -538,23 +554,18 @@ def handle_message(event):
     # 如果都不符合，嘗試分析用戶輸入
     else:
         # 檢查是否是網址或簡短內容
-        if len(user_message) < 30 and ("http" in user_message or "www" in user_message or ".com" in user_message or ".tw" in user_message):
+        if len(user_message) < 60 and ("http" in user_message or "www" in user_message or ".com" in user_message or ".tw" in user_message) and not "分析" in user_message:
             # 看起來是網址，進行分析
-            analysis_result = detect_fraud_with_chatgpt(f"這個網址是否安全: {user_message}")
+            analysis_result = detect_fraud_with_chatgpt(user_message, display_name)
             response_text = analysis_result
             
             # 解析分析結果，判斷是否與詐騙相關
-            risk_level, fraud_type = parse_fraud_analysis(analysis_result)
-            is_fraud_related = risk_level is not None
+            risk_level_detected, fraud_type_detected = parse_fraud_analysis(analysis_result)
+            is_fraud_related = risk_level_detected in ["高", "中", "低"]
+            if fraud_type_detected == "新興詐騙":
+                firebase_manager.save_emerging_fraud_report(user_id, display_name, user_message, analysis_result)
         else:
-            help_text = f"{display_name}，我是防詐騙小助手，可以提供以下協助：\n\n"
-            help_text += "1. 查詢「詐騙類型」列表\n"
-            help_text += "2. 輸入特定詐騙類型查看相關資訊\n"
-            help_text += "3. 查詢特定詐騙類型的「案例」\n"
-            help_text += "4. 查詢特定詐騙類型的「處理方法」或「SOP」\n"
-            help_text += "5. 輸入「分析」+訊息內容，檢查是否含有詐騙跡象\n"
-            help_text += "6. 輸入「我的紀錄」查看您的詐騙分析歷史\n\n"
-            help_text += "若您遇到可疑情況，請立即撥打165反詐騙專線尋求協助！"
+            help_text = f"{display_name}，您好！我是防詐騙小助手。\n您可以問我「常見詐騙類型」，或者傳送可疑訊息給我「分析」。\n\n若您遇到可疑情況，請立即撥打165反詐騙專線尋求協助！"
             response_text = help_text
     
     # 回覆訊息（加入快速回覆按鈕）
@@ -568,10 +579,10 @@ def handle_message(event):
         user_id=user_id,
         display_name=display_name,
         message=user_message,
-        response=response_text,
+        response=response_text if response_text else "Flex Message Sent", # 記錄是 Flex Message
         is_fraud_related=is_fraud_related,
-        fraud_type=fraud_type,
-        risk_level=risk_level
+        fraud_type=fraud_type_detected,
+        risk_level=risk_level_detected
     )
 
 if __name__ == "__main__":

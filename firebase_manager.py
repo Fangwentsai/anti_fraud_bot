@@ -212,8 +212,8 @@ class FirebaseManager:
             reports = self.db.collection('fraud_reports').stream()
             
             # 統計各類型詐騙數量
-            fraud_types = {}
-            risk_levels = {'高': 0, '中': 0, '低': 0}
+            fraud_types_stats = {} # Renamed to avoid conflict
+            risk_levels_stats = {'高': 0, '中': 0, '低': 0, '無風險': 0, '不確定': 0} # Added more risk levels
             total_reports = 0
             
             for doc in reports:
@@ -221,22 +221,48 @@ class FirebaseManager:
                 total_reports += 1
                 
                 # 詐騙類型統計
-                fraud_type = report.get('fraud_type', '未分類')
-                if fraud_type not in fraud_types:
-                    fraud_types[fraud_type] = 0
-                fraud_types[fraud_type] += 1
+                fraud_type_report = report.get('fraud_type', '未分類') # Renamed to avoid conflict
+                if fraud_type_report not in fraud_types_stats:
+                    fraud_types_stats[fraud_type_report] = 0
+                fraud_types_stats[fraud_type_report] += 1
                 
                 # 風險等級統計
-                risk_level = report.get('risk_level', '未評估')
-                if risk_level in risk_levels:
-                    risk_levels[risk_level] += 1
+                risk_level_report = report.get('risk_level', '未評估') # Renamed to avoid conflict
+                if risk_level_report in risk_levels_stats:
+                    risk_levels_stats[risk_level_report] += 1
             
             return {
                 'total_reports': total_reports,
-                'fraud_types': fraud_types,
-                'risk_levels': risk_levels
+                'fraud_types': fraud_types_stats,
+                'risk_levels': risk_levels_stats
             }
         
         except Exception as e:
             logger.error(f"獲取詐騙統計數據失敗: {e}")
-            return {} 
+            return {}
+
+    def save_emerging_fraud_report(self, user_id: str, display_name: str, user_message: str,
+                                   chatgpt_analysis: str, status: str = "pending_review") -> bool:
+        """
+        保存用戶回報的新興詐騙資訊
+        """
+        if not self.db:
+            logger.error("Firebase未初始化，無法保存新興詐騙回報")
+            return False
+        
+        try:
+            report_data = {
+                'user_id': user_id,
+                'display_name': display_name,
+                'user_message_description': user_message,
+                'chatgpt_initial_analysis': chatgpt_analysis,
+                'timestamp': datetime.datetime.now(),
+                'status': status  # e.g., 'pending_review', 'categorized', 'rejected'
+            }
+            self.db.collection('emerging_fraud_reports').add(report_data)
+            logger.info(f"成功保存新興詐騙回報 from {user_id}")
+            return True
+        
+        except Exception as e:
+            logger.error(f"保存新興詐騙回報失敗: {e}")
+            return False 
