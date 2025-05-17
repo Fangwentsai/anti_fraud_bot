@@ -438,6 +438,12 @@
       "difficulty": "hard",
       "source": "165反詐騙資料庫",
       "keywords": ["虛擬貨幣", "比特幣", "以太幣", "高報酬", "專業分析師", "保證翻倍"],
+      "options": [
+        { "id": "A", "text": "點擊連結註冊，投資虛擬貨幣獲取高報酬。", "is_fraud": true },
+        { "id": "B", "text": "謹慎看待任何「保證翻倍」的投資訊息，直接忽略。", "is_fraud": false },
+        { "id": "C", "text": "先投資少量資金試試，如果真的獲利再加碼。", "is_fraud": true }
+      ],
+      "correct_option": "B",
       "explanation": "虛擬貨幣投資風險高，宣稱保證獲利、穩賺不賠的平台多為詐騙。"
     },
     {
@@ -447,6 +453,12 @@
       "difficulty": "easy",
       "source": "165反詐騙資料庫",
       "keywords": ["Costco", "會員回饋", "抽中禮券", "填寫資料"],
+      "options": [
+        { "id": "A", "text": "開心點擊連結填寫寄送資料，準備領取禮券。", "is_fraud": true },
+        { "id": "B", "text": "忽略此訊息，如有疑問直接聯繫Costco官方客服或至門市詢問。", "is_fraud": false },
+        { "id": "C", "text": "分享這個好消息給親友，一起參加活動。", "is_fraud": true }
+      ],
+      "correct_option": "B",
       "explanation": "大型賣場的抽獎活動通常會在店內或官方網站公布，不會單獨以簡訊或郵件通知中獎並要求點擊不明連結。"
     },
     {
@@ -456,6 +468,12 @@
       "difficulty": "medium",
       "source": "165反詐騙資料庫",
       "keywords": ["Google帳戶", "不明裝置登入", "帳戶安全", "確認活動"],
+      "options": [
+        { "id": "A", "text": "立即點擊連結確認，避免帳戶被盜用。", "is_fraud": true },
+        { "id": "B", "text": "不點擊郵件中的連結，而是直接前往Google官方網站登入檢查帳戶活動。", "is_fraud": false },
+        { "id": "C", "text": "在郵件中的連結輸入帳號密碼進行驗證。", "is_fraud": true }
+      ],
+      "correct_option": "B",
       "explanation": "Google的安全通知會直接顯示在您的帳戶活動中，或透過官方App發送。請勿點擊可疑郵件中的連結。"
     },
     {
@@ -465,6 +483,12 @@
       "difficulty": "medium",
       "source": "165反詐騙資料庫",
       "keywords": ["線上客服", "無需經驗", "彈性工時", "引導儲值", "Telegram"],
+      "options": [
+        { "id": "A", "text": "主動聯繫Telegram帳號詢問工作內容並應徵。", "is_fraud": true },
+        { "id": "B", "text": "警覺可疑的工作內容，避免接觸要求「引導儲值」的工作。", "is_fraud": false },
+        { "id": "C", "text": "將此機會分享給正在找工作的朋友。", "is_fraud": true }
+      ],
+      "correct_option": "B",
       "explanation": "要求引導他人儲值的工作內容，極可能是協助博弈或詐騙平台。應徵工作需注意工作內容的合法性。"
     },
     {
@@ -474,6 +498,12 @@
       "difficulty": "easy",
       "source": "165反詐騙資料庫",
       "keywords": ["水費", "催收", "逾期", "停水", "繳費"],
+      "options": [
+        { "id": "A", "text": "趕快點擊連結繳費，以免被停水。", "is_fraud": true },
+        { "id": "B", "text": "透過自來水公司官方App或官網查詢水費狀況並繳費。", "is_fraud": false },
+        { "id": "C", "text": "撥打簡訊中提供的電話號碼確認繳費方式。", "is_fraud": true }
+      ],
+      "correct_option": "B",
       "explanation": "自來水公司的官方網站通常是 `.gov.tw` 或 `.com.tw` 結尾，應注意辨識釣魚網站的網址。"
     },
     {
@@ -483,6 +513,12 @@
       "difficulty": "easy",
       "source": "165反詐騙資料庫",
       "keywords": ["市場調查", "消費習慣", "問卷調查", "禮券"],
+      "options": [
+        { "id": "A", "text": "點擊連結，完成問卷領取禮券。", "is_fraud": true },
+        { "id": "B", "text": "對來路不明的問卷調查保持警覺，不輕易點擊連結。", "is_fraud": false },
+        { "id": "C", "text": "先完成問卷，如果要求付費再考慮是否繼續。", "is_fraud": true }
+      ],
+      "correct_option": "B",
       "explanation": "部分假問卷調查的目的是騙取個資，或在問卷結束後要求支付「手續費」才能領取獎品。應注意問卷來源的可靠性。"
     }
   ]
