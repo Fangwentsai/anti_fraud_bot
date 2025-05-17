@@ -435,14 +435,23 @@ def send_potato_game_question(user_id, reply_token):
         )
         return
 
+    # 詐騙訊息（假土豆）
     false_potato_text = report_data['message']
     
-    # 創建兩個不同的安全訊息（真土豆）
-    true_potato_text1 = "這是安全的做法：保持警惕，仔細核實信息來源，不要輕易透露個人敏感資料或進行轉帳操作。遇到可疑情況請與家人朋友商量或報警。"
-    true_potato_text2 = "這是保障安全的建議：定期更新密碼，使用雙重認證，不要在公共Wi-Fi下登入銀行賬戶，收到可疑訊息時先聯絡官方客服核實，不要點擊不明來源的連結。"
+    # 創建兩個明顯安全的訊息（真土豆）
+    true_potato_texts = [
+        "提醒您，銀行業務人員絕不會要求您提供網路銀行密碼或是ATM操作。如有任何疑問請撥打官方客服電話查詢，且務必親自撥打，不要使用對方提供的電話號碼。",
+        "購物前請確認網站的安全性，選擇有https和安全認證的官方網站，並透過第三方支付或信用卡付款以獲得交易保障。遇到要求私下交易或要求先付款的賣家請特別小心。",
+        "接到陌生來電宣稱您涉及刑案、洗錢，需要監管帳戶或轉帳操作，請立即掛斷。司法單位不會用電話要求您操作ATM或銀行帳戶。請撥打165反詐騙專線確認。",
+        "網路投資前請查證平台合法性，任何宣稱「保證獲利」、「零風險高報酬」的投資都極可能是詐騙。合法投資管道不會要求您安裝特定APP或加入特定通訊軟體群組。",
+        "保護個人資料安全，不隨意提供身分證字號、銀行帳號等資訊。對方如有要求購買遊戲點數、禮品卡，並要求提供卡號序號，幾乎都是詐騙行為。"
+    ]
+    
+    # 從安全訊息中隨機選擇兩則
+    selected_true_potatoes = random.sample(true_potato_texts, 2)
     
     # 打亂三個選項的順序
-    options_display_texts = [false_potato_text, true_potato_text1, true_potato_text2]
+    options_display_texts = [false_potato_text] + selected_true_potatoes
     random.shuffle(options_display_texts)
 
     user_game_state[user_id] = {
@@ -458,7 +467,7 @@ def send_potato_game_question(user_id, reply_token):
             layout='vertical',
             contents=[
                 TextComponent(text='選哪顆土豆？🤔', weight='bold', size='xl', align='center', margin='md'),
-                TextComponent(text='親愛的朋友，請判斷下面哪個選項「更像」是詐騙陷阱（也就是假土豆）呢？', wrap=True, margin='lg', size='sm'),
+                TextComponent(text='請指出下列哪一個選項「是詐騙訊息」（也就是假土豆）？', wrap=True, margin='lg', size='sm'),
                 SeparatorComponent(margin='lg'),
                 TextComponent(text='選項 A:', weight='bold', size='md', margin='lg'),
                 TextComponent(text=options_display_texts[0][:250] + '...' if len(options_display_texts[0]) > 250 else options_display_texts[0], wrap=True, size='sm', margin='sm'),
@@ -530,14 +539,18 @@ def handle_potato_game_answer(user_id, reply_token, data_params):
         return
 
     reply_messages = []
-    explanation_intro = f"這則訊息和【{fraud_type_for_explanation}】詐騙手法有關。"
-    explanation_detail = f"原本的詐騙訊息是：\n「{false_potato_original_text[:250]}...」" 
+    
+    # 獲取詐騙特徵說明
+    fraud_features = get_fraud_features(fraud_type_for_explanation, false_potato_original_text)
+    
+    explanation_intro = f"這則訊息屬於【{fraud_type_for_explanation}】類型的詐騙手法。"
+    explanation_detail = f"詐騙訊息：\n「{false_potato_original_text[:180]}...」" 
 
     if chosen_text == false_potato_original_text: 
-        result_text = f"答對了！🎉 您真厲害，成功選出了假土豆！\n\n{explanation_intro}\n{explanation_detail}\n\n多一分警惕，少一分風險！"
+        result_text = f"👍 恭喜答對了！您成功識別出詐騙訊息！\n\n{explanation_intro}\n\n{explanation_detail}\n\n{fraud_features}\n\n記住：提高警覺，保護自己和親友的資產安全！"
         reply_messages.append(TextSendMessage(text=result_text))
     else: 
-        result_text = f"哎呀，差一點點！您選的這個選項其實是比較安全的做法喔。\n真正的「假土豆」(詐騙陷阱)是另一個。\n\n{explanation_intro}\n{explanation_detail}\n\n沒關係，多練習幾次就會更熟悉這些手法了！"
+        result_text = f"❌ 要小心！您選的是安全建議，不是詐騙訊息。\n\n{explanation_intro}\n\n正確答案是：\n「{false_potato_original_text[:180]}...」\n\n{fraud_features}\n\n別灰心，透過練習您會越來越擅長識別詐騙！"
         reply_messages.append(TextSendMessage(text=result_text))
 
     quick_reply_items = QuickReply(items=[
@@ -551,6 +564,65 @@ def handle_potato_game_answer(user_id, reply_token, data_params):
         line_bot_api.reply_message(reply_token, messages=reply_messages)
     except Exception as e:
         logger.error(f"Error sending potato game answer reply: {e}")
+
+def get_fraud_features(fraud_type, fraud_message):
+    """
+    根據詐騙類型提供典型詐騙特徵說明
+    """
+    common_features = "⚠️ 詐騙常見特徵：\n"
+    
+    # 根據詐騙類型添加特定特徵
+    if "購物" in fraud_type:
+        features = [
+            "1. 要求私下交易或匯款到私人帳戶",
+            "2. 急著成交，製造急迫感",
+            "3. 價格明顯低於市場行情",
+            "4. 要求使用非正規支付方式",
+            "5. 賣家資訊模糊不清"
+        ]
+    elif "投資" in fraud_type or "理財" in fraud_type:
+        features = [
+            "1. 保證「穩賺不賠」、「高報酬、低風險」",
+            "2. 聲稱有「內部資訊」或「獨家投資管道」",
+            "3. 要求下載特定APP或加入特定群組",
+            "4. 催促立即投資，聲稱「機會稍縱即逝」",
+            "5. 要求將資金轉入「投資專戶」"
+        ]
+    elif "交友" in fraud_type:
+        features = [
+            "1. 短時間內迅速發展親密關係",
+            "2. 自稱高社經地位但無法見面",
+            "3. 編造各種理由請求金錢協助",
+            "4. 聲稱有緊急醫療費用或意外事件",
+            "5. 拒絕視訊通話或見面"
+        ]
+    elif "檢警" in fraud_type or "公務" in fraud_type:
+        features = [
+            "1. 聲稱您涉及刑案或洗錢",
+            "2. 要求監管您的銀行帳戶",
+            "3. 要求操作ATM或網銀",
+            "4. 要求購買點數卡或禮品卡",
+            "5. 警告不得向他人透露"
+        ]
+    elif "中獎" in fraud_type:
+        features = [
+            "1. 未參加也「中獎」",
+            "2. 要求支付手續費、稅金才能領獎",
+            "3. 使用模糊的活動辦法",
+            "4. 通知管道可疑（如簡訊）",
+            "5. 要求提供銀行帳號或個資"
+        ]
+    else:
+        # 通用詐騙特徵
+        features = [
+            "1. 製造緊急感與恐慌",
+            "2. 要求提供敏感個人資料",
+            "3. 提出不合理或可疑的要求",
+            "4. 語法錯誤或可疑連結",
+            "5. 要求轉帳、匯款或購買點數"
+        ]
+    
+    return common_features + "\n".join(features)
 
 # --- End: Add these new functions ---
 
