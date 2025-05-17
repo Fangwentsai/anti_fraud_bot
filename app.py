@@ -440,6 +440,84 @@ def send_potato_game_question(user_id, reply_token):
         fraud_type = question['fraud_type']
         explanation = question.get('explanation', '這是一則詐騙訊息，請保持警覺。')
         
+        # 檢查題目是否已有預設選項
+        if 'options' in question and question['options'] and 'correct_option' in question:
+            # 使用題庫中的預設選項
+            options = question['options'].copy()
+            correct_option = question['correct_option']
+            
+            # 隨機打亂選項順序
+            random.shuffle(options)
+            
+            # 重新映射選項ID (原本可能是A,B,C，現在換成新的順序)
+            option_mapping = {'A': options[0], 'B': options[1], 'C': options[2] if len(options) > 2 else None}
+            
+            # 記錄正確答案的新位置
+            for option_id, option in option_mapping.items():
+                if option and option['id'] == correct_option:
+                    new_correct_option = option_id
+                    break
+            else:
+                new_correct_option = 'A'  # 預設值，應該不會發生
+                
+            # 顯示選項的文本內容
+            options_display_texts = [option['text'] for option in options if option]
+            if len(options_display_texts) < 3:
+                # 如果選項不足三個，補充
+                while len(options_display_texts) < 3:
+                    options_display_texts.append("此選項不適用")
+            
+            # 保存遊戲狀態，包括新的選項順序和答案位置
+            user_game_state[user_id] = {
+                'false_potato_original': false_potato_text,
+                'fraud_type_for_explanation': fraud_type,
+                'custom_explanation': explanation,
+                'option_A_text': options_display_texts[0],
+                'option_B_text': options_display_texts[1],
+                'option_C_text': options_display_texts[2] if len(options_display_texts) > 2 else "無選項C",
+                'correct_option': new_correct_option,
+                'using_predefined_options': True
+            }
+        else:
+            # 題目沒有預設選項，使用原來的邏輯
+            # 創建兩個明顯安全的訊息（真土豆）
+            true_potato_texts = [
+                "提醒您，銀行業務人員絕不會要求您提供網路銀行密碼或是ATM操作。如有任何疑問請撥打官方客服電話查詢，且務必親自撥打，不要使用對方提供的電話號碼。",
+                "購物前請確認網站的安全性，選擇有https和安全認證的官方網站，並透過第三方支付或信用卡付款以獲得交易保障。遇到要求私下交易或要求先付款的賣家請特別小心。",
+                "接到陌生來電宣稱您涉及刑案、洗錢，需要監管帳戶或轉帳操作，請立即掛斷。司法單位不會用電話要求您操作ATM或銀行帳戶。請撥打165反詐騙專線確認。",
+                "網路投資前請查證平台合法性，任何宣稱「保證獲利」、「零風險高報酬」的投資都極可能是詐騙。合法投資管道不會要求您安裝特定APP或加入特定通訊軟體群組。",
+                "保護個人資料安全，不隨意提供身分證字號、銀行帳號等資訊。對方如有要求購買遊戲點數、禮品卡，並要求提供卡號序號，幾乎都是詐騙行為。"
+            ]
+            
+            # 從安全訊息中隨機選擇兩則
+            selected_true_potatoes = random.sample(true_potato_texts, 2)
+            
+            # 打亂三個選項的順序
+            options_display_texts = [false_potato_text] + selected_true_potatoes
+            random.shuffle(options_display_texts)
+
+            # 找出詐騙訊息在打亂後的位置
+            correct_option = None
+            for i, text in enumerate(options_display_texts):
+                if text == false_potato_text:
+                    if i == 0:
+                        correct_option = 'A'
+                    elif i == 1:
+                        correct_option = 'B'
+                    else:
+                        correct_option = 'C'
+                    break
+
+            user_game_state[user_id] = {
+                'false_potato_original': false_potato_text,
+                'fraud_type_for_explanation': fraud_type,
+                'custom_explanation': explanation,
+                'option_A_text': options_display_texts[0],
+                'option_B_text': options_display_texts[1],
+                'option_C_text': options_display_texts[2],
+                'correct_option': correct_option,
+                'using_predefined_options': False
+            }
     else:
         # 如果沒有預設題庫，則回退到從Firebase中獲取
         logger.warning("使用Firebase資料庫作為備選題目來源")
@@ -456,31 +534,45 @@ def send_potato_game_question(user_id, reply_token):
         false_potato_text = report_data['message']
         fraud_type = report_data['fraud_type']
         explanation = ""
-    
-    # 創建兩個明顯安全的訊息（真土豆）
-    true_potato_texts = [
-        "提醒您，銀行業務人員絕不會要求您提供網路銀行密碼或是ATM操作。如有任何疑問請撥打官方客服電話查詢，且務必親自撥打，不要使用對方提供的電話號碼。",
-        "購物前請確認網站的安全性，選擇有https和安全認證的官方網站，並透過第三方支付或信用卡付款以獲得交易保障。遇到要求私下交易或要求先付款的賣家請特別小心。",
-        "接到陌生來電宣稱您涉及刑案、洗錢，需要監管帳戶或轉帳操作，請立即掛斷。司法單位不會用電話要求您操作ATM或銀行帳戶。請撥打165反詐騙專線確認。",
-        "網路投資前請查證平台合法性，任何宣稱「保證獲利」、「零風險高報酬」的投資都極可能是詐騙。合法投資管道不會要求您安裝特定APP或加入特定通訊軟體群組。",
-        "保護個人資料安全，不隨意提供身分證字號、銀行帳號等資訊。對方如有要求購買遊戲點數、禮品卡，並要求提供卡號序號，幾乎都是詐騙行為。"
-    ]
-    
-    # 從安全訊息中隨機選擇兩則
-    selected_true_potatoes = random.sample(true_potato_texts, 2)
-    
-    # 打亂三個選項的順序
-    options_display_texts = [false_potato_text] + selected_true_potatoes
-    random.shuffle(options_display_texts)
+        
+        # 創建兩個明顯安全的訊息（真土豆）
+        true_potato_texts = [
+            "提醒您，銀行業務人員絕不會要求您提供網路銀行密碼或是ATM操作。如有任何疑問請撥打官方客服電話查詢，且務必親自撥打，不要使用對方提供的電話號碼。",
+            "購物前請確認網站的安全性，選擇有https和安全認證的官方網站，並透過第三方支付或信用卡付款以獲得交易保障。遇到要求私下交易或要求先付款的賣家請特別小心。",
+            "接到陌生來電宣稱您涉及刑案、洗錢，需要監管帳戶或轉帳操作，請立即掛斷。司法單位不會用電話要求您操作ATM或銀行帳戶。請撥打165反詐騙專線確認。",
+            "網路投資前請查證平台合法性，任何宣稱「保證獲利」、「零風險高報酬」的投資都極可能是詐騙。合法投資管道不會要求您安裝特定APP或加入特定通訊軟體群組。",
+            "保護個人資料安全，不隨意提供身分證字號、銀行帳號等資訊。對方如有要求購買遊戲點數、禮品卡，並要求提供卡號序號，幾乎都是詐騙行為。"
+        ]
+        
+        # 從安全訊息中隨機選擇兩則
+        selected_true_potatoes = random.sample(true_potato_texts, 2)
+        
+        # 打亂三個選項的順序
+        options_display_texts = [false_potato_text] + selected_true_potatoes
+        random.shuffle(options_display_texts)
 
-    user_game_state[user_id] = {
-        'false_potato_original': false_potato_text,
-        'fraud_type_for_explanation': fraud_type,
-        'custom_explanation': explanation if potato_game_questions else "",
-        'option_A_text': options_display_texts[0],
-        'option_B_text': options_display_texts[1],
-        'option_C_text': options_display_texts[2]
-    }
+        # 找出詐騙訊息在打亂後的位置
+        correct_option = None
+        for i, text in enumerate(options_display_texts):
+            if text == false_potato_text:
+                if i == 0:
+                    correct_option = 'A'
+                elif i == 1:
+                    correct_option = 'B'
+                else:
+                    correct_option = 'C'
+                break
+
+        user_game_state[user_id] = {
+            'false_potato_original': false_potato_text,
+            'fraud_type_for_explanation': fraud_type,
+            'custom_explanation': explanation,
+            'option_A_text': options_display_texts[0],
+            'option_B_text': options_display_texts[1],
+            'option_C_text': options_display_texts[2],
+            'correct_option': correct_option,
+            'using_predefined_options': False
+        }
 
     flex_message_content = BubbleContainer(
         body=BoxComponent(
@@ -490,13 +582,13 @@ def send_potato_game_question(user_id, reply_token):
                 TextComponent(text='請指出下列哪一個選項「是詐騙訊息」（也就是假土豆）？', wrap=True, margin='lg', size='sm'),
                 SeparatorComponent(margin='lg'),
                 TextComponent(text='選項 A:', weight='bold', size='md', margin='lg'),
-                TextComponent(text=options_display_texts[0][:250] + '...' if len(options_display_texts[0]) > 250 else options_display_texts[0], wrap=True, size='sm', margin='sm'),
+                TextComponent(text=user_game_state[user_id]['option_A_text'][:250] + '...' if len(user_game_state[user_id]['option_A_text']) > 250 else user_game_state[user_id]['option_A_text'], wrap=True, size='sm', margin='sm'),
                 SeparatorComponent(margin='lg'),
                 TextComponent(text='選項 B:', weight='bold', size='md', margin='lg'),
-                TextComponent(text=options_display_texts[1][:250] + '...' if len(options_display_texts[1]) > 250 else options_display_texts[1], wrap=True, size='sm', margin='sm'),
+                TextComponent(text=user_game_state[user_id]['option_B_text'][:250] + '...' if len(user_game_state[user_id]['option_B_text']) > 250 else user_game_state[user_id]['option_B_text'], wrap=True, size='sm', margin='sm'),
                 SeparatorComponent(margin='lg'),
                 TextComponent(text='選項 C:', weight='bold', size='md', margin='lg'),
-                TextComponent(text=options_display_texts[2][:250] + '...' if len(options_display_texts[2]) > 250 else options_display_texts[2], wrap=True, size='sm', margin='sm'),
+                TextComponent(text=user_game_state[user_id]['option_C_text'][:250] + '...' if len(user_game_state[user_id]['option_C_text']) > 250 else user_game_state[user_id]['option_C_text'], wrap=True, size='sm', margin='sm'),
             ]
         ),
         footer=BoxComponent(
@@ -547,6 +639,7 @@ def handle_potato_game_answer(user_id, reply_token, data_params):
     false_potato_original_text = game_data['false_potato_original']
     fraud_type_for_explanation = game_data['fraud_type_for_explanation']
     custom_explanation = game_data.get('custom_explanation', '')
+    correct_option = game_data.get('correct_option')
     
     chosen_text = ""
     if chosen_option_id == 'A':
@@ -570,11 +663,14 @@ def handle_potato_game_answer(user_id, reply_token, data_params):
     explanation_intro = f"這則訊息屬於【{fraud_type_for_explanation}】類型的詐騙手法。"
     explanation_detail = f"詐騙訊息：\n「{false_potato_original_text[:180]}...」" 
 
-    if chosen_text == false_potato_original_text: 
+    # 判斷用戶是否選擇了正確的選項
+    is_correct = chosen_option_id == correct_option
+    
+    if is_correct: 
         result_text = f"👍 恭喜答對了！您成功識別出詐騙訊息！\n\n{explanation_intro}\n\n{explanation_detail}\n\n{fraud_features}\n\n記住：提高警覺，保護自己和親友的資產安全！"
         reply_messages.append(TextSendMessage(text=result_text))
     else: 
-        result_text = f"❌ 要小心！您選的是安全建議，不是詐騙訊息。\n\n{explanation_intro}\n\n正確答案是：\n「{false_potato_original_text[:180]}...」\n\n{fraud_features}\n\n別灰心，透過練習您會越來越擅長識別詐騙！"
+        result_text = f"❌ 要小心！您選的不是詐騙訊息。\n\n{explanation_intro}\n\n正確答案是選項 {correct_option}：\n「{false_potato_original_text[:180]}...」\n\n{fraud_features}\n\n別灰心，透過練習您會越來越擅長識別詐騙！"
         reply_messages.append(TextSendMessage(text=result_text))
 
     quick_reply_items = QuickReply(items=[
