@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 import json
 from flask import Flask, request, abort, render_template
@@ -1200,7 +1201,26 @@ def load_potato_game_questions():
             
         with open(POTATO_GAME_QUESTIONS_DB, 'r', encoding='utf-8') as f:
             data = json.load(f)
-            potato_game_questions = data.get("questions", [])
+            
+            # 處理不同的JSON結構
+            all_questions = []
+            
+            if isinstance(data, dict) and "questions" in data:
+                # 處理頂層questions
+                top_questions = data.get("questions", [])
+                
+                for q in top_questions:
+                    # 檢查是否有嵌套的questions數組
+                    if isinstance(q, dict) and "questions" in q:
+                        # 將嵌套的questions添加到總題庫
+                        nested_questions = q.get("questions", [])
+                        all_questions.extend(nested_questions)
+                        logger.info(f"發現嵌套題目：{len(nested_questions)}題")
+                    else:
+                        # 將頂層題目添加到總題庫
+                        all_questions.append(q)
+            
+            potato_game_questions = all_questions
             
         # 確認文件內容
         first_three_questions = []
