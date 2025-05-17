@@ -15,6 +15,7 @@ import logging
 from firebase_manager import FirebaseManager
 import random
 import datetime  # 導入datetime用於時間比較
+import re
 
 load_dotenv()
 
@@ -39,6 +40,9 @@ user_game_state = {}
 
 # 用戶最後聊天時間記錄
 user_last_chat_time = {}
+user_pending_analysis = {} # 用於追蹤等待用戶澄清的分析請求
+
+CHAT_TIP_PROBABILITY = 0.3 # 閒聊時回覆防詐小知識的機率
 
 # 定義防詐小知識
 anti_fraud_tips = [
@@ -672,197 +676,221 @@ def fraud_statistics():
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_id = event.source.user_id
-    text_message = event.message.text.strip()
-    reply_token = event.reply_token # Get reply_token
-    
     profile = get_user_profile(user_id)
-    display_name = profile.display_name if profile and profile.display_name else "使用者"
-    logger.info(f"接收到來自 {display_name}({user_id}) 的訊息: {text_message}")
-    
-    # 檢查是否需要重新開始對話（超過5分鐘）
+    display_name = profile.display_name if profile else "未知用戶"
+    text_message = event.message.text
+    reply_token = event.reply_token
     current_time = datetime.datetime.now()
-    should_reset_conversation = False
-    
-    if user_id in user_last_chat_time:
-        time_diff = current_time - user_last_chat_time[user_id]
-        if time_diff.total_seconds() > 300:  # 5分鐘 = 300秒
-            should_reset_conversation = True
-            logger.info(f"用戶 {user_id} 超過5分鐘沒有互動，重新開始對話")
-    
-    # 更新最後聊天時間
-    user_last_chat_time[user_id] = current_time
-    
-    # 如果需要重新開始對話，發送問候
-    if should_reset_conversation and text_message not in ["詐騙類型列表", "有哪些詐騙", "選哪顆土豆", "玩遊戲", "開始遊戲", "選土豆", "potato game"]:
-        # 隨機選擇一個防詐小知識
-        tip = random.choice(anti_fraud_tips)
-        greeting_text = f"{display_name}您好！很高興再次與您交流。\n\n今日防詐小知識：\n{tip}\n\n有什麼我能幫您的嗎？"
+
+    logger.info(f"Received message from {display_name} ({user_id}): {text_message}")
+
+    # 0. 檢查是否正在等待用戶對某訊息提供澄清
+    pending_state = user_pending_analysis.get(user_id)
+    if pending_state and pending_state.get("waiting_for_clarification"):
+        logger.info(f"User {user_id} is providing clarification for: {pending_state.get('original_message')}")
+        clarification = text_message
+        original_message_to_analyze = pending_state.get("original_message")
         
-        quick_reply = QuickReply(items=[
-            QuickReplyButton(action=MessageAction(label="看看詐騙類型", text="詐騙類型列表")),
-            QuickReplyButton(action=MessageAction(label="玩「選土豆」遊戲", text="選哪顆土豆")),
-        ])
+        # 將原始訊息與用戶的澄清合併後進行分析
+        combined_message = f"用戶原始訊息是：\n「{original_message_to_analyze}」\n\n用戶針對此訊息，補充的疑慮或說明是：\n「{clarification}」"
+        logger.info(f"Combined message for analysis for user {user_id}: {combined_message}")
+
+        analysis_result_text = detect_fraud_with_chatgpt(combined_message, display_name)
+        analysis_data = parse_fraud_analysis(analysis_result_text)
+
+        risk_level = analysis_data.get("risk_level", "不確定")
+        fraud_type_identified = analysis_data.get("fraud_type", "未知")
+        explanation_text = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
+        suggestions_text = analysis_data.get("suggestions", "請隨時保持警惕。")
+
+        reply_text_parts = [
+            f"{display_name}您好，針對您的訊息及補充說明，我的分析如下：",
+            f"風險等級：{risk_level}",
+            f"可能詐騙類型：{fraud_type_identified}"
+        ]
+        if explanation_text and explanation_text.strip() and not any(item in explanation_text for item in [risk_level, fraud_type_identified]):
+             reply_text_parts.append(f"\n{explanation_text.strip()}")
+        if suggestions_text and suggestions_text.strip():
+             reply_text_parts.append(f"\n建議：\n{suggestions_text.strip()}")
         
-        line_bot_api.reply_message(reply_token, TextSendMessage(text=greeting_text, quick_reply=quick_reply))
-        firebase_manager.save_user_interaction(user_id, display_name, text_message, "自動重新開始對話並提供防詐小知識", is_fraud_related=False)
+        reply_message_text = "\n".join(reply_text_parts)
+
+        line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_message_text))
+        firebase_manager.save_user_interaction(
+            user_id, display_name, 
+            f"Original: {original_message_to_analyze} | Clarification: {clarification}", 
+            reply_message_text, 
+            is_fraud_related=(risk_level.lower() not in ["無風險", "不確定", "非詐騙相關", "低", "低風險"]), # 擴展非詐騙相關判斷
+            fraud_type=fraud_type_identified, 
+            risk_level=risk_level
+        )
+        if user_id in user_pending_analysis: # 再次確認以防多重請求問題
+            del user_pending_analysis[user_id] # 分析完成，清除狀態
+        user_last_chat_time[user_id] = current_time # 更新最後互動時間
         return
 
-    # 遊戲觸發
-    game_trigger_keywords = ["選哪顆土豆", "玩遊戲", "開始遊戲", "選土豆", "potato game", 
-                           "我要玩選土豆", "我要玩選土豆遊戲", "想玩選土豆", "選土豆遊戲", 
-                           "玩選土豆", "玩選哪顆土豆", "我要玩選哪顆土豆", "來玩選土豆"]
-    if any(keyword in text_message.lower() for keyword in game_trigger_keywords):
-        logger.info(f"User {user_id} triggered potato game.")
+    # 更新用戶最後聊天時間 (移至更早的位置，確保所有互動路徑都能更新)
+    user_last_chat_time[user_id] = current_time
+
+    # 檢查用戶是否在遊戲中
+    if user_id in user_game_state:
+        logger.info(f"User {user_id} is in potato game state.")
+        # 檢查是否需要重置自動回覆計時器 (例如超過5分鐘沒有互動)
+        # 這段邏輯可以根據實際需求保留或調整
+        # if user_id in user_last_chat_time and (current_time - user_last_chat_time[user_id]) > AUTO_REPLY_RESET_INTERVAL:
+        # logger.info(f"Resetting auto-reply for user {user_id} due to inactivity.")
+        # # 可以在這裡發送一個新的問候語或提示
+        # greeting_message = f"{display_name}您好！又見面了，有什麼可以幫您的嗎？試試看輸入「功能」了解我會做什麼！"
+        # line_bot_api.push_message(user_id, TextSendMessage(text=greeting_message))
+        # firebase_manager.save_user_interaction(user_id, display_name, "Auto-reply reset", greeting_message, is_fraud_related=False)
+
+        # 更新用戶最後聊天時間 (即便只是用戶發訊息，尚未回覆，也更新)
+        user_last_chat_time[user_id] = current_time
+        
+        # 處理功能詢問
+        if any(keyword in text_message.lower() for keyword in function_inquiry_keywords):
+            reply_text = f"{display_name}您好！我是防詐騙小幫手，我的功能包括：\n\n" \
+                        f"1️⃣ 詐騙風險分析：我可以分析您收到的可疑訊息，評估是否為詐騙\n\n" \
+                        f"2️⃣ 詐騙類型查詢：您可以輸入「詐騙類型列表」查看各種常見詐騙\n\n" \
+                        f"3️⃣ 「選哪顆土豆」小遊戲：通過遊戲學習辨識詐騙訊息\n\n" \
+                        f"4️⃣ 防詐小知識：與我聊天時，我會不定時分享實用的防詐技巧\n\n" \
+                        f"5️⃣ 閒聊功能：當您只是想跟我聊聊天時，我也樂意陪伴您\n\n" \
+                        f"您想嘗試哪個功能呢？"
+            
+            quick_reply = QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label="看看詐騙類型", text="詐騙類型列表")),
+                QuickReplyButton(action=MessageAction(label="玩「選土豆」遊戲", text="選哪顆土豆")),
+                QuickReplyButton(action=MessageAction(label="分析可疑訊息", text="我收到這個：")),
+            ])
+            
+            line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
+            firebase_manager.save_user_interaction(user_id, display_name, text_message, "回覆功能說明", is_fraud_related=False)
+            return
+        
+        # 處理需要追問的情況 (例如用戶明確表示被詐騙)
+        if any(pattern in text_message.lower() for pattern in follow_up_patterns):
+            follow_up_reply_text = (
+                f"{display_name}您好！我理解您可能正在擔心是否遇到詐騙情況。\n\n"
+                f"為了能更準確地幫助您分析，請您告訴我更多詳細情況：\n\n"
+                f"• 您收到了什麼可疑訊息或電話？\n"
+                f"• 對方提出了什麼要求？\n"
+                f"• 您是否已經提供個人資料或進行付款？\n\n"
+                f"請將可疑內容分享給我，我會立即為您分析風險！"
+            )
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=follow_up_reply_text))
+            firebase_manager.save_user_interaction(
+                user_id, display_name, text_message, 
+                "Responded to follow-up pattern with clarifying questions", 
+                is_fraud_related=True 
+            )
+            return
+
+        # 處理「選哪顆土豆」遊戲觸發
+        if any(keyword in text_message.lower() for keyword in potato_game_trigger_keywords):
+            logger.info(f"User {user_id} triggered potato game.")
+            firebase_manager.save_user_interaction(
+                user_id, display_name, text_message, 
+                "啟動「選哪顆土豆」遊戲", is_fraud_related=False
+            )
+            send_potato_game_question(user_id, reply_token)
+            return
+
+    # 處理詐騙類型列表查詢
+    if "詐騙類型列表" == text_message.lower() or "詐騙類型" == text_message.lower():
+        types_text = "目前已收集的詐騙類型有：\n"
+        for f_type, info in fraud_types.items():
+            types_text += f"\n⚠️ {f_type}：\n{info['description']}\n"
+        
+        types_text += "\n想了解特定類型，可以問我「什麼是[詐騙類型]」喔！"
+
+        quick_reply_items = []
+        for f_type in list(fraud_types.keys())[:4]:
+            quick_reply_items.append(QuickReplyButton(action=MessageAction(label=f_type, text=f"什麼是{f_type}")))
+
+        line_bot_api.reply_message(reply_token, TextSendMessage(text=types_text, quick_reply=QuickReply(items=quick_reply_items) if quick_reply_items else None))
+        firebase_manager.save_user_interaction(user_id, display_name, text_message, "Provided list of fraud types", is_fraud_related=False)
+        return
+    
+    # 處理特定詐騙類型資訊查詢 (例如 "什麼是網路購物詐騙")
+    specific_type_query_match = re.match(r"^(什麼是|查詢|我想了解|我想知道)(.+詐騙)$", text_message.strip())
+    if specific_type_query_match:
+        query_type_name = specific_type_query_match.group(2).strip()
+        found_type = None
+        for f_type_key, f_type_data in fraud_types.items():
+            if query_type_name == f_type_key or query_type_name in f_type_key or f_type_key in query_type_name:
+                found_type = f_type_key
+                break
+        
+        if found_type and found_type in fraud_types:
+            type_info = fraud_types[found_type]
+            examples_list = type_info.get("examples", [])
+            examples = "\n".join(examples_list) if examples_list else "暫無案例"
+            sop_list = type_info.get("sop", [])
+            sop = "\n".join(sop_list) if sop_list else "暫無建議"
+            
+            reply_message_parts = [
+                f"【{found_type}】詳細說明：",
+                type_info['description'],
+                f"\n📋 常見案例與手法：\n{examples}",
+                f"\n🛡️ 防範建議：\n{sop}"
+            ]
+            reply_message_text = "\n".join(reply_message_parts)
+
+            line_bot_api.reply_message(reply_token,TextSendMessage(text=reply_message_text))
+            firebase_manager.save_user_interaction(user_id, display_name, text_message, f"Provided details for {found_type}", is_fraud_related=False)
+            return
+        else:
+            line_bot_api.reply_message(reply_token, TextSendMessage(text=f"抱歉，我還沒有關於「{query_type_name}」的詳細資訊。您可以輸入「詐騙類型列表」查看我已知的類型。"))
+            firebase_manager.save_user_interaction(user_id, display_name, text_message, f"Specific fraud type not found: {query_type_name}", is_fraud_related=False)
+            return
+
+    # 新增：如果訊息看起來像一般分析請求，但不明確，則提問以引導用戶提供更多資訊
+    is_specific_command_check = (
+        any(keyword in text_message.lower() for keyword in function_inquiry_keywords) or
+        any(pattern in text_message.lower() for pattern in follow_up_patterns) or 
+        any(keyword in text_message.lower() for keyword in potato_game_trigger_keywords) or
+        ("詐騙類型列表" == text_message.lower() or "詐騙類型" == text_message.lower()) or
+        (re.match(r"^(什麼是|查詢|我想了解|我想知道)(.+詐騙)$", text_message.strip()) is not None)
+    )
+
+    if not is_specific_command_check and (len(text_message) > 15 or text_message.lower().startswith(("我收到這個", "幫我看看這個", "這則訊息", "分析一下這個", "這個是", "請問這個"))):
+        logger.info(f"Message from {user_id} ('{text_message}') seems like a general analysis request. Asking for clarification.")
+        user_pending_analysis[user_id] = {
+            "original_message": text_message,
+            "waiting_for_clarification": True,
+            "timestamp": current_time 
+        }
+        clarification_question = (
+            f"{display_name}您好，我看到您傳送了「{text_message[:30]}{'...' if len(text_message)>30 else ''}」。\n\n"
+            f"為了更精準地為您分析，可以請您具體說明一下：\n"
+            f"1. 您對這則訊息的哪個部分感到最可疑或不確定？\n"
+            f"2. 您擔心這可能是哪種類型的問題呢（例如金錢、個資、假冒身份等）？\n\n"
+            f"請直接回覆您的疑慮，我會結合您的說明為您分析。"
+        )
+        line_bot_api.reply_message(reply_token, TextSendMessage(text=clarification_question))
         firebase_manager.save_user_interaction(
             user_id, display_name, text_message, 
-            "啟動「選哪顆土豆」遊戲", is_fraud_related=False
+            "Asked for clarification on general analysis request", 
+            is_fraud_related=False 
         )
-        send_potato_game_question(user_id, reply_token)
         return
 
-    # 其他既有訊息處理邏輯
-    if text_message == "詐騙類型列表" or text_message == "有哪些詐騙":
-        carousel_items = []
-        type_names = list(fraud_types.keys())
-        chunk_size = 10 # Max buttons per bubble for Flex Carousel
-
-        for i in range(0, len(type_names), chunk_size):
-            chunk = type_names[i:i+chunk_size]
-            buttons = []
-            for type_name in chunk:
-                buttons.append(
-                    ButtonComponent(
-                        style='link',
-                        height='sm',
-                        action=MessageAction(label=type_name, text=f"我想了解 {type_name}")
-                    )
-                )
-            
-            bubble = BubbleContainer(
-                body=BoxComponent(
-                    layout='vertical',
-                    contents=[
-                        TextComponent(text='選擇想了解的詐騙類型', weight='bold', size='md')
-                    ] + buttons
-                )
-            )
-            carousel_items.append(bubble)
-        
-        if carousel_items:
-            flex_message = FlexSendMessage(
-                alt_text='詐騙類型列表',
-                contents=CarouselContainer(contents=carousel_items)
-            )
-            line_bot_api.reply_message(reply_token, flex_message)
-            firebase_manager.save_user_interaction(user_id, display_name, text_message, "回覆詐騙類型列表 Flex Message")
-        else:
-            line_bot_api.reply_message(reply_token, TextSendMessage(text="目前沒有可顯示的詐騙類型。"))
-            firebase_manager.save_user_interaction(user_id, display_name, text_message, "回覆無詐騙類型")
-        return
-
-    elif text_message.startswith("我想了解"):
-        try:
-            selected_type = text_message.split("我想了解")[1].strip()
-            if selected_type in fraud_types:
-                type_info = fraud_types[selected_type]
-                description = type_info.get("description", "暫無描述")
-                examples = "\n".join([f"{ex}" for ex in type_info.get("examples", ["暫無範例"])])
-                sop = "\n".join([f"{s}" for s in type_info.get("sop", ["暫無建議"])])
-
-                reply_text = (
-                    f"【{selected_type}】\n\n"
-                    f"描述：\n{description}\n\n"
-                    f"常見案例：\n{examples}\n\n"
-                    f"防範方式：\n{sop}"
-                )
-                
-                # 創建用於詢問是否想了解其他詐騙案例的QuickReply
-                quick_reply_items = QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="了解其他詐騙類型", text="詐騙類型列表")),
-                    QuickReplyButton(action=MessageAction(label="回到首頁", text="你好"))
-                ])
-                
-                # 檢查文字長度，如果太長則分段或用Flex Message
-                if len(reply_text) > 4800: # Line TextSendMessage limit is 5000 chars, leave some buffer
-                    reply_text_part1 = reply_text[:4800]
-                    reply_text_part2 = reply_text[4800:]
-                    line_bot_api.reply_message(reply_token, [
-                        TextSendMessage(text=reply_text_part1),
-                        TextSendMessage(text=reply_text_part2, quick_reply=quick_reply_items)
-                    ])
-                else:
-                    line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply_items))
-                
-                firebase_manager.save_user_interaction(user_id, display_name, text_message, f"回覆關於 {selected_type} 的資訊")
-
-            else:
-                line_bot_api.reply_message(reply_token, TextSendMessage(text=f"抱歉，我還不了解「{selected_type}」這種詐騙類型。您可以試試看「詐騙類型列表」。"))
-                firebase_manager.save_user_interaction(user_id, display_name, text_message, f"查詢未知詐騙類型 {selected_type}")
-        except IndexError:
-            line_bot_api.reply_message(reply_token, TextSendMessage(text="指令格式錯誤，請輸入如：「我想了解 網路購物詐騙」"))
-            firebase_manager.save_user_interaction(user_id, display_name, text_message, "指令格式錯誤 (我想了解)")
-        return
-
-    elif text_message == "你好" or text_message.lower() == "hello" or text_message.lower() == "hi":
-        reply_text = f"{display_name}您好！我是您的防詐騙小幫手，我可以：\n1. 分析您收到的可疑訊息，評估詐騙風險。\n2. 提供常見詐騙類型資訊與防範建議。\n3. 和您玩「選哪顆土豆」小遊戲，練習辨識詐騙！\n\n您可以直接傳送可疑訊息給我，或輸入「詐騙類型列表」或「玩遊戲」來試試看喔！"
-        quick_reply = QuickReply(items=[
-            QuickReplyButton(action=MessageAction(label="看看詐騙類型", text="詐騙類型列表")),
-            QuickReplyButton(action=MessageAction(label="玩「選土豆」遊戲", text="選哪顆土豆")),
-            QuickReplyButton(action=MessageAction(label="我收到可疑訊息", text="我收到這個：")),
-        ])
-        line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
-        firebase_manager.save_user_interaction(user_id, display_name, text_message, "回覆問候語與功能選單")
-        return
-
-    # 處理功能相關詢問
-    function_inquiry_keywords = ["有什麼功能", "還有什麼功能", "可以做什麼", "會做什麼", "怎麼使用", "如何使用", "使用方法"]
-    if any(keyword in text_message for keyword in function_inquiry_keywords):
-        reply_text = f"{display_name}您好！我是防詐騙小幫手，我的功能包括：\n\n" \
-                    f"1️⃣ 詐騙風險分析：我可以分析您收到的可疑訊息，評估是否為詐騙\n\n" \
-                    f"2️⃣ 詐騙類型查詢：您可以輸入「詐騙類型列表」查看各種常見詐騙\n\n" \
-                    f"3️⃣ 「選哪顆土豆」小遊戲：通過遊戲學習辨識詐騙訊息\n\n" \
-                    f"4️⃣ 防詐小知識：與我聊天時，我會不定時分享實用的防詐技巧\n\n" \
-                    f"5️⃣ 閒聊功能：當您只是想跟我聊聊天時，我也樂意陪伴您\n\n" \
-                    f"您想嘗試哪個功能呢？"
-        
-        quick_reply = QuickReply(items=[
-            QuickReplyButton(action=MessageAction(label="看看詐騙類型", text="詐騙類型列表")),
-            QuickReplyButton(action=MessageAction(label="玩「選土豆」遊戲", text="選哪顆土豆")),
-            QuickReplyButton(action=MessageAction(label="分析可疑訊息", text="我收到這個：")),
-        ])
-        
-        line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
-        firebase_manager.save_user_interaction(user_id, display_name, text_message, "回覆功能說明", is_fraud_related=False)
-        return
-        
-    # 處理需要追問的情況
-    follow_up_patterns = [
-        "我被詐騙了", "我是不是被詐騙了", "這是詐騙嗎", "我可能被騙了", 
-        "有人騙我", "我被騙", "我被騙了嗎", "我被騙錢", "這個是真的嗎",
-        "這是詐騙訊息嗎"
+    # 如果不是任何特定指令，也不是需要提問引導的分析請求，則視為閒聊或直接分析
+    # 判斷是否應進入閒聊+防詐小提示的邏輯
+    # CHAT_TIP_PROBABILITY 應在文件頂部定義, e.g., CHAT_TIP_PROBABILITY = 0.3
+    # 檢查訊息是否不包含任何已知指令的關鍵字，以判斷是否為一般閒聊
+    general_chat_keywords = [
+        "詐騙類型列表", "詐騙類型", 
+        "選哪顆土豆", "玩遊戲",
+        "什麼是", "查詢", "我想了解", "我想知道" # 這些是類型查詢的前綴
     ]
-    
-    if any(pattern in text_message.lower() for pattern in follow_up_patterns):
-        reply_text = f"{display_name}您好！我理解您可能正在擔心是否遇到詐騙情況。\\n\\n" \
-                     f"為了能更準確地幫助您分析，請您告訴我更多詳細情況：\\n\\n" \
-                     f"• 您收到了什麼可疑訊息或電話？\\n" \
-                     f"• 對方提出了什麼要求？\\n" \
-                     f"• 您是否已經提供個人資料或進行付款？\\n\\n" \
-                     f"請將可疑內容分享給我，我會立即為您分析風險！"
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
-        # 更新用戶最後互動時間
-        user_last_chat_time[user_id] = datetime.datetime.now()
-        # 保存互動記錄到Firebase
-        firebase_manager.save_user_interaction(
-            user_id, display_name, text_message, reply_text,
-            is_fraud_related=False
-        )
-        return
-    
-    # 如果不是任何特定指令，視為閒聊並有機會回覆防詐小知識
-    if not any(keyword in text_message for keyword in ["詐騙類型", "我想了解", "選哪顆土豆", "玩遊戲"]):
-        # 30%機率回覆防詐小知識，70%機率正常分析
-        if random.random() < 0.3:
+    general_chat_keywords.extend(function_inquiry_keywords)
+    # follow_up_patterns 和 potato_game_trigger_keywords 已經在 is_specific_command_check 中考慮
+
+    is_not_specific_command_for_chat = not any(keyword in text_message.lower() for keyword in general_chat_keywords)
+    # 並且也不是正則表達式匹配的特定類型查詢
+    if is_not_specific_command_for_chat and not re.match(r"^(什麼是|查詢|我想了解|我想知道)(.+詐騙)$", text_message.strip()):
+        if random.random() < CHAT_TIP_PROBABILITY: 
             tip = random.choice(anti_fraud_tips)
             reply_text = f"{display_name}，和您聊天很愉快！順便分享一則防詐小知識：\n\n{tip}\n\n您想了解更多防詐資訊嗎？"
             
@@ -882,8 +910,8 @@ def handle_message(event):
             )
             return
     
-    # 預設使用ChatGPT進行分析
-    logger.info(f"將訊息傳送給ChatGPT進行分析: {text_message}")
+    # 預設使用ChatGPT進行分析 (如果以上所有條件都不滿足)
+    logger.info(f"Defaulting to direct fraud analysis for message from {user_id}: {text_message}")
     analysis_result_text = detect_fraud_with_chatgpt(text_message, display_name)
     analysis_data = parse_fraud_analysis(analysis_result_text)
 
