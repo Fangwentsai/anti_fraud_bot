@@ -453,24 +453,71 @@ class FirebaseManager:
             return []
         
         try:
-            query = (self.db.collection('interactions')
-                    .where('user_id', '==', user_id)
-                    .order_by('timestamp', direction=firestore.Query.DESCENDING)
-                    .limit(limit))
-            
-            results = []
-            for doc in query.stream():
-                interaction = doc.to_dict()
-                # 將timestamp轉換為字符串以便序列化
-                if 'timestamp' in interaction:
-                    interaction['timestamp'] = interaction['timestamp'].strftime('%Y-%m-%d %H:%M:%S')
-                results.append(interaction)
-            
-            # 返回按時間從舊到新排序的結果，便於構建對話歷史
-            results.reverse()
-            
-            return results
-        
+            # 嘗試使用複合查詢
+            try:
+                query = (self.db.collection('interactions')
+                        .where('user_id', '==', user_id)
+                        .order_by('timestamp', direction=firestore.Query.DESCENDING)
+                        .limit(limit))
+                
+                results = []
+                for doc in query.stream():
+                    interaction = doc.to_dict()
+                    # 將timestamp轉換為字符串以便序列化
+                    if 'timestamp' in interaction:
+                        interaction['timestamp'] = interaction['timestamp'].strftime('%Y-%m-%d %H:%M:%S')
+                    results.append(interaction)
+                
+                # 返回按時間從舊到新排序的結果，便於構建對話歷史
+                results.reverse()
+                
+                return results
+                
+            except Exception as query_error:
+                # 如果是索引錯誤，記錄下來並嘗試使用替代方案
+                if "index" in str(query_error).lower():
+                    logger.warning(f"索引錯誤，嘗試使用替代方案獲取用戶對話歷史: {query_error}")
+                    
+                    # 備選方案：只獲取用戶ID，不排序 (這可能不需要索引)
+                    try:
+                        alt_query = (self.db.collection('interactions')
+                                    .where('user_id', '==', user_id)
+                                    .limit(limit*2))  # 獲取稍多一些，以防丟失最近數據
+                        
+                        alt_results = []
+                        for doc in alt_query.stream():
+                            interaction = doc.to_dict()
+                            if 'timestamp' in interaction:
+                                # 保存timestamp以便後續排序
+                                try:
+                                    if isinstance(interaction['timestamp'], datetime.datetime):
+                                        alt_results.append(interaction)
+                                except Exception:
+                                    # 忽略時間格式錯誤的記錄
+                                    pass
+                        
+                        # 在Python中進行排序
+                        if alt_results:
+                            alt_results.sort(key=lambda x: x['timestamp'], reverse=True)
+                            # 只保留limit數量的記錄
+                            alt_results = alt_results[:limit]
+                            # 將時間戳轉換為字符串
+                            for item in alt_results:
+                                if isinstance(item['timestamp'], datetime.datetime):
+                                    item['timestamp'] = item['timestamp'].strftime('%Y-%m-%d %H:%M:%S')
+                            # 反轉順序，從舊到新
+                            alt_results.reverse()
+                            
+                            logger.info(f"使用替代方案成功獲取了 {len(alt_results)} 條用戶對話記錄")
+                            return alt_results
+                    except Exception as alt_error:
+                        logger.error(f"替代方案也失敗了: {alt_error}")
+                        # 繼續到最終異常處理
+                
+                # 如果不是索引錯誤或備選方案也失敗，則抛出原始異常
+                raise query_error
+                
         except Exception as e:
             logger.error(f"獲取用戶對話歷史失敗: {e}")
+            logger.info("由於無法獲取對話歷史，機器人將在無記憶模式下運行")
             return [] 

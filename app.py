@@ -405,7 +405,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         if user_id:
             recent_history = firebase_manager.get_recent_interactions(user_id, limit=3)
             
-            if recent_history:
+            if recent_history and len(recent_history) > 0:
                 # 添加歷史上下文信息
                 context_prompt = "以下是用戶最近的對話歷史，可能有助於你的分析："
                 
@@ -418,6 +418,11 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                 context_prompt += "\n\n請根據這些歷史對話和當前訊息進行分析。"
                 
                 messages.append({"role": "user", "content": context_prompt})
+                logger.info(f"詐騙分析使用了 {len(recent_history)} 條歷史對話記錄")
+            else:
+                logger.info("詐騙分析無法獲取歷史對話，使用單一訊息分析")
+        else:
+            logger.info("未提供user_id，詐騙分析將不使用歷史記錄")
         
         # 添加要分析的當前訊息
         analysis_prompt = f"""請分析這則訊息：
@@ -1091,21 +1096,28 @@ def handle_message(event):
                 "content": "你是一位名為「土豆」的AI聊天機器人，你的風格友善、溫暖且貼心。你需要根據之前的對話歷史來回應用戶，提供連貫且自然的對話體驗。你是防詐騙專家，當用戶討論可疑訊息時，要保持警覺。"
             }
             
-            # 將歷史對話轉換為ChatGPT格式
-            for interaction in recent_history:
-                # 用戶消息
-                if 'message' in interaction and interaction['message']:
-                    chat_history.append({
-                        "role": "user",
-                        "content": interaction['message']
-                    })
+            # 如果成功獲取到歷史對話，則使用它們
+            if recent_history:
+                # 將歷史對話轉換為ChatGPT格式
+                for interaction in recent_history:
+                    # 用戶消息
+                    if 'message' in interaction and interaction['message']:
+                        chat_history.append({
+                            "role": "user",
+                            "content": interaction['message']
+                        })
+                    
+                    # 機器人回應
+                    if 'response' in interaction and interaction['response']:
+                        chat_history.append({
+                            "role": "assistant",
+                            "content": interaction['response']
+                        })
                 
-                # 機器人回應
-                if 'response' in interaction and interaction['response']:
-                    chat_history.append({
-                        "role": "assistant",
-                        "content": interaction['response']
-                    })
+                logger.info(f"成功使用用戶歷史對話: {len(chat_history)} 條消息")
+            else:
+                # 如果沒有歷史對話或發生錯誤，使用空的歷史
+                logger.info("無法獲取用戶歷史對話，使用空歷史")
             
             # 添加當前用戶消息
             current_user_message = {
