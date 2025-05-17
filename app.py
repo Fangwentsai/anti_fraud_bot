@@ -609,13 +609,13 @@ def send_potato_game_question(user_id, reply_token):
                 ),
                 ButtonComponent(
                     style='primary',
-                    color='#A0522D', 
+                    color='#FF8C00', 
                     height='sm',
                     action=PostbackAction(label='選 B', data=f'action=potato_game_answer&chosen_option_id=B&uid={user_id}')
                 ),
                 ButtonComponent(
                     style='primary',
-                    color='#8B4513', 
+                    color='#FF8C00', 
                     height='sm',
                     action=PostbackAction(label='選 C', data=f'action=potato_game_answer&chosen_option_id=C&uid={user_id}')
                 )
