@@ -916,6 +916,69 @@ def handle_message(event):
             send_potato_game_question(user_id, reply_token)
             return
 
+    # 處理詐騙類型列表查詢
+    if text_message.lower() == "詐騙類型列表" or text_message.lower() == "詐騙類型":
+        logger.info(f"User {user_id} is querying fraud types list")
+        types_text = "目前已收集的詐騙類型有：\n"
+        for f_type, info in fraud_types.items():
+            types_text += f"\n⚠️ {f_type}：\n{info['description']}\n"
+        
+        types_text += "\n想了解特定類型，可以問我「什麼是[詐騙類型]」喔！"
+
+        quick_reply_items = []
+        for f_type in list(fraud_types.keys())[:4]:  # 只取前4個詐騙類型作為快速回覆
+            quick_reply_items.append(QuickReplyButton(action=MessageAction(label=f_type, text=f"什麼是{f_type}")))
+
+        line_bot_api.reply_message(reply_token, TextSendMessage(text=types_text, quick_reply=QuickReply(items=quick_reply_items) if quick_reply_items else None))
+        firebase_manager.save_user_interaction(user_id, display_name, text_message, "Provided list of fraud types", is_fraud_related=False)
+        return
+        
+    # 處理特定詐騙類型資訊查詢 (例如 "什麼是網路購物詐騙")
+    specific_type_query_match = re.match(r"^(什麼是|查詢|我想了解|我想知道)(.+詐騙)$", text_message.strip())
+    if specific_type_query_match:
+        query_type = specific_type_query_match.group(2).strip()
+        logger.info(f"User {user_id} is querying about specific fraud type: {query_type}")
+        
+        matched_fraud_type = None
+        for f_type, info in fraud_types.items():
+            if query_type in f_type or f_type in query_type:
+                matched_fraud_type = f_type
+                break
+        
+        if matched_fraud_type:
+            info = fraud_types[matched_fraud_type]
+            response_text = f"⚠️ {matched_fraud_type} ⚠️\n\n{info['description']}\n\n"
+            
+            if info.get('examples') and len(info['examples']) > 0:
+                response_text += "📋 案例：\n" + info['examples'][0] + "\n\n"
+            
+            if info.get('sop') and len(info['sop']) > 0:
+                response_text += "🛡️ 防範方法：\n" + "\n".join(info['sop'][:5]) + "\n"
+            
+            quick_reply = QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label="查看其他詐騙類型", text="詐騙類型列表")),
+                QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text="選哪顆土豆")),
+                QuickReplyButton(action=MessageAction(label="分析可疑訊息", text="請幫我分析這則訊息："))
+            ])
+            
+            line_bot_api.reply_message(reply_token, TextSendMessage(text=response_text, quick_reply=quick_reply))
+            firebase_manager.save_user_interaction(user_id, display_name, text_message, f"Provided info about {matched_fraud_type}", is_fraud_related=False)
+            return
+        else:
+            # 未找到匹配的詐騙類型，給出一般性回覆
+            response_text = f"抱歉，我目前沒有關於「{query_type}」的詳細資訊。\n\n以下是我已收集的詐騙類型，您可以查詢這些："
+            for f_type in fraud_types.keys():
+                response_text += f"\n- {f_type}"
+            
+            quick_reply = QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label="查看詐騙類型列表", text="詐騙類型列表")),
+                QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text="選哪顆土豆"))
+            ])
+            
+            line_bot_api.reply_message(reply_token, TextSendMessage(text=response_text, quick_reply=quick_reply))
+            firebase_manager.save_user_interaction(user_id, display_name, text_message, "Responded to unknown fraud type query", is_fraud_related=False)
+            return
+
     # 檢查是否需要對消息進行詐騙分析的邏輯
     def should_perform_fraud_analysis(text_message):
         # 1. 檢查是否包含常見問候詞
@@ -932,16 +995,26 @@ def handle_message(event):
             return True
             
         # 4. 檢查是否是請求分析的明顯特徵
-        analysis_indicators = ["幫我分析", "幫忙看看", "這是不是詐騙", "這是真的嗎", "這可靠嗎"]
+        analysis_indicators = ["幫我分析", "幫忙看看", "這是不是詐騙", "這是真的嗎", "這可靠嗎", "分析一下", "這樣是詐騙嗎"]
         if any(indicator in text_message for indicator in analysis_indicators):
             return True
             
-        # 5. 如果消息長度較短且不包含特定關鍵詞，可能是一般閒聊
-        if len(text_message) < 20 and not any(word in text_message for word in ["錢", "轉帳", "匯款", "銀行", "帳號", "個資", "警察", "通知", "中獎", "貸款"]):
-            return False
+        # 5. 檢查是否包含特定詐騙相關關鍵詞
+        # 只有使用者明確表示需要分析，或者文本包含多個詐騙關鍵詞才進行分析
+        fraud_related_keywords = ["詐騙", "被騙", "騙子", "可疑", "轉帳", "匯款", "銀行帳號", "個資", "身份證", "密碼", 
+                                "通知", "中獎", "貸款", "投資", "急需", "幫我處理", "急用", "解除設定", "提款卡", 
+                                "監管帳戶", "解凍", "安全帳戶", "簽證", "保證金", "違法", "洗錢", "警察", "檢察官"]
+                                
+        # 要求至少包含兩個詐騙相關關鍵詞
+        keyword_count = sum(1 for keyword in fraud_related_keywords if keyword in text_message)
+        if keyword_count >= 2:
+            return True
             
-        # 默認對較長消息進行分析
-        return len(text_message) > 20
+        # 關鍵變化：不再使用「消息長度>20」作為自動分析的條件
+        # 更明確的判斷是用戶是否實際請求分析詐騙風險
+            
+        # 6. 預設不進行詐騙分析，將訊息作為一般閒聊處理
+        return False
 
     # 預設使用ChatGPT進行閒聊回應或詐騙分析
     logger.info(f"Message from {user_id}: {text_message} - Determining if fraud analysis is needed")
