@@ -366,68 +366,82 @@ def parse_fraud_analysis(analysis_result):
     return result
 
 # ChatGPT檢測詐騙訊息函數
-def detect_fraud_with_chatgpt(user_message, display_name="朋友"):
-    try:
-        is_url_analysis = ("網址是否安全" in user_message or 
-                           (any(domain in user_message for domain in [".com", ".tw", ".org", ".net", "http://", "https://", "www."]) and len(user_message.split()) < 15))
-
-        fraud_info = ""
-        for fraud_type_key, details in fraud_tactics.items():
-            if "常見話術" in details:
-                fraud_info += f"詐騙類型: {fraud_type_key}\\n"
-                fraud_info += "常見話術:\\n" + "\\n".join([f"- {tactic}" for tactic in details.get("常見話術", [])])
-                fraud_info += "\\n\\n"
-
-        if is_url_analysis:
-            prompt = f"""哈囉 {display_name}，我是土豆，您想分析這個網址/內容是嗎？
-「{user_message}」
-我來幫您仔細看看。
-
-請用清晰、易懂的方式向 {display_name} 解釋情況，就像一位耐心的技術支援人員在協助他一樣。
-
-您的分析應包含：
-1.  **這個網址/內容安全嗎？** (例如：看起來[安全/有點可疑/蠻危險的/我不太確定])
-2.  **為什麼我會這樣判斷？** (簡述您的判斷理由，例如網址拼寫、是不是HTTPS開頭、網站內容等等。)
-3.  **給 {display_name} 的操作建議：** (明確告知是否應該點擊或打開。如果危險，請強調「千萬不要點！」如果安全，可以說明如何安全使用。)
-4.  **這可能是哪種類型的風險？** (如果可疑或危險，例如：這可能是釣魚網站，想騙您的帳號密碼；或者可能會下載怪怪的程式。)
-5.  **(可選) 提醒 {display_name} 一個辨識小技巧：** (例如：以後看到類似的，可以多留意一下網址是不是官方的喔！)
-            """
-        else:
-            prompt = f"""哈囉 {display_name}，我是您的防詐騙小幫手土豆！我來幫您看看這則訊息，請稍等我一下喔。
-
-這是您傳來的訊息：
-「{user_message}」
-
-我會參考這些已知的詐騙資訊來幫您分析：
----
-{fraud_info}
----
-
-請您用像和朋友聊天一樣自然、口語的方式回應 {display_name}。分析結果請盡量融入到流暢的段落中，而不是生硬的點列。
-
-您的分析應該包含以下重點，並用溫暖且支持的語氣傳達：
-
-1.  **這則訊息的風險有多大？** (例如：我覺得這則訊息的風險比較[高/中/低]，或者看起來沒什麼問題。)
-2.  **為什麼會有這樣的判斷？** (例如：主要是因為訊息裡提到了[可疑點]，或者它看起來像是普通的[訊息類型判斷]，沒有提到金錢或奇怪的要求。)
-3.  **這跟哪種詐騙手法比較像？** (如果有的話，例如：這可能跟[詐騙類型]有點像。如果不像任何詐騙，或是一種新的手法，也請說明。)
-4.  **給 {display_name} 的貼心建議：** (例如：建議您[具體行動]，像是不要點連結、跟家人朋友討論看看、或打給165確認一下。如果訊息安全，也可以提醒保持好習慣。)
-5.  **一句鼓勵打氣的話：** (例如：{display_name}，您很小心，這樣很棒！有任何問題隨時再找我聊聊！)
-
-如果訊息內容明顯和詐騙沒什麼關係（比如問天氣、抱怨商品），請友善地告訴 {display_name} 這可能比較不適合我分析，但可以簡單建議他可以怎麼做（例如找消保官），然後溫和地引導他回到防詐騙的話題。
-            """
+def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None):
+    """使用ChatGPT API分析訊息是否為詐騙
+    
+    Args:
+        user_message: 用戶訊息
+        display_name: 用戶顯示名稱
+        user_id: 用戶ID，用於獲取歷史對話
         
+    Returns:
+        分析結果的文本
+    """
+    try:
+        # 構建基本系統提示
+        system_prompt = """你是一個專業的詐騙分析專家，請分析以下訊息是否可能是詐騙：
+
+提供分析結果時，請使用以下格式（用中文回答）：
+{
+"risk_level": "高/中/低/無風險",
+"fraud_type": "詐騙類型或'非詐騙相關'",
+"explanation": "詳細解釋為什麼這是或不是詐騙（100-200字）",
+"suggestions": "給用戶的建議（如果有風險）",
+"is_emerging": true/false（是否可能是新型詐騙手法）
+}
+
+分析時請特別注意：
+1. 是否要求轉帳、提供個人資料或點擊可疑連結
+2. 是否製造緊急感或威脅
+3. 是否有不合理的誘惑（高報酬、中獎等）
+4. 是否偽裝成官方機構或熟人
+5. 是否有拼寫或語法錯誤
+
+請客觀分析內容，不要過度敏感，也不要放過可疑跡象。"""
+
+        # 如果提供了user_id，嘗試獲取歷史對話作為上下文
+        messages = [{"role": "system", "content": system_prompt}]
+        
+        if user_id:
+            recent_history = firebase_manager.get_recent_interactions(user_id, limit=3)
+            
+            if recent_history:
+                # 添加歷史上下文信息
+                context_prompt = "以下是用戶最近的對話歷史，可能有助於你的分析："
+                
+                for interaction in recent_history:
+                    if 'message' in interaction and interaction['message']:
+                        context_prompt += f"\n用戶: {interaction['message']}"
+                    if 'response' in interaction and interaction['response']:
+                        context_prompt += f"\n機器人: {interaction['response']}"
+                
+                context_prompt += "\n\n請根據這些歷史對話和當前訊息進行分析。"
+                
+                messages.append({"role": "user", "content": context_prompt})
+        
+        # 添加要分析的當前訊息
+        analysis_prompt = f"""請分析這則訊息：
+
+{user_message}
+
+這是來自「{display_name}」的訊息。請依照系統提示的格式提供JSON格式的分析結果。"""
+
+        messages.append({"role": "user", "content": analysis_prompt})
+        
+        # 調用ChatGPT API
+        logger.info(f"發送詐騙分析請求給ChatGPT，共{len(messages)}條消息")
         response = openai.chat.completions.create(
             model=os.environ.get('OPENAI_MODEL', 'gpt-3.5-turbo'),
-            messages=[
-                {"role": "system", "content": "你是一位名為「土豆」的AI防詐騙顧問。你的個性充滿智慧、有耐心，並且像一位非常關心朋友的夥伴。你的目標是幫助使用者識別潛在的詐騙風險。請用溫暖、友善、口語化且易於理解的方式與使用者對話。在提供專業建議的同時，也要展現出同理心與支持，讓使用者感覺到安心和被理解。盡量避免使用過於官方或生硬的術語。"},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7, # 略微調高以獲得更多樣性和更自然的語言，同時保持一定的真實性
-            max_tokens=1500 # 增加token以應對更複雜的分析和更詳細、自然的口語回覆
+            messages=messages,
+            temperature=0.2,  # 較低的溫度，使結果更確定性
+            max_tokens=800
         )
-        return response.choices[0].message.content.strip()
+        
+        result = response.choices[0].message.content.strip()
+        
+        return result
     except Exception as e:
-        logger.error(f"與OpenAI API交互失敗: {e}")
+        logger.error(f"ChatGPT 詐騙分析錯誤: {e}")
         return "抱歉，我現在無法分析您的訊息。請稍後再試。"
 
 # --- Begin: Add these new functions for the game ---
@@ -808,7 +822,7 @@ def handle_message(event):
         combined_message = f"用戶原始訊息是：\n「{original_message_to_analyze}」\n\n用戶針對此訊息，補充的疑慮或說明是：\n「{clarification}」"
         logger.info(f"Combined message for analysis for user {user_id}: {combined_message}")
 
-        analysis_result_text = detect_fraud_with_chatgpt(combined_message, display_name)
+        analysis_result_text = detect_fraud_with_chatgpt(combined_message, display_name, user_id)
         analysis_data = parse_fraud_analysis(analysis_result_text)
 
         risk_level = analysis_data.get("risk_level", "不確定")
@@ -1039,8 +1053,8 @@ def handle_message(event):
     # 判斷是否需要進行詐騙分析
     if should_perform_fraud_analysis(text_message):
         logger.info(f"Performing fraud analysis for message from {user_id}: {text_message}")
-        # 使用現有的詐騙分析邏輯
-        analysis_result_text = detect_fraud_with_chatgpt(text_message, display_name)
+        # 使用現有的詐騙分析邏輯，傳入user_id
+        analysis_result_text = detect_fraud_with_chatgpt(text_message, display_name, user_id)
         analysis_data = parse_fraud_analysis(analysis_result_text)
 
         risk_level = analysis_data.get("risk_level", "不確定")
@@ -1065,25 +1079,56 @@ def handle_message(event):
         logger.info(f"Using chat response for message from {user_id}: {text_message}")
         
         try:
-            # 使用更友善的閒聊回應
-            chat_prompt = f"""作為一個名為「土豆」的防詐騙機器人，請針對用戶的訊息「{text_message}」，提供一個簡短、自然、友善的回覆。
+            # 獲取用戶最近的對話歷史
+            recent_history = firebase_manager.get_recent_interactions(user_id, limit=5)
             
-            確保回覆：
-            1. 針對用戶的實際問題或陳述做出相關回應（不超過3句話）
-            2. 語氣溫暖友善，就像真人對話
-            3. 不要分析是否是詐騙，也不要介紹自己的功能，只需自然回應
-            4. 如果用戶看起來焦慮或擔心被詐騙，要給予安撫和理解
+            # 準備對話歷史消息列表
+            chat_history = []
             
-            只需要回覆閒聊部分，不需加入其他內容。"""
+            # 系統提示消息
+            system_message = {
+                "role": "system", 
+                "content": "你是一位名為「土豆」的AI聊天機器人，你的風格友善、溫暖且貼心。你需要根據之前的對話歷史來回應用戶，提供連貫且自然的對話體驗。你是防詐騙專家，當用戶討論可疑訊息時，要保持警覺。"
+            }
             
+            # 將歷史對話轉換為ChatGPT格式
+            for interaction in recent_history:
+                # 用戶消息
+                if 'message' in interaction and interaction['message']:
+                    chat_history.append({
+                        "role": "user",
+                        "content": interaction['message']
+                    })
+                
+                # 機器人回應
+                if 'response' in interaction and interaction['response']:
+                    chat_history.append({
+                        "role": "assistant",
+                        "content": interaction['response']
+                    })
+            
+            # 添加當前用戶消息
+            current_user_message = {
+                "role": "user",
+                "content": text_message
+            }
+            
+            # 構建完整的消息列表
+            messages = [system_message] + chat_history + [current_user_message]
+            
+            # 限制消息數量，避免超出API限制
+            if len(messages) > 10:
+                # 保留系統消息和最近的對話
+                messages = [system_message] + messages[-9:]
+            
+            logger.info(f"使用記憶功能，總共提供 {len(messages)} 條消息給ChatGPT")
+            
+            # 使用更友善的閒聊回應並帶有記憶功能
             chat_response = openai.chat.completions.create(
                 model=os.environ.get('OPENAI_MODEL', 'gpt-3.5-turbo'),
-                messages=[
-                    {"role": "system", "content": "你是一位名為「土豆」的AI聊天機器人，你的風格友善、溫暖且貼心。請針對用戶的訊息給予簡短自然的回應，不需分析詐騙風險。"},
-                    {"role": "user", "content": chat_prompt}
-                ],
+                messages=messages,
                 temperature=0.7,
-                max_tokens=150
+                max_tokens=200
             )
             
             chat_reply = chat_response.choices[0].message.content.strip()

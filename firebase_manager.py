@@ -435,4 +435,42 @@ class FirebaseManager:
             return True
         except Exception as e:
             logger.error(f"更新報告 {report_id} 狀態失敗: {e}")
-            return False 
+            return False
+
+    def get_recent_interactions(self, user_id: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """
+        獲取用戶最近的對話歷史記錄
+        
+        Args:
+            user_id: Line用戶ID
+            limit: 最大返回記錄數
+            
+        Returns:
+            最近對話記錄列表，按時間從舊到新排序
+        """
+        if not self.db:
+            logger.error("Firebase未初始化，無法獲取數據")
+            return []
+        
+        try:
+            query = (self.db.collection('interactions')
+                    .where('user_id', '==', user_id)
+                    .order_by('timestamp', direction=firestore.Query.DESCENDING)
+                    .limit(limit))
+            
+            results = []
+            for doc in query.stream():
+                interaction = doc.to_dict()
+                # 將timestamp轉換為字符串以便序列化
+                if 'timestamp' in interaction:
+                    interaction['timestamp'] = interaction['timestamp'].strftime('%Y-%m-%d %H:%M:%S')
+                results.append(interaction)
+            
+            # 返回按時間從舊到新排序的結果，便於構建對話歷史
+            results.reverse()
+            
+            return results
+        
+        except Exception as e:
+            logger.error(f"獲取用戶對話歷史失敗: {e}")
+            return [] 
