@@ -45,9 +45,9 @@ user_pending_analysis = {} # 用於追蹤等待用戶澄清的分析請求
 CHAT_TIP_PROBABILITY = 0.3 # 閒聊時回覆防詐小知識的機率
 
 # 定義關鍵詞和模式
-function_inquiry_keywords = ["功能", "幫助", "會什麼", "能做什麼", "使用說明", "你是誰", "你好"]
+function_inquiry_keywords = ["功能", "幫助", "會什麼", "能做什麼", "使用說明", "你是誰"]
 follow_up_patterns = ["被騙", "詐騙", "可疑", "不確定", "幫我看看", "這是詐騙嗎", "這是真的嗎"]
-potato_game_trigger_keywords = ["選哪顆土豆", "玩遊戲", "土豆遊戲", "選土豆", "開始遊戲"]
+potato_game_trigger_keywords = ["選哪顆土豆", "玩遊戲", "土豆遊戲", "選土豆", "選土豆遊戲", "開始遊戲"]
 
 # 定義防詐小知識
 anti_fraud_tips = [
