@@ -906,15 +906,15 @@ def handle_message(event):
             )
             return
 
-        # 處理「選哪顆土豆」遊戲觸發
-        if any(keyword in text_message.lower() for keyword in potato_game_trigger_keywords):
-            logger.info(f"User {user_id} triggered potato game.")
-            firebase_manager.save_user_interaction(
-                user_id, display_name, text_message, 
-                "啟動「選哪顆土豆」遊戲", is_fraud_related=False
-            )
-            send_potato_game_question(user_id, reply_token)
-            return
+    # 處理「選哪顆土豆」遊戲觸發 (注意：這部分代碼從user_game_state條件內移出)
+    if any(keyword in text_message.lower() for keyword in potato_game_trigger_keywords):
+        logger.info(f"User {user_id} triggered potato game.")
+        firebase_manager.save_user_interaction(
+            user_id, display_name, text_message, 
+            "啟動「選哪顆土豆」遊戲", is_fraud_related=False
+        )
+        send_potato_game_question(user_id, reply_token)
+        return
 
     # 處理詐騙類型列表查詢
     if text_message.lower() == "詐騙類型列表" or text_message.lower() == "詐騙類型":
