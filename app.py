@@ -979,7 +979,7 @@ def handle_message(event):
     # 如果不是任何特定指令，也不是需要提問引導的分析請求，則視為閒聊或直接分析
     # 判斷是否應進入閒聊+防詐小提示的邏輯
     # CHAT_TIP_PROBABILITY 應在文件頂部定義, e.g., CHAT_TIP_PROBABILITY = 0.3
-    # 檢查訊息是否不包含任何已知指令的關鍵字，以判斷是否為一般閒聊
+    # 檢查訊息是否為一般閒聊關鍵詞
     general_chat_keywords = [
         "詐騙類型列表", "詐騙類型", 
         "選哪顆土豆", "玩遊戲",
@@ -989,9 +989,12 @@ def handle_message(event):
     general_chat_keywords.extend(function_inquiry_keywords)
     # follow_up_patterns 和 potato_game_trigger_keywords 已經在 is_specific_command_check 中考慮
 
-    is_not_specific_command_for_chat = not any(keyword in text_message.lower() for keyword in general_chat_keywords)
-    # 並且也不是正則表達式匹配的特定類型查詢
-    if is_not_specific_command_for_chat and not re.match(r"^(什麼是|查詢|我想了解|我想知道)(.+詐騙)$", text_message.strip()):
+    # 判斷是否包含一般閒聊關鍵詞
+    is_general_chat = any(keyword in text_message.lower() for keyword in general_chat_keywords)
+    
+    # 如果是一般閒聊關鍵詞或不是特定指令查詢，進入閒聊邏輯
+    if is_general_chat or (not is_specific_command_check and not re.match(r"^(什麼是|查詢|我想了解|我想知道)(.+詐騙)$", text_message.strip())):
+        # 根據機率決定是否發送防詐小知識
         if random.random() < CHAT_TIP_PROBABILITY: 
             tip = random.choice(anti_fraud_tips)
             reply_text = f"{display_name}，和您聊天很愉快！順便分享一則防詐小知識：\n\n{tip}\n\n您想了解更多防詐資訊嗎？"
@@ -1009,6 +1012,21 @@ def handle_message(event):
             line_bot_api.reply_message(
                 reply_token, 
                 TextSendMessage(text=reply_text, quick_reply=quick_reply)
+            )
+            return
+        else:
+            # 如果沒有隨機選中發送小知識，則直接回應簡單問候
+            greetings = ["您好！", "嗨！", "哈囉！", "很高興見到您！", "您好呀！"]
+            reply_text = f"{random.choice(greetings)}有什麼我能幫您的嗎？您可以輸入「功能」來了解我能做什麼。"
+            
+            firebase_manager.save_user_interaction(
+                user_id, display_name, text_message, 
+                reply_text, is_fraud_related=False
+            )
+            
+            line_bot_api.reply_message(
+                reply_token, 
+                TextSendMessage(text=reply_text)
             )
             return
     
