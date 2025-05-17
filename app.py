@@ -983,7 +983,8 @@ def handle_message(event):
     general_chat_keywords = [
         "詐騙類型列表", "詐騙類型", 
         "選哪顆土豆", "玩遊戲",
-        "什麼是", "查詢", "我想了解", "我想知道" # 這些是類型查詢的前綴
+        "什麼是", "查詢", "我想了解", "我想知道", # 這些是類型查詢的前綴
+        "你好", "嗨", "哈囉", "嘿", "hi", "hello", "hey" # 添加基本問候詞，保證這些簡單問候不會被當作詐騙分析
     ]
     general_chat_keywords.extend(function_inquiry_keywords)
     # follow_up_patterns 和 potato_game_trigger_keywords 已經在 is_specific_command_check 中考慮
