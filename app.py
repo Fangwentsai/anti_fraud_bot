@@ -1044,6 +1044,226 @@ def display_url_analysis_result(analysis_result):
     
     return flex_message
 
+def create_url_analysis_flex_message(analysis_result, url):
+    """
+    將URL分析結果轉換為 Flex Message 格式
+    
+    Args:
+        analysis_result: 分析結果字典
+        url: 原始分析的URL
+        
+    Returns:
+        格式化的 Flex Message 訊息
+    """
+    # 根據風險等級設置對應的表情符號和顏色
+    risk_level = analysis_result.get("risk_level", "不確定")
+    risk_mapping = {
+        "高": {"icon": "🔴", "color": "#FF5252"},
+        "中": {"icon": "🟠", "color": "#FFA726"},
+        "低": {"icon": "🟢", "color": "#66BB6A"},
+        "不確定": {"icon": "⚪", "color": "#9E9E9E"}
+    }
+    
+    risk_info = risk_mapping.get(risk_level, risk_mapping["不確定"])
+    risk_icon = risk_info["icon"]
+    risk_color = risk_info["color"]
+    
+    # 確保所有值都不為空並轉為字符串
+    def ensure_string(value):
+        if value is None:
+            return ""
+        if isinstance(value, dict) or isinstance(value, list):
+            try:
+                return json.dumps(value, ensure_ascii=False)
+            except:
+                return str(value)
+        return str(value)
+    
+    # 獲取分析內容並確保是字符串
+    reason = ensure_string(analysis_result.get("reason", "無具體原因說明"))
+    purpose = ensure_string(analysis_result.get("purpose", "未提供網站用途資訊"))
+    suggestion = ensure_string(analysis_result.get("suggestion", "請謹慎使用，如有疑慮請勿點擊"))
+    
+    # 清理可能的 JSON 格式
+    for field in [reason, purpose, suggestion]:
+        if field.startswith('{') and field.endswith('}'):
+            try:
+                # 嘗試解析 JSON
+                parsed = json.loads(field)
+                if isinstance(parsed, dict):
+                    # 提取字符串值
+                    for k, v in parsed.items():
+                        if isinstance(v, str) and len(v) > 10:
+                            field = v
+                            break
+            except:
+                # 如果不是有效的 JSON，保留原始值
+                pass
+    
+    # 構建 Flex Message 內容
+    flex_contents = {
+        "type": "bubble",
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": "URL風險分析結果",
+                    "weight": "bold",
+                    "size": "xl",
+                    "align": "center",
+                    "color": "#1DB446"
+                },
+                {
+                    "type": "text",
+                    "text": f"{risk_icon} 風險等級：{risk_level}",
+                    "weight": "bold",
+                    "size": "xl",
+                    "margin": "md",
+                    "color": risk_color
+                },
+                {
+                    "type": "separator",
+                    "margin": "xxl"
+                }
+            ]
+        }
+    }
+    
+    # 如果有短網址警告，添加到內容中
+    if "short_url_warning" in analysis_result:
+        flex_contents["body"]["contents"].append({
+            "type": "box",
+            "layout": "vertical",
+            "margin": "md",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": analysis_result["short_url_warning"],
+                    "wrap": True,
+                    "size": "sm",
+                    "color": "#ff0000",
+                    "weight": "bold"
+                }
+            ]
+        })
+        flex_contents["body"]["contents"].append({
+            "type": "separator",
+            "margin": "md"
+        })
+    
+    # 添加分析原因
+    if reason and not (reason.isspace() or reason == ""):
+        flex_contents["body"]["contents"].append({
+            "type": "box",
+            "layout": "vertical",
+            "margin": "xxl",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": "🔍 分析原因：",
+                    "weight": "bold",
+                    "size": "md",
+                    "color": "#555555"
+                },
+                {
+                    "type": "text",
+                    "text": reason,
+                    "wrap": True,
+                    "size": "sm",
+                    "margin": "sm"
+                }
+            ]
+        })
+    
+    # 添加可能用途
+    if purpose and not (purpose.isspace() or purpose == ""):
+        flex_contents["body"]["contents"].append({
+            "type": "box",
+            "layout": "vertical",
+            "margin": "xxl",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": "📱 可能用途：",
+                    "weight": "bold",
+                    "size": "md",
+                    "color": "#555555"
+                },
+                {
+                    "type": "text",
+                    "text": purpose,
+                    "wrap": True,
+                    "size": "sm",
+                    "margin": "sm"
+                }
+            ]
+        })
+    
+    # 添加安全建議
+    if suggestion and not (suggestion.isspace() or suggestion == ""):
+        flex_contents["body"]["contents"].append({
+            "type": "box",
+            "layout": "vertical",
+            "margin": "xxl",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": "💡 安全建議：",
+                    "weight": "bold",
+                    "size": "md",
+                    "color": "#555555"
+                },
+                {
+                    "type": "text",
+                    "text": suggestion,
+                    "wrap": True,
+                    "size": "sm",
+                    "margin": "sm"
+                }
+            ]
+        })
+    
+    # 添加提醒
+    flex_contents["body"]["contents"].append({
+        "type": "box",
+        "layout": "vertical",
+        "margin": "xxl",
+        "contents": [
+            {
+                "type": "text",
+                "text": "⚠️ 提醒：即使風險較低的網址也應謹慎使用，特別是涉及個人資料或金融操作時。",
+                "wrap": True,
+                "size": "xs",
+                "margin": "sm",
+                "color": "#aaaaaa"
+            }
+        ]
+    })
+    
+    # 創建並返回 Flex Message
+    try:
+        flex_message = FlexSendMessage(
+            alt_text='URL風險分析結果',
+            contents=flex_contents
+        )
+        return flex_message
+    except Exception as e:
+        logger.error(f"創建Flex Message失敗: {e}")
+        # 備用方案：返回文本消息
+        formatted_text = f"URL風險分析結果：\n\n{risk_icon} 風險等級：{risk_level}\n\n"
+        if "short_url_warning" in analysis_result:
+            formatted_text += f"{analysis_result['short_url_warning']}\n\n"
+        if reason:
+            formatted_text += f"🔍 分析原因：\n{reason}\n\n"
+        if purpose:
+            formatted_text += f"📱 可能用途：\n{purpose}\n\n"
+        if suggestion:
+            formatted_text += f"💡 安全建議：\n{suggestion}\n\n"
+        formatted_text += "⚠️ 提醒：即使風險較低的網址也應謹慎使用，特別是涉及個人資料或金融操作時。"
+        return TextSendMessage(text=formatted_text)
+
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
@@ -1108,40 +1328,72 @@ def handle_message(event):
                 "分析URL", is_fraud_related=False
             )
             
-            # 進行URL風險分析
-            analysis_result = analyze_url(url)
-            
-            # 針對短網址或高風險網址添加額外警告
-            is_short_url = len(url.split('//')[-1].split('/')[0]) < 15 and any(short_domain in url.lower() for short_domain in ["bit.ly", "tinyurl", "goo.gl", "t.co", "is.gd", "etf8", "fun", "xyz", "link", "tiny", "short", "go"])
-            
-            if is_short_url:
-                # 如果是短網址，提高風險等級
-                if analysis_result["risk_level"] == "低":
-                    analysis_result["risk_level"] = "中"
-                elif analysis_result["risk_level"] == "中":
-                    analysis_result["risk_level"] = "高"
+            try:
+                # 進行URL風險分析
+                analysis_result = analyze_url(url)
                 
-                # 添加短網址警告
-                short_url_warning = "⚠️ 這個網址似乎是短網址或轉址服務，這類網址可能隱藏了真實目的地，建議謹慎使用。"
-                analysis_result["short_url_warning"] = short_url_warning
+                # 檢查是否有JSON字串錯誤輸出
+                for key, value in analysis_result.items():
+                    if isinstance(value, str) and (value.startswith('{') and value.endswith('}')) or (value.startswith('[') and value.endswith(']')):
+                        try:
+                            # 嘗試解析JSON
+                            parsed_json = json.loads(value)
+                            # 如果成功解析，提取文本
+                            if isinstance(parsed_json, dict):
+                                if "explanation" in parsed_json:
+                                    analysis_result[key] = parsed_json.get("explanation", "無法解析內容")
+                                elif "suggestions" in parsed_json:
+                                    analysis_result[key] = parsed_json.get("suggestions", "無建議")
+                                else:
+                                    # 取第一個有值的字段
+                                    for json_key, json_value in parsed_json.items():
+                                        if json_value and isinstance(json_value, str):
+                                            analysis_result[key] = json_value
+                                            break
+                        except:
+                            # 如果不是有效的JSON，保留原始值但移除花括號
+                            if value.startswith('{') and value.endswith('}'):
+                                analysis_result[key] = value[1:-1].replace('"', '').replace(',', '\n')
                 
-                # 在分析原因中添加短網址警告
-                if "reason" in analysis_result:
-                    analysis_result["reason"] = "- 這是短網址，可能隱藏真實目的地\n" + analysis_result["reason"]
+                # 針對短網址或高風險網址添加額外警告
+                is_short_url = len(url.split('//')[-1].split('/')[0]) < 15 and any(short_domain in url.lower() for short_domain in ["bit.ly", "tinyurl", "goo.gl", "t.co", "is.gd", "etf8", "fun", "xyz", "link", "tiny", "short", "go"])
                 
-                # 在建議中強調謹慎
-                if "suggestion" in analysis_result:
-                    analysis_result["suggestion"] = "- 短網址可能導向風險網站，請特別小心\n" + analysis_result["suggestion"]
-            
-            # 顯示分析結果（統一使用Flex Message）
-            response_message = display_url_analysis_result(analysis_result)
-            
-            # 如果是高風險或中風險的短網址，添加文字說明
-            if is_short_url and analysis_result["risk_level"] in ["高", "中"]:
-                text_warning = TextSendMessage(text=f"謹慎使用這個連結！從網址「{url}」來看，這個網址比正常網址短，且「{'未使用' if not url.startswith('https') else '雖使用'}」安全連線。短網址常被用來掩飾不法行為，建議不要點擊或輸入任何個人資料，特別是金融相關資訊。")
-                line_bot_api.reply_message(event.reply_token, [response_message, text_warning])
-            else:
-                line_bot_api.reply_message(event.reply_token, response_message)
+                if is_short_url:
+                    # 如果是短網址，提高風險等級
+                    if analysis_result.get("risk_level", "") == "低":
+                        analysis_result["risk_level"] = "中"
+                    elif analysis_result.get("risk_level", "") == "中":
+                        analysis_result["risk_level"] = "高"
+                    
+                    # 添加短網址警告
+                    short_url_warning = "⚠️ 這個網址似乎是短網址或轉址服務，這類網址可能隱藏了真實目的地，建議謹慎使用。"
+                    analysis_result["short_url_warning"] = short_url_warning
+                    
+                    # 在分析原因中添加短網址警告
+                    if "reason" in analysis_result:
+                        analysis_result["reason"] = "- 這是短網址，可能隱藏真實目的地\n" + str(analysis_result["reason"])
+                    
+                    # 在建議中強調謹慎
+                    if "suggestion" in analysis_result:
+                        analysis_result["suggestion"] = "- 短網址可能導向風險網站，請特別小心\n" + str(analysis_result["suggestion"])
+                
+                # 確保風險等級有值
+                if not analysis_result.get("risk_level") or analysis_result.get("risk_level") == "":
+                    analysis_result["risk_level"] = "不確定"
+                
+                # 創建Flex Message顯示分析結果
+                flex_message = create_url_analysis_flex_message(analysis_result, url)
+                
+                # 如果是高風險或中風險的短網址，添加文字說明
+                if is_short_url and analysis_result.get("risk_level", "") in ["高", "中"]:
+                    text_warning = TextSendMessage(text=f"謹慎使用這個連結！從網址「{url}」來看，這個網址比正常網址短，且「{'未使用' if not url.startswith('https') else '雖使用'}」安全連線。短網址常被用來掩飾不法行為，建議不要點擊或輸入任何個人資料，特別是金融相關資訊。")
+                    line_bot_api.reply_message(event.reply_token, [flex_message, text_warning])
+                else:
+                    line_bot_api.reply_message(event.reply_token, flex_message)
+            except Exception as e:
+                logger.error(f"URL分析顯示過程中發生錯誤: {e}")
+                safe_message = TextSendMessage(text=f"分析此網址時發生錯誤。建議您謹慎使用任何不熟悉的連結，尤其是短網址或要求個人資料的網站。")
+                line_bot_api.reply_message(event.reply_token, safe_message)
             return
         else:
             # 如果找不到URL，請求用戶提供URL
