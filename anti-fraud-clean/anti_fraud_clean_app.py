@@ -388,8 +388,8 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
 {
 "risk_level": "高/中/低/無風險",
 "fraud_type": "詐騙類型或'非詐騙相關'",
-"explanation": "詳細解釋為什麼這是或不是詐騙（100-200字）",
-"suggestions": "給用戶的建議（如果有風險）",
+"explanation": "詳細解釋為什麼這是或不是詐騙（100-200字），請使用平易近人、簡單易懂的語言，像是在跟長輩解釋一樣，避免使用專業術語，用具體實例說明",
+"suggestions": "給用戶的建議（如果有風險），提供清晰、具體、易於執行的指示",
 "is_emerging": true/false（是否可能是新型詐騙手法）
 }
 
@@ -400,7 +400,9 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
 4. 是否偽裝成官方機構或熟人
 5. 是否有拼寫或語法錯誤
 
-請客觀分析內容，不要過度敏感，也不要放過可疑跡象。"""
+請客觀分析內容，不要過度敏感，也不要放過可疑跡象。
+
+重要！分析說明必須使用平易近人、簡單易懂的語言，就像跟50歲以上的長輩說話一樣，避免使用專業術語，多用日常生活中的比喻和例子來解釋。"""
 
         # 如果提供了user_id，嘗試獲取歷史對話作為上下文
         messages = [{"role": "system", "content": system_prompt}]
@@ -870,7 +872,7 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
                     ]
                 ),
                 TextComponent(
-                    text=f"幫我分析這個網站是不是詐騙：\n{message_to_analyze[:60] + '...' if len(message_to_analyze) > 60 else message_to_analyze}",
+                    text=f"分析內容：\n{message_to_analyze[:60] + '...' if len(message_to_analyze) > 60 else message_to_analyze}",
                     size='xs',
                     wrap=True,
                     margin='md',
