@@ -1,0 +1,1 @@
+import sys, os; current_dir = os.path.dirname(os.path.abspath(__file__)); anti_fraud_clean_dir = os.path.join(current_dir, "anti-fraud-clean"); sys.path.insert(0, anti_fraud_clean_dir); from app import app; if __name__ == "__main__": app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
