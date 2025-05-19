@@ -777,6 +777,116 @@ def get_fraud_features(fraud_type, fraud_message):
 
 # --- End: Add these new functions ---
 
+# URL分析功能
+def analyze_url(url):
+    """
+    分析URL的風險等級和安全性
+    
+    Args:
+        url: 要分析的網址
+        
+    Returns:
+        分析結果字典
+    """
+    try:
+        # 使用ChatGPT進行URL分析
+        system_prompt = """你是一位網路安全專家，請分析以下URL的風險等級和安全性：
+        
+請依照以下格式回覆（用中文回答）：
+風險等級：[高/中/低]
+原因：[詳細說明為什麼這個URL可能存在風險或是安全的]
+可能用途：[這個網址的可能用途]
+建議：[給用戶的建議和注意事項]
+
+分析時請考慮以下因素：
+1. URL結構和域名的可信度
+2. 是否是釣魚網站的已知特徵
+3. 是否含有可疑參數或重定向
+4. 是否使用HTTPS等安全協議
+5. 網域註冊信息和知名度
+
+請保持客觀並提供有用的安全建議。"""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"請分析這個URL: {url}"}
+        ]
+        
+        logger.info(f"發送URL分析請求給ChatGPT: {url}")
+        response = openai.chat.completions.create(
+            model=os.environ.get('OPENAI_MODEL', 'gpt-3.5-turbo'),
+            messages=messages,
+            temperature=0.2,
+            max_tokens=500
+        )
+        
+        result = response.choices[0].message.content.strip()
+        
+        # 解析分析結果
+        analysis = {}
+        for line in result.split('\n'):
+            if line.startswith("風險等級："):
+                analysis["risk_level"] = line.replace("風險等級：", "").strip()
+            elif line.startswith("原因："):
+                analysis["reason"] = line.replace("原因：", "").strip()
+            elif line.startswith("可能用途："):
+                analysis["purpose"] = line.replace("可能用途：", "").strip()
+            elif line.startswith("建議："):
+                analysis["suggestion"] = line.replace("建議：", "").strip()
+        
+        # 如果沒有成功解析，則保存原始回應
+        if not analysis:
+            analysis = {"raw_response": result}
+            
+        return analysis
+    except Exception as e:
+        logger.error(f"URL分析錯誤: {e}")
+        return {"error": str(e), "risk_level": "不確定", "reason": "分析時發生錯誤，無法確定風險等級。"}
+
+def display_url_analysis_result(analysis_result):
+    """
+    將URL分析結果轉換為易讀的文本格式
+    
+    Args:
+        analysis_result: 分析結果字典
+        
+    Returns:
+        格式化的分析結果文本
+    """
+    if "error" in analysis_result:
+        return f"抱歉，分析URL時發生錯誤：{analysis_result['error']}\n\n建議您謹慎使用該連結，或使用其他工具進一步驗證。"
+        
+    if "raw_response" in analysis_result:
+        # 如果有原始回應但結構化解析失敗
+        return f"URL分析結果：\n\n{analysis_result['raw_response']}"
+        
+    # 根據風險等級設置對應的表情符號
+    risk_icons = {
+        "高": "🔴",
+        "中": "🟠",
+        "低": "🟢",
+        "不確定": "⚪"
+    }
+    
+    risk_level = analysis_result.get("risk_level", "不確定")
+    risk_icon = risk_icons.get(risk_level, "⚪")
+    
+    result_text = f"URL風險分析結果：\n\n{risk_icon} 風險等級：{risk_level}\n\n"
+    
+    if "reason" in analysis_result:
+        result_text += f"📝 分析原因：\n{analysis_result['reason']}\n\n"
+        
+    if "purpose" in analysis_result:
+        result_text += f"🔍 可能用途：\n{analysis_result['purpose']}\n\n"
+        
+    if "suggestion" in analysis_result:
+        result_text += f"💡 安全建議：\n{analysis_result['suggestion']}"
+    
+    # 添加額外提示
+    result_text += "\n\n⚠️ 提醒：即使風險較低的網址也應謹慎使用，特別是涉及個人資料或金融操作時。"
+    
+    return result_text
+
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
