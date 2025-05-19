@@ -970,8 +970,9 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
                             layout='vertical',
                             margin='sm',
                             padding_all='13px',
-                            background_color='#FFF',
-                            border='1px solid #DDDDDD',
+                            background_color='#FFFFFF',
+                            border_width='1px',
+                            border_color='#DDDDDD',
                             corner_radius='md',
                             contents=[
                                 TextComponent(
@@ -999,7 +1000,8 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
                             margin='sm',
                             padding_all='13px',
                             background_color='#E6F7FF',
-                            border='1px solid #BBDEFB',
+                            border_width='1px',
+                            border_color='#BBDEFB',
                             corner_radius='md',
                             contents=[
                                 TextComponent(
