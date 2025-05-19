@@ -1213,19 +1213,39 @@ def handle_message(event):
     analysis_prompts = ["請幫我分析這則訊息：", "幫我分析這則訊息", "分析這則訊息", "幫我分析訊息"]
     if any(text_message.strip() == prompt or text_message.strip() == prompt.rstrip("：") for prompt in analysis_prompts):
         logger.info(f"User {user_id} requested message analysis but didn't provide message content")
-        prompt_reply = f"{display_name}，您好！請將您想要分析的可疑訊息完整發送給我，我會立即為您進行詐騙風險評估。\n\n例如：\n- 銀行通知您的帳戶異常需要操作ATM\n- 不明網拍賣家要求私下交易\n- 陌生人傳來的投資理財訊息\n等等。"
+        
+        # 使用隨機回覆，讓機器人回應更加多樣化
+        prompt_replies = [
+            f"{display_name}，您好！請將可疑的訊息或網址貼給我，我會馬上分析是否有詐騙風險。可以是陌生人傳來的連結、可疑的購物網站，或任何讓您不安的訊息。",
+            f"好的，{display_name}！想知道某個網址或訊息是否安全？請直接貼上來，我會立刻為您檢查風險。無論是社群媒體連結、購物網站還是奇怪的訊息都可以。",
+            f"沒問題，{display_name}！要分析什麼訊息或網址呢？請完整複製貼上您想查證的內容，像是陌生來電要求的操作、可疑網址或社群媒體訊息都可以。",
+            f"收到！{display_name}，請直接將您懷疑的訊息或網址複製給我，特別是含有連結、要求個人資料或提到錢的訊息，我會立刻幫您辨識風險。"
+        ]
+        
+        selected_reply = random.choice(prompt_replies)
         
         quick_reply = QuickReply(items=[
             QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text="選哪顆土豆")),
             QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text="詐騙類型列表"))
         ])
         
-        line_bot_api.reply_message(reply_token, TextSendMessage(text=prompt_reply, quick_reply=quick_reply))
+        line_bot_api.reply_message(reply_token, TextSendMessage(text=selected_reply, quick_reply=quick_reply))
         firebase_manager.save_user_interaction(user_id, display_name, text_message, "Responded to analysis request prompt", is_fraud_related=False)
         return
-
+    
+    # 檢查訊息是否包含URL
+    def contains_url(text):
+        # 一個簡單的URL檢測正則表達式
+        url_pattern = re.compile(r'https?://\S+|www\.\S+|\S+\.\w{2,}(/\S*)?')
+        return bool(url_pattern.search(text))
+    
     # 檢查是否需要對消息進行詐騙分析的邏輯
     def should_perform_fraud_analysis(text_message):
+        # 直接檢查是否含有URL，如果有優先分析
+        if contains_url(text_message):
+            logger.info(f"訊息中含有URL，將進行詐騙分析")
+            return True
+            
         # 1. 檢查是否包含常見問候詞
         common_greetings = ["你好", "嗨", "哈囉", "嘿", "hi", "hello", "hey", "早安", "午安", "晚安"]
         if text_message.lower() in common_greetings or (len(text_message) <= 5 and any(greeting in text_message.lower() for greeting in common_greetings)):
@@ -1254,9 +1274,6 @@ def handle_message(event):
         keyword_count = sum(1 for keyword in fraud_related_keywords if keyword in text_message)
         if keyword_count >= 2:
             return True
-            
-        # 關鍵變化：不再使用「消息長度>20」作為自動分析的條件
-        # 更明確的判斷是用戶是否實際請求分析詐騙風險
             
         # 6. 預設不進行詐騙分析，將訊息作為一般閒聊處理
         return False
