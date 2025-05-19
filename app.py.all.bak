@@ -5,10 +5,10 @@ from flask import Flask, request, abort, render_template
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
-    MessageEvent, TextMessage, TextSendMessage, FlexSendMessage,
-    QuickReply, QuickReplyButton, MessageAction, PostbackEvent, PostbackAction,
-    BubbleContainer, BoxComponent, ButtonComponent, TextComponent,
-    CarouselContainer, URIAction, SeparatorComponent
+MessageEvent, TextMessage, TextSendMessage, FlexSendMessage,
+QuickReply, QuickReplyButton, MessageAction, PostbackEvent, PostbackAction,
+BubbleContainer, BoxComponent, ButtonComponent, TextComponent,
+CarouselContainer, URIAction, SeparatorComponent
 )
 from dotenv import load_dotenv
 import openai
@@ -17,11 +17,9 @@ from firebase_manager import FirebaseManager
 import random
 import datetime  # 導入datetime用於時間比較
 import re
+import requests  # 添加 requests 庫用於展開短網址
 
-# 指定 .env 文件的路徑
-# 假設 anti-fraud-clean 和 linebot-anti-fraud 是同級目錄
-dotenv_path = os.path.join(os.path.dirname(__file__), '..', 'linebot-anti-fraud', '.env')
-load_dotenv(dotenv_path=dotenv_path)
+load_dotenv()
 
 app = Flask(__name__)
 
@@ -53,226 +51,230 @@ CHAT_TIP_PROBABILITY = 0.3 # 閒聊時回覆防詐小知識的機率
 function_inquiry_keywords = ["功能", "幫助", "會什麼", "能做什麼", "使用說明", "你是誰"]
 follow_up_patterns = ["被騙", "詐騙", "可疑", "不確定", "幫我看看", "這是詐騙嗎", "這是真的嗎"]
 potato_game_trigger_keywords = ["選哪顆土豆", "玩遊戲", "土豆遊戲", "選土豆", "選土豆遊戲", "開始遊戲"]
+url_analysis_keywords = ["分析這個網站", "網址分析", "連結分析", "網站分析", "判斷網站", "判斷網址"]
+
+# URL正則表達式模式
+url_pattern = re.compile(r'https?://\S+')
 
 # 定義防詐小知識
 anti_fraud_tips = [
-    "🔍 收到不明連結？先確認發信人身分，再三思而後行。點擊前問自己：這真的必要嗎？",
-    "🔐 請定期更換密碼，並避免在不同平台使用相同的密碼組合。建議使用密碼管理工具！",
-    "📱 接到自稱銀行、警方的電話？掛斷後，主動撥打官方電話確認，不要回撥對方提供的號碼。",
-    "💰 投資報酬率高得不合理？記住：天下沒有白吃的午餐，高報酬必有高風險！",
-    "🤝 網路交友要謹慎，短時間內就談及金錢往來的「好友」很可能是詐騙集團。",
-    "🏦 真正的銀行絕不會請你操作ATM「解除設定」、「升級系統」或「確認身分」。",
-    "🛒 網購只用正規平台，交易時留在平台內完成，切勿私下交易或提前付款。",
-    "🎮 購買遊戲點數前，先確認用途，若是給陌生人或解凍帳戶使用，極可能是詐騙！"
+"🔍 收到不明連結？先確認發信人身分，再三思而後行。點擊前問自己：這真的必要嗎？",
+"🔐 請定期更換密碼，並避免在不同平台使用相同的密碼組合。建議使用密碼管理工具！",
+"📱 接到自稱銀行、警方的電話？掛斷後，主動撥打官方電話確認，不要回撥對方提供的號碼。",
+"💰 投資報酬率高得不合理？記住：天下沒有白吃的午餐，高報酬必有高風險！",
+"🤝 網路交友要謹慎，短時間內就談及金錢往來的「好友」很可能是詐騙集團。",
+"🏦 真正的銀行絕不會請你操作ATM「解除設定」、「升級系統」或「確認身分」。",
+"🛒 網購只用正規平台，交易時留在平台內完成，切勿私下交易或提前付款。",
+"🎮 購買遊戲點數前，先確認用途，若是給陌生人或解凍帳戶使用，極可能是詐騙！"
 ]
 
 # 詐騙類型分類
 fraud_types = {
-    "網路購物詐騙": {
-        "description": "涉及假冒購物網站、虛假商品或不實廣告的詐騙",
-        "examples": [
-            "🛒 假買家騙賣家詐騙案例 🛒\n\n詐騙集團假扮買家接觸二手商品賣家，聲稱透過蝦皮等平台交易，引導賣家加入假冒客服LINE帳號，以「簽署保證書」、「銀行認證」等藉口誘導賣家進行網路銀行轉帳或LINE Pay付款，導致受害者財產損失。\n\n📊 資料來源：165打詐儀表板"
-        ],
-        "sop": [
-            "⚠️ 防範網路購物詐騙注意事項 ⚠️",
-            "1️⃣ 有網路交易問題，請洽交易平臺公告的官方客服聯繫方式，不要使用陌生人提供的聯繫方式",
-            "2️⃣ 堅守平台內部交易，不要跳出蝦皮、露天或其他平台的對話系統",
-            "3️⃣ 銀行及蝦皮等平台不會以私人LINE帳號聯繫客戶",
-            "4️⃣ 遇到要求「簽署保證書」、「銀行認證」等操作時，請提高警覺",
-            "5️⃣ 絕對不要依照他人指示操作網路銀行或進行轉帳",
-            "6️⃣ 有任何疑問，請立即撥打165反詐騙專線諮詢"
-        ]
-    },
-    "假交友投資詐騙": {
-        "description": "透過網路交友平台或社群媒體，假扮有好感的異性建立感情連結，最終以各種理由騙取金錢",
-        "examples": [
-            "💔 網路交友詐騙案例 💔\n\n詐騙者假扮高社經地位人士（如醫生、軍官、機長等）與被害者在網路上認識並建立情感連結，長期噓寒問暖後，以生病需要醫藥費、寄送海外禮物需繳納關稅等各種理由，誘騙被害者轉帳或面交金錢。此類詐騙特別針對寡居或情感生活較為孤單的中老年人。\n\n📊 資料來源：165打詐儀表板"
-        ],
-        "sop": [
-            "⚠️ 防範交友投資詐騙注意事項 ⚠️",
-            "1️⃣ 網友見都沒見過卻談及金錢，高度可能是詐騙",
-            "2️⃣ 對方自稱長期在國外工作（如軍醫、機長等）且無法見面，但很快發展感情關係，應提高警覺",
-            "3️⃣ 拒絕任何以緊急醫療費、運費、稅金等名義要求的金錢往來",
-            "4️⃣ 不要聽信需要協助開通外幣帳戶、借用帳戶的說法",
-            "網友見都沒見過卻談及金錢，高度可能是詐騙",
-            "對方自稱長期在國外工作（如軍醫、機長等）且無法見面，但很快發展感情關係，應提高警覺",
-            "拒絕任何以緊急醫療費、運費、稅金等名義要求的金錢往來",
-            "不要聽信需要協助開通外幣帳戶、借用帳戶的說法",
-            "避免協助陌生網友申辦手機門號或提供SIM卡",
-            "對於網友所提供的身份資訊，嘗試多方查證",
-            "有任何疑問，請立即撥打165反詐騙專線諮詢",
-            "多與家人朋友分享交友情況，避免單獨做出財務決定"
-        ]
-    },
-    "假中獎通知詐騙": {
-        "description": "冒充官方單位或知名企業，宣稱中獎但需繳納手續費等費用才能領獎的詐騙",
-        "examples": [],
-        "sop": []
-    },
-    "假借銀行貸款詐騙": {
-        "description": "假冒金融機構人員，宣傳低利快速貸款，但要求先支付手續費或購買點數",
-        "examples": [
-            "一名急需資金償還家庭債務的民眾在Facebook看到名為「數位速e貸」的廣告，標榜貸款快速、利息低且手續簡單。於是加入了一個名為「台北富邦銀行信貸」的LINE帳號。在申請貸款30萬元並通過初審後，對方表示需要購買一份金融貸款保險，才能提高信用評分。受害者匯了1萬5千元到指定帳戶後，對方又要求購買點數卡以增加信貸評分。受害者多次購買點數卡並提供給對方。不久後，受害者發現網路銀行帳戶無法使用，聯繫對方也已失聯。向銀行客服查詢後，確認帳戶已被列入警示名單，且這根本不是台北富邦銀行的業務。"
-        ],
-        "sop": [
-            "貸款請找合法的金融機構、保險公司辦理",
-            "合法貸款機構不會要求事先支付手續費或保證金",
-            "銀行辦理信貸，絕不會要求購買點數卡或預先匯款",
-            "又是貸款、又是點數卡，絕對是詐騙",
-            "直接前往銀行分行或透過官方網站申請貸款",
-            "不要點擊不明來源的貸款廣告連結",
-            "不要輕信「免聯徵、快速核貸」等宣傳",
-            "保護個人資料，不輕易提供身分證影本",
-            "有貸款需求應向合法金融機構諮詢",
-            "對於要求先匯款才能貸款的服務要特別警覺",
-            "確認貸款機構是否為金管會核准的合法機構",
-            "若有疑慮，請撥打165反詐騙專線諮詢"
-        ]
-    },
-    "假廣告詐騙": {
-        "description": "透過網路平台發布虛假的廣告資訊，如租屋、票券代購、工作機會等，要求預付訂金後消失",
-        "examples": [
-            "一名大學三年級學生因為沒有抽中學校宿舍，在Facebook的租屋版社團看到房東「Joyce」發佈的租屋訊息。照片中房間屋況良好，周遭生活機能便利，租金合理且可申請租屋補助。學生加了房東的LINE，房東表示學生排在第5組看房，但前面已有客人打算預付訂金優先看屋。為了搶先看屋，學生立即匯了租金加訂金共3萬元。之後，房東聲稱其丈夫誤收了其他客人訂金，請學生先匯款給那位客人以保留優先權。學生提出退費要求後，房東消失無蹤。"
-        ],
-        "sop": [
-            "網路租屋，若聽見看屋優先權，極可能是詐騙",
-            "網路租屋應洽房屋仲介公司或正規租屋網站",
-            "沒有看到房屋實體前，不要支付任何訂金或租金",
-            "合法的租屋或票券交易不會要求預付款項",
-            "對於急迫推銷「限時優惠」的廣告保持警惕",
-            "查證廣告發布者的真實身份和評價",
-            "使用有保障的第三方支付或交易平台",
-            "利用Google圖片搜尋功能查證租屋照片是否為盜用",
-            "請親友陪同看房，避免獨自決策",
-            "若有疑慮，請撥打165反詐騙專線諮詢"
-        ]
-    },
-    "色情應召詐財詐騙": {
-        "description": "透過網路平台宣傳色情服務，要求支付「訂金」、「保證金」等費用，但實際上不提供任何服務",
-        "examples": [
-            "一名男性在社群媒體上看到某粉專提供外送茶服務的廣告，便私訊詢問。對方提供了多張女性照片供選擇，並說明價格和服務內容。該男性選定後，對方表示需先支付5,000元的訂金，才會安排女伴前往。匯款後，對方又表示因為是首次交易，為確保安全，需再支付5,000元「保證金」，承諾女伴抵達後可退還。男性再次匯款後，對方又以「車資」、「安全檢查費」等理由要求額外付款。此時男性意識到可能受騙，拒絕再付款並要求退款，但對方已將其封鎖，無法聯繫。"
-        ],
-        "sop": [
-            "任何要求先匯款的色情服務廣告，幾乎都是詐騙",
-            "不要相信網路上陌生人提供的色情服務",
-            "避免在不明來源的網站或社群媒體上尋找此類服務",
-            "保護個人資料，避免身份被盜用或遭勒索",
-            "不要輕信不合理的收費方式或理由",
-            "對於反覆要求「額外費用」的行為提高警覺",
-            "色情交易在台灣是違法的，可能面臨法律風險",
-            "若已遭詐騙，應保留所有通訊記錄作為證據",
-            "若有疑慮，請撥打165反詐騙專線諮詢"
-        ]
-    },
-    "虛擬遊戲詐騙": {
-        "description": "透過遊戲內聊天或社群媒體接觸玩家，提供虛假的遊戲點數、外掛或服務，騙取金錢或帳號",
-        "examples": [
-            "一名高中生在某線上遊戲中認識一位「資深玩家」，對方表示可以幫忙代購遊戲點數，只需要市價的七折。高中生心動不已，先後匯了3,000元購買遊戲點數。交易順利後，「資深玩家」又推薦一個能提升角色能力的外掛程式，聲稱只要安裝就能獲得遊戲優勢。高中生下載安裝了該程式，不久後發現遊戲帳號被盜，所有虛擬物品被轉移，且該程式還竊取了他電腦中的個人資料，導致其父母的銀行帳戶遭盜刷。"
-        ],
-        "sop": [
-            "只透過遊戲官方管道購買遊戲點數或物品",
-            "不要下載來路不明的外掛或修改程式",
-            "保護遊戲帳號密碼，不隨意提供給他人",
-            "價格明顯低於市場的交易多為詐騙",
-            "不要相信可以破解遊戲系統的說法",
-            "遊戲內交友需謹慎，不輕易透露個人資訊",
-            "使用雙重認證保護重要遊戲帳號",
-            "定期更換密碼並檢查帳號安全設置",
-            "不要使用與其他平台相同的密碼",
-            "若有疑慮，請撥打165反詐騙專線諮詢"
-        ]
-    },
-    "假求職詐騙": {
-        "description": "以虛假工作機會為誘餌，騙取個人銀行帳戶或金融卡的詐騙",
-        "examples": [
-            "一名舞者在社群平台分享自己的表演影片，收到網友「寧靜致遠」私訊，表示欣賞其舞蹈風格，邀請參加私人聚會表演。雙方轉至LINE溝通，對方以支付訂金為由，要求提供銀行帳戶。此後，對方失聯，但受害者帳戶陸續有不明款項匯入。最終被告知帳戶已被列為警示帳戶，警方調查發現這些款項涉及其他詐騙案件，受害者的帳戶被用來洗錢。"
-        ],
-        "sop": [
-            "不要提供銀行帳戶資料給陌生人",
-            "帳戶有不明匯入款項，請聯繫開戶銀行並立即報警",
-            "對於高薪、低門檻的工作邀約保持警覺",
-            "不要輕易相信可以快速賺錢的工作機會",
-            "不要寄出金融卡、提款卡或存簿給他人",
-            "不要將卡片放置於指定置物櫃、郵箱供他人收取",
-            "避免協助他人操作ATM或網路銀行",
-            "工作內容若涉及金融交易或轉帳，多半是詐騙",
-            "徵才管道應以正規求職平台為主",
-            "有任何疑問，請撥打165反詐騙專線諮詢"
-        ]
-    },
-    "假檢警詐騙": {
-        "description": "冒充執法機關人員（警察、檢察官、法官等）進行詐騙，以「證件遭冒用」、「涉及刑案」等藉口，誘導被害人提供金融資訊或匯款",
-        "examples": [
-            "民眾小劉接獲假冒馬偕醫院人員電話，對方佯稱有人持小劉證件代領管制藥品，需要核實身分。當小劉否認有委託代領藥品一事，假冒醫院人員隨即告知將由檢警接手。隨後假冒警察、檢察官接連來電，羅織罪名後，要求小劉交付金融卡與帳戶資料。幸好小劉保持警覺，事後立即通報165檢舉。此案與近期醫療院所病患個資外洩有關，詐騙集團可能取得這些外洩個資，進行精準詐騙。"
-        ],
-        "sop": [
-            "檢警不會用電話通知涉案，會以公文傳喚",
-            "檢警不會要求提供金融帳戶、存摺或金融卡",
-            "檢警不會要求解除分期付款",
-            "檢警不會監管銀行帳戶或操作ATM",
-            "檢警不會要求交付現金或匯款",
-            "檢警不會用LINE製作筆錄",
-            "檢警不會以電話傳送公文",
-            "接到可疑來電，掛斷並撥打165反詐騙專線查證",
-            "對來電顯示110或派出所電話保持懷疑，這些號碼可能被偽造",
-            "醫院絕不會轉接檢警處理冒用身分或代領藥品事宜",
-            "不透露個人資訊，不點擊不明連結，不輕易匯款"
-        ]
-    },
-    "金融帳戶詐騙": {
-        "description": "透過各種手段騙取民眾金融帳戶、金融卡或網路銀行密碼，用於非法交易或洗錢",
-        "examples": [
-            "受害者看到一則「出租金融帳戶，輕鬆賺租金」的廣告後心動，與對方聯繫並按指示將提款卡和帳戶資訊放置在指定的變電箱中。詐騙者取得帳戶控制權後進行大量非法交易，導致帳戶被銀行凍結，受害者不僅未得到承諾的租金，還面臨法律追訴風險。"
-        ],
-        "sop": [
-            "帳戶、提款卡及密碼是個人財務安全核心，切勿出租或交予他人",
-            "任何聲稱出租帳戶可賺錢的廣告，都是詐騙",
-            "不要受高報酬誘惑出借金融帳戶",
-            "不要輕信可輕鬆賺取額外收入的廣告",
-            "銀行客服不會要求提供完整卡號或密碼",
-            "發現帳戶有異常活動，應立即聯繫銀行或撥打165專線",
-            "不要在未經確認的網站輸入金融資訊",
-            "保護個人金融資訊，不要向陌生人透露"
-        ]
-    },
-    "釣魚簡訊詐騙": {
-        "description": "透過偽裝成官方機構或知名企業的訊息，誘導點擊惡意連結，騙取個人資料或金融資訊",
-        "examples": [
-            "民眾小張收到一則聲稱來自中華電信的簡訊，內容為：「[中華電信]您正在申請的網路服務因個資驗證失敗，請點擊下方連結重新補驗...」，並附上一串短網址。小張一時不察點擊連結，進入一個與中華電信官網極為相似的頁面，並依照指示輸入了身分證字號、銀行帳號及信用卡資訊。不久後，他便收到銀行通知有多筆不明消費，才驚覺受騙。"
-        ],
-        "sop": [
-            "收到任何要求點擊連結並輸入個人資料的簡訊，務必提高警覺。",
-            "不要點擊來源不明的簡訊連結。",
-            "官方機構不會透過簡訊要求民眾輸入敏感個資或銀行帳戶資訊。",
-            "仔細檢查網址是否為官方網址，釣魚網站通常會有細微差異。",
-            "開啟簡訊實聯制，並確認發送號碼是否為官方號碼。",
-            "若不確定簡訊真偽，應直接向官方客服查證，而非點擊簡訊中連結。",
-            "安裝防毒軟體並定期更新，可協助偵測惡意網站。",
-            "教育家中長輩識別釣魚簡訊的技巧。",
-            "若已點擊並輸入資料，應立即聯繫銀行停卡並報警處理。"
-        ]
-    },
-    "點數購買詐騙": {
-        "description": "要求被害人購買遊戲點數、禮品卡等，並提供其序號或密碼的詐騙手法",
-        "examples": [
-            "🎮 虛擬寶物換現金的騙局 🎮\n\n我在《熱血江湖》遊戲打到了一件相當稀有罕見的寶物，在遊戲圈內吸引了不少玩家的注意，有一位遊戲暱稱「林北小舞」的好友私訊我，說他很想收購我的寶物。他表示寶物對他組裝裝備非常重要，願意以8,500元價格購入。因為之前我們曾組隊聊過好幾次，對方看起來不像騙子，我便答應出售寶物。\n\n不過，對方說月底才領薪水，無法馬上付款，能否先交付寶物讓他提前增強裝備，等到月底領薪後再匯款。我心想，大家都是同一個遊戲公會的老玩家，有一定的信任基礎，沒多想就把寶物交給了他。\n\n之後，我和「林北小舞」依舊每天在遊戲中互動，他誇讚我那件寶物幫了他大忙，讓他在遊戲中如虎添翼。然而，到了約定付款日期，我卻始終沒收到他的匯款消息。剛開始，我提醒他幾次，他總是各種理由推脫，要嘛薪水延遲發放、要嘛家裡臨時有急用，畢竟我們也算是朋友，就再寬限幾天吧。\n\n有天，我發現他不再回我訊息，連遊戲角色也消失得無影無蹤，我這才驚覺，自己被騙了！\n\n📊 資料來源：165打詐儀表板"
-        ],
-        "sop": [
-            "⚠️ 常見犯罪手法及話術 ⚠️",
-            "1️⃣ 雙方約定交易遊戲帳號/遊戲裝備/點數",
-            "2️⃣ 要求至遊戲交易平台網站交易，卻被網站告知帳戶出錯要求儲值才能退款",
-            "3️⃣ 對方稱不明原因無法交易傳送一國際擔保平台交易連結，平台客服稱帳戶凍結，需儲值才能解凍",
-            "4️⃣ 要求匯款至指定帳戶儲值",
-            "5️⃣ 要求購買點數卡後拍照",
-            "",
-            "🛡️ 防詐小撇步 🛡️",
-            "虛擬寶物交易，應選擇官方認可的第三方平台，才有保障。",
-            "",
-            "🔍 詐騙話術解析 🔍",
-            "1. 虛擬遊戲好友表達購買虛擬寶物意願",
-            "2. 誘騙提前交付虛擬寶物，卻藉故延遲付款，並失聯"
-        ]
-    }
+"網路購物詐騙": {
+"description": "涉及假冒購物網站、虛假商品或不實廣告的詐騙",
+"examples": [
+"🛒 假買家騙賣家詐騙案例 🛒\n\n詐騙集團假扮買家接觸二手商品賣家，聲稱透過蝦皮等平台交易，引導賣家加入假冒客服LINE帳號，以「簽署保證書」、「銀行認證」等藉口誘導賣家進行網路銀行轉帳或LINE Pay付款，導致受害者財產損失。\n\n📊 資料來源：165打詐儀表板"
+],
+"sop": [
+"⚠️ 防範網路購物詐騙注意事項 ⚠️",
+"1️⃣ 有網路交易問題，請洽交易平臺公告的官方客服聯繫方式，不要使用陌生人提供的聯繫方式",
+"2️⃣ 堅守平台內部交易，不要跳出蝦皮、露天或其他平台的對話系統",
+"3️⃣ 銀行及蝦皮等平台不會以私人LINE帳號聯繫客戶",
+"4️⃣ 遇到要求「簽署保證書」、「銀行認證」等操作時，請提高警覺",
+"5️⃣ 絕對不要依照他人指示操作網路銀行或進行轉帳",
+"6️⃣ 有任何疑問，請立即撥打165反詐騙專線諮詢"
+]
+},
+"假交友投資詐騙": {
+"description": "透過網路交友平台或社群媒體，假扮有好感的異性建立感情連結，最終以各種理由騙取金錢",
+"examples": [
+"💔 網路交友詐騙案例 💔\n\n詐騙者假扮高社經地位人士（如醫生、軍官、機長等）與被害者在網路上認識並建立情感連結，長期噓寒問暖後，以生病需要醫藥費、寄送海外禮物需繳納關稅等各種理由，誘騙被害者轉帳或面交金錢。此類詐騙特別針對寡居或情感生活較為孤單的中老年人。\n\n📊 資料來源：165打詐儀表板"
+],
+"sop": [
+"⚠️ 防範交友投資詐騙注意事項 ⚠️",
+"1️⃣ 網友見都沒見過卻談及金錢，高度可能是詐騙",
+"2️⃣ 對方自稱長期在國外工作（如軍醫、機長等）且無法見面，但很快發展感情關係，應提高警覺",
+"3️⃣ 拒絕任何以緊急醫療費、運費、稅金等名義要求的金錢往來",
+"4️⃣ 不要聽信需要協助開通外幣帳戶、借用帳戶的說法",
+"網友見都沒見過卻談及金錢，高度可能是詐騙",
+"對方自稱長期在國外工作（如軍醫、機長等）且無法見面，但很快發展感情關係，應提高警覺",
+"拒絕任何以緊急醫療費、運費、稅金等名義要求的金錢往來",
+"不要聽信需要協助開通外幣帳戶、借用帳戶的說法",
+"避免協助陌生網友申辦手機門號或提供SIM卡",
+"對於網友所提供的身份資訊，嘗試多方查證",
+"有任何疑問，請立即撥打165反詐騙專線諮詢",
+"多與家人朋友分享交友情況，避免單獨做出財務決定"
+]
+},
+"假中獎通知詐騙": {
+"description": "冒充官方單位或知名企業，宣稱中獎但需繳納手續費等費用才能領獎的詐騙",
+"examples": [],
+"sop": []
+},
+"假借銀行貸款詐騙": {
+"description": "假冒金融機構人員，宣傳低利快速貸款，但要求先支付手續費或購買點數",
+"examples": [
+"一名急需資金償還家庭債務的民眾在Facebook看到名為「數位速e貸」的廣告，標榜貸款快速、利息低且手續簡單。於是加入了一個名為「台北富邦銀行信貸」的LINE帳號。在申請貸款30萬元並通過初審後，對方表示需要購買一份金融貸款保險，才能提高信用評分。受害者匯了1萬5千元到指定帳戶後，對方又要求購買點數卡以增加信貸評分。受害者多次購買點數卡並提供給對方。不久後，受害者發現網路銀行帳戶無法使用，聯繫對方也已失聯。向銀行客服查詢後，確認帳戶已被列入警示名單，且這根本不是台北富邦銀行的業務。"
+],
+"sop": [
+"貸款請找合法的金融機構、保險公司辦理",
+"合法貸款機構不會要求事先支付手續費或保證金",
+"銀行辦理信貸，絕不會要求購買點數卡或預先匯款",
+"又是貸款、又是點數卡，絕對是詐騙",
+"直接前往銀行分行或透過官方網站申請貸款",
+"不要點擊不明來源的貸款廣告連結",
+"不要輕信「免聯徵、快速核貸」等宣傳",
+"保護個人資料，不輕易提供身分證影本",
+"有貸款需求應向合法金融機構諮詢",
+"對於要求先匯款才能貸款的服務要特別警覺",
+"確認貸款機構是否為金管會核准的合法機構",
+"若有疑慮，請撥打165反詐騙專線諮詢"
+]
+},
+"假廣告詐騙": {
+"description": "透過網路平台發布虛假的廣告資訊，如租屋、票券代購、工作機會等，要求預付訂金後消失",
+"examples": [
+"一名大學三年級學生因為沒有抽中學校宿舍，在Facebook的租屋版社團看到房東「Joyce」發佈的租屋訊息。照片中房間屋況良好，周遭生活機能便利，租金合理且可申請租屋補助。學生加了房東的LINE，房東表示學生排在第5組看房，但前面已有客人打算預付訂金優先看屋。為了搶先看屋，學生立即匯了租金加訂金共3萬元。之後，房東聲稱其丈夫誤收了其他客人訂金，請學生先匯款給那位客人以保留優先權。學生提出退費要求後，房東消失無蹤。"
+],
+"sop": [
+"網路租屋，若聽見看屋優先權，極可能是詐騙",
+"網路租屋應洽房屋仲介公司或正規租屋網站",
+"沒有看到房屋實體前，不要支付任何訂金或租金",
+"合法的租屋或票券交易不會要求預付款項",
+"對於急迫推銷「限時優惠」的廣告保持警惕",
+"查證廣告發布者的真實身份和評價",
+"使用有保障的第三方支付或交易平台",
+"利用Google圖片搜尋功能查證租屋照片是否為盜用",
+"請親友陪同看房，避免獨自決策",
+"若有疑慮，請撥打165反詐騙專線諮詢"
+]
+},
+"色情應召詐財詐騙": {
+"description": "透過網路平台宣傳色情服務，要求支付「訂金」、「保證金」等費用，但實際上不提供任何服務",
+"examples": [
+"一名男性在社群媒體上看到某粉專提供外送茶服務的廣告，便私訊詢問。對方提供了多張女性照片供選擇，並說明價格和服務內容。該男性選定後，對方表示需先支付5,000元的訂金，才會安排女伴前往。匯款後，對方又表示因為是首次交易，為確保安全，需再支付5,000元「保證金」，承諾女伴抵達後可退還。男性再次匯款後，對方又以「車資」、「安全檢查費」等理由要求額外付款。此時男性意識到可能受騙，拒絕再付款並要求退款，但對方已將其封鎖，無法聯繫。"
+],
+"sop": [
+"任何要求先匯款的色情服務廣告，幾乎都是詐騙",
+"不要相信網路上陌生人提供的色情服務",
+"避免在不明來源的網站或社群媒體上尋找此類服務",
+"保護個人資料，避免身份被盜用或遭勒索",
+"不要輕信不合理的收費方式或理由",
+"對於反覆要求「額外費用」的行為提高警覺",
+"色情交易在台灣是違法的，可能面臨法律風險",
+"若已遭詐騙，應保留所有通訊記錄作為證據",
+"若有疑慮，請撥打165反詐騙專線諮詢"
+]
+},
+"虛擬遊戲詐騙": {
+"description": "透過遊戲內聊天或社群媒體接觸玩家，提供虛假的遊戲點數、外掛或服務，騙取金錢或帳號",
+"examples": [
+"一名高中生在某線上遊戲中認識一位「資深玩家」，對方表示可以幫忙代購遊戲點數，只需要市價的七折。高中生心動不已，先後匯了3,000元購買遊戲點數。交易順利後，「資深玩家」又推薦一個能提升角色能力的外掛程式，聲稱只要安裝就能獲得遊戲優勢。高中生下載安裝了該程式，不久後發現遊戲帳號被盜，所有虛擬物品被轉移，且該程式還竊取了他電腦中的個人資料，導致其父母的銀行帳戶遭盜刷。"
+],
+"sop": [
+"只透過遊戲官方管道購買遊戲點數或物品",
+"不要下載來路不明的外掛或修改程式",
+"保護遊戲帳號密碼，不隨意提供給他人",
+"價格明顯低於市場的交易多為詐騙",
+"不要相信可以破解遊戲系統的說法",
+"遊戲內交友需謹慎，不輕易透露個人資訊",
+"使用雙重認證保護重要遊戲帳號",
+"定期更換密碼並檢查帳號安全設置",
+"不要使用與其他平台相同的密碼",
+"若有疑慮，請撥打165反詐騙專線諮詢"
+]
+},
+"假求職詐騙": {
+"description": "以虛假工作機會為誘餌，騙取個人銀行帳戶或金融卡的詐騙",
+"examples": [
+"一名舞者在社群平台分享自己的表演影片，收到網友「寧靜致遠」私訊，表示欣賞其舞蹈風格，邀請參加私人聚會表演。雙方轉至LINE溝通，對方以支付訂金為由，要求提供銀行帳戶。此後，對方失聯，但受害者帳戶陸續有不明款項匯入。最終被告知帳戶已被列為警示帳戶，警方調查發現這些款項涉及其他詐騙案件，受害者的帳戶被用來洗錢。"
+],
+"sop": [
+"不要提供銀行帳戶資料給陌生人",
+"帳戶有不明匯入款項，請聯繫開戶銀行並立即報警",
+"對於高薪、低門檻的工作邀約保持警覺",
+"不要輕易相信可以快速賺錢的工作機會",
+"不要寄出金融卡、提款卡或存簿給他人",
+"不要將卡片放置於指定置物櫃、郵箱供他人收取",
+"避免協助他人操作ATM或網路銀行",
+"工作內容若涉及金融交易或轉帳，多半是詐騙",
+"徵才管道應以正規求職平台為主",
+"有任何疑問，請撥打165反詐騙專線諮詢"
+]
+},
+"假檢警詐騙": {
+"description": "冒充執法機關人員（警察、檢察官、法官等）進行詐騙，以「證件遭冒用」、「涉及刑案」等藉口，誘導被害人提供金融資訊或匯款",
+"examples": [
+"民眾小劉接獲假冒馬偕醫院人員電話，對方佯稱有人持小劉證件代領管制藥品，需要核實身分。當小劉否認有委託代領藥品一事，假冒醫院人員隨即告知將由檢警接手。隨後假冒警察、檢察官接連來電，羅織罪名後，要求小劉交付金融卡與帳戶資料。幸好小劉保持警覺，事後立即通報165檢舉。此案與近期醫療院所病患個資外洩有關，詐騙集團可能取得這些外洩個資，進行精準詐騙。"
+],
+"sop": [
+"檢警不會用電話通知涉案，會以公文傳喚",
+"檢警不會要求提供金融帳戶、存摺或金融卡",
+"檢警不會要求解除分期付款",
+"檢警不會監管銀行帳戶或操作ATM",
+"檢警不會要求交付現金或匯款",
+"檢警不會用LINE製作筆錄",
+"檢警不會以電話傳送公文",
+"接到可疑來電，掛斷並撥打165反詐騙專線查證",
+"對來電顯示110或派出所電話保持懷疑，這些號碼可能被偽造",
+"醫院絕不會轉接檢警處理冒用身分或代領藥品事宜",
+"不透露個人資訊，不點擊不明連結，不輕易匯款"
+]
+},
+"金融帳戶詐騙": {
+"description": "透過各種手段騙取民眾金融帳戶、金融卡或網路銀行密碼，用於非法交易或洗錢",
+"examples": [
+"受害者看到一則「出租金融帳戶，輕鬆賺租金」的廣告後心動，與對方聯繫並按指示將提款卡和帳戶資訊放置在指定的變電箱中。詐騙者取得帳戶控制權後進行大量非法交易，導致帳戶被銀行凍結，受害者不僅未得到承諾的租金，還面臨法律追訴風險。"
+],
+"sop": [
+"帳戶、提款卡及密碼是個人財務安全核心，切勿出租或交予他人",
+"任何聲稱出租帳戶可賺錢的廣告，都是詐騙",
+"不要受高報酬誘惑出借金融帳戶",
+"不要輕信可輕鬆賺取額外收入的廣告",
+"銀行客服不會要求提供完整卡號或密碼",
+"發現帳戶有異常活動，應立即聯繫銀行或撥打165專線",
+"不要在未經確認的網站輸入金融資訊",
+"保護個人金融資訊，不要向陌生人透露"
+]
+},
+"釣魚簡訊詐騙": {
+"description": "透過偽裝成官方機構或知名企業的訊息，誘導點擊惡意連結，騙取個人資料或金融資訊",
+"examples": [
+"民眾小張收到一則聲稱來自中華電信的簡訊，內容為：「[中華電信]您正在申請的網路服務因個資驗證失敗，請點擊下方連結重新補驗...」，並附上一串短網址。小張一時不察點擊連結，進入一個與中華電信官網極為相似的頁面，並依照指示輸入了身分證字號、銀行帳號及信用卡資訊。不久後，他便收到銀行通知有多筆不明消費，才驚覺受騙。"
+],
+"sop": [
+"收到任何要求點擊連結並輸入個人資料的簡訊，務必提高警覺。",
+"不要點擊來源不明的簡訊連結。",
+"官方機構不會透過簡訊要求民眾輸入敏感個資或銀行帳戶資訊。",
+"仔細檢查網址是否為官方網址，釣魚網站通常會有細微差異。",
+"開啟簡訊實聯制，並確認發送號碼是否為官方號碼。",
+"若不確定簡訊真偽，應直接向官方客服查證，而非點擊簡訊中連結。",
+"安裝防毒軟體並定期更新，可協助偵測惡意網站。",
+"教育家中長輩識別釣魚簡訊的技巧。",
+"若已點擊並輸入資料，應立即聯繫銀行停卡並報警處理。"
+]
+},
+"點數購買詐騙": {
+"description": "要求被害人購買遊戲點數、禮品卡等，並提供其序號或密碼的詐騙手法",
+"examples": [
+"🎮 虛擬寶物換現金的騙局 🎮\n\n我在《熱血江湖》遊戲打到了一件相當稀有罕見的寶物，在遊戲圈內吸引了不少玩家的注意，有一位遊戲暱稱「林北小舞」的好友私訊我，說他很想收購我的寶物。他表示寶物對他組裝裝備非常重要，願意以8,500元價格購入。因為之前我們曾組隊聊過好幾次，對方看起來不像騙子，我便答應出售寶物。\n\n不過，對方說月底才領薪水，無法馬上付款，能否先交付寶物讓他提前增強裝備，等到月底領薪後再匯款。我心想，大家都是同一個遊戲公會的老玩家，有一定的信任基礎，沒多想就把寶物交給了他。\n\n之後，我和「林北小舞」依舊每天在遊戲中互動，他誇讚我那件寶物幫了他大忙，讓他在遊戲中如虎添翼。然而，到了約定付款日期，我卻始終沒收到他的匯款消息。剛開始，我提醒他幾次，他總是各種理由推脫，要嘛薪水延遲發放、要嘛家裡臨時有急用，畢竟我們也算是朋友，就再寬限幾天吧。\n\n有天，我發現他不再回我訊息，連遊戲角色也消失得無影無蹤，我這才驚覺，自己被騙了！\n\n📊 資料來源：165打詐儀表板"
+],
+"sop": [
+"⚠️ 常見犯罪手法及話術 ⚠️",
+"1️⃣ 雙方約定交易遊戲帳號/遊戲裝備/點數",
+"2️⃣ 要求至遊戲交易平台網站交易，卻被網站告知帳戶出錯要求儲值才能退款",
+"3️⃣ 對方稱不明原因無法交易傳送一國際擔保平台交易連結，平台客服稱帳戶凍結，需儲值才能解凍",
+"4️⃣ 要求匯款至指定帳戶儲值",
+"5️⃣ 要求購買點數卡後拍照",
+"",
+"🛡️ 防詐小撇步 🛡️",
+"虛擬寶物交易，應選擇官方認可的第三方平台，才有保障。",
+"",
+"🔍 詐騙話術解析 🔍",
+"1. 虛擬遊戲好友表達購買虛擬寶物意願",
+"2. 誘騙提前交付虛擬寶物，卻藉故延遲付款，並失聯"
+]
+}
 }
 
 # 加載詐騙話術資料庫 (可選)
@@ -291,6 +293,8 @@ def load_fraud_tactics():
     except json.JSONDecodeError:
         logger.error(f"解析詐騙話術文件 {FRAUD_TACTICS_DB} 失敗。")
         fraud_tactics_data = {} # Ensure it's an empty dict on parse error
+    try:
+        pass
     except Exception as e:
         logger.error(f"加載詐騙話術時發生未知錯誤: {e}")
         fraud_tactics_data = {}
@@ -448,7 +452,9 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         result = response.choices[0].message.content.strip()
         
         return result
-    except Exception as e:
+#     try:
+        pass
+#     except Exception as e:
         logger.error(f"ChatGPT 詐騙分析錯誤: {e}")
         return "抱歉，我現在無法分析您的訊息。請稍後再試。"
 
@@ -776,40 +782,323 @@ def get_fraud_features(fraud_type, fraud_message):
 
 # --- End: Add these new functions ---
 
-@app.route("/callback", methods=['POST'])
-def callback():
-    signature = request.headers['X-Line-Signature']
-    body = request.get_data(as_text=True)
-    app.logger.info("Request body: " + body)
+# URL分析功能
+def analyze_url(url):
+    """
+    分析URL的風險等級和安全性
     
-    try:
-        handler.handle(body, signature)
-    except InvalidSignatureError:
-        abort(400)
+    Args:
+        url: 要分析的網址
         
-    return 'OK'
+    Returns:
+        分析結果字典
+    """
+    try:
+        # 檢查是否為短網址
+        is_short_url = len(url.split('//')[-1].split('/')[0]) < 15 and any(short_domain in url.lower() for short_domain in ["bit.ly", "tinyurl", "goo.gl", "t.co", "is.gd", "etf8", "fun", "xyz", "link", "tiny", "short", "go"])
+        
+        original_url = url
+        expanded_url = None
+        
+        # 如果是短網址，嘗試展開
+        if is_short_url:
+            expanded_url = expand_short_url(url)
+            # 如果成功展開，將展開後的URL用於分析
+            if expanded_url != url:
+                url = expanded_url
+                logger.info(f"使用展開後的URL進行分析: {url}")
+        
+        # 預先提供一些基本的安全特徵評估
+        https_secure = url.startswith("https://")
+        has_suspicious_params = "?" in url and any(param in url.lower() for param in ["redirect", "url=", "goto=", "return="])
+        domain = url.split("//")[-1].split("/")[0].lower()
+        
+        # 判斷是否為政府網站
+        is_gov_site = ".gov" in domain
+        is_official_site = any(org in domain for org in [".edu", ".org", ".gov", ".mil"])
+        
+        # 使用ChatGPT進行URL分析
+        system_prompt = """你是一位網路安全專家，請簡明扼要地分析以下URL的風險：
+        
+請依照以下格式回覆（用中文回答，使用簡單易懂的語言，適合非技術人士理解）：
+風險等級：[高/中/低]
+原因：[3-4點簡短說明這個網址安全或有風險的原因]
+可能用途：[2-3點簡短說明這個網站可能的用途]
+建議：[2-3點簡短的安全建議]
 
-@app.route("/", methods=['GET'])
-def home():
-    return "Line Bot Anti-Fraud is running!"
+注意：
+1. 請使用簡單的語言，避免技術術語
+2. 請用條列式回答，每點不超過20字
+3. 整體回答簡短精簡，重點是讓一般用戶容易理解
+4. 請不要返回JSON格式，直接使用純文本回應
+5. 不要使用markdown格式
 
-@app.route("/fraud-statistics", methods=['GET'])
-def fraud_statistics():
-    """顯示詐騙統計數據頁面"""
-    stats = firebase_manager.get_fraud_statistics()
-    return render_template('statistics.html', stats=stats)
+分析考慮因素：
+- 網域是政府或知名組織嗎？
+- 有使用HTTPS嗎？
+- URL結構是否合理？
+- 網站的可能用途？
+"""
 
-@handler.add(MessageEvent, message=TextMessage)
-def handle_message(event):
-    user_id = event.source.user_id
-    profile = get_user_profile(user_id)
-    display_name = profile.display_name if profile else "未知用戶"
-    text_message = event.message.text
-    reply_token = event.reply_token
-    current_time = datetime.datetime.now()
-
-    logger.info(f"Received message from {display_name} ({user_id}): {text_message}")
-
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"請分析這個URL: {url}"}
+        ]
+        
+        logger.info(f"發送URL分析請求給ChatGPT: {url}")
+        response = openai.chat.completions.create(
+            model=os.environ.get('OPENAI_MODEL', 'gpt-3.5-turbo'),
+            messages=messages,
+            temperature=0.2,
+            max_tokens=500  # 減少token以獲取更簡潔的回應
+        )
+        
+        result = response.choices[0].message.content.strip()
+        logger.info(f"ChatGPT URL分析回應: {result}")
+        
+        # 檢查結果是否為 JSON 格式，並嘗試提取內容
+        json_start = result.find('{')
+        json_end = result.rfind('}')
+        
+        # 如果發現 JSON 結構，嘗試提取並解析
+        if json_start >= 0 and json_end > json_start:
+            try:
+                json_part = result[json_start:json_end+1]
+                parsed_json = json.loads(json_part)
+                logger.info(f"從回應中提取JSON: {json_part}")
+                
+                # 將JSON內容轉換為標準分析結果格式
+                extracted_result = {}
+                
+                # 提取各個字段
+                if "risk_level" in parsed_json:
+                    extracted_result["risk_level"] = parsed_json["risk_level"]
+                
+                # 提取或組合分析原因
+                if "explanation" in parsed_json:
+                    extracted_result["reason"] = parsed_json["explanation"]
+                elif "reason" in parsed_json:
+                    extracted_result["reason"] = parsed_json["reason"]
+                    
+                # 提取或組合用途信息
+                if "purpose" in parsed_json:
+                    extracted_result["purpose"] = parsed_json["purpose"]
+                else:
+                    # 如果沒有用途字段，嘗試從其他字段提取相關信息
+                    extracted_result["purpose"] = "- 根據網址分析確定可能用途\n- 請謹慎判斷網站真實意圖"
+                
+                # 提取或組合建議
+                if "suggestions" in parsed_json:
+                    extracted_result["suggestion"] = parsed_json["suggestions"]
+                elif "suggestion" in parsed_json:
+                    extracted_result["suggestion"] = parsed_json["suggestion"]
+                
+                # 記錄提取的結果
+                logger.info(f"從JSON提取的分析結果: {extracted_result}")
+                
+                # 更新結果，但保留原始 JSON 以供參考
+                result = "風險等級：" + extracted_result.get("risk_level", "不確定") + "\n"
+                if "reason" in extracted_result and extracted_result["reason"]:
+                    result += "原因：" + extracted_result["reason"] + "\n"
+                if "purpose" in extracted_result and extracted_result["purpose"]:
+                    result += "可能用途：" + extracted_result["purpose"] + "\n"
+                if "suggestion" in extracted_result and extracted_result["suggestion"]:
+                    result += "建議：" + extracted_result["suggestion"]
+                
+                logger.info(f"重新格式化後的分析結果: {result}")
+            except json.JSONDecodeError as e:
+                logger.warning(f"JSON解析失敗，將使用原始文本: {e}")
+        
+        # 解析分析結果 - 首先設置預設值
+        if is_gov_site:
+            default_risk = "低"
+            default_reason = f"1. 網域分析：該URL屬於政府網站\n2. 一般政府網站可信度高\n3. {'使用' if https_secure else '未使用'}HTTPS安全連線"
+            default_purpose = "- 提供政府服務和資訊\n- 官方新聞或公告平台"
+            default_suggestion = "1. 確認網址是否正確\n2. 不要隨意點擊頁面中的其他連結"
+        elif is_official_site:
+            default_risk = "低"
+            default_reason = f"1. 網域分析：該URL使用正規組織網域\n2. 此類網站通常可信度高\n3. {'使用' if https_secure else '未使用'}HTTPS安全連線"
+            default_purpose = "- 提供組織服務和資訊\n- 官方資訊平台"
+            default_suggestion = "1. 確認網址是否正確\n2. 不要隨意提供個人資料"
+        else:
+            default_risk = "中" if https_secure else "高"
+            default_reason = f"1. 網域分析：非官方組織網域\n2. {'使用' if https_secure else '未使用'}HTTPS安全連線\n3. {'有' if has_suspicious_params else '無'}可疑參數"
+            default_purpose = "- 可能是個人或商業網站\n- 功能需進一步確認"
+            default_suggestion = "1. 不建議提供敏感資訊\n2. 避免下載檔案或軟體"
+        
+        # 使用正則表達式解析ChatGPT回應
+        analysis = {
+            "risk_level": default_risk,
+            "reason": default_reason,
+            "purpose": default_purpose,
+            "suggestion": default_suggestion
+        }
+        
+        # 解析ChatGPT的回應
+        lines = result.split('\n')
+        current_section = None
+        section_content = []
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            if line.startswith("風險等級："):
+                analysis["risk_level"] = line.replace("風險等級：", "").strip()
+                current_section = None
+            elif line.startswith("原因："):
+                current_section = "reason"
+                content = line.replace("原因：", "").strip()
+                if content:
+                    section_content.append(content)
+            elif line.startswith("可能用途："):
+                if current_section == "reason" and section_content:
+                    analysis["reason"] = "\n".join(section_content)
+                current_section = "purpose"
+                section_content = []
+                content = line.replace("可能用途：", "").strip()
+                if content:
+                    section_content.append(content)
+            elif line.startswith("建議："):
+                if current_section == "purpose" and section_content:
+                    analysis["purpose"] = "\n".join(section_content)
+                current_section = "suggestion"
+                section_content = []
+                content = line.replace("建議：", "").strip()
+                if content:
+                    section_content.append(content)
+            elif current_section:
+                section_content.append(line)
+        
+        # 處理最後一個區段的內容
+        if current_section == "suggestion" and section_content:
+            analysis["suggestion"] = "\n".join(section_content)
+        
+        # 檢查並使用預設值填充空白區域
+        if not analysis["reason"] or analysis["reason"] == "":
+            analysis["reason"] = default_reason
+            
+        if not analysis["purpose"] or analysis["purpose"] == "":
+            analysis["purpose"] = default_purpose
+            
+        if not analysis["suggestion"] or analysis["suggestion"] == "":
+            analysis["suggestion"] = default_suggestion
+            
+        # 如果沒有成功解析，則保存原始回應
+        if analysis["risk_level"] == "不確定" and "raw_response" not in analysis:
+            analysis["raw_response"] = result
+            
+        # 檢查是否有未處理的JSON字符串
+        for key, value in analysis.items():
+            if isinstance(value, str) and (value.startswith('{') and value.endswith('}')):
+                try:
+                    # 嘗試解析JSON
+                    parsed_json = json.loads(value)
+                    # 如果成功解析，提取文本
+                    if isinstance(parsed_json, dict):
+                        if "explanation" in parsed_json:
+                            analysis[key] = parsed_json.get("explanation", "無法解析內容")
+                        elif "suggestions" in parsed_json:
+                            analysis[key] = parsed_json.get("suggestions", "無建議")
+                        else:
+                            # 取第一個有值的字段
+                            for json_key, json_value in parsed_json.items():
+                                if json_value and isinstance(json_value, str):
+                                    analysis[key] = json_value
+                                    break
+                except json.JSONDecodeError:
+                    # 如果不是有效的JSON，保留原始值但移除花括號
+                    analysis[key] = value[1:-1].replace('"', '').replace(',', '\n')
+                    
+        # 確保所有值都是字符串且不是JSON格式
+        for key, value in analysis.items():
+            if value and isinstance(value, str):
+                # 如果值看起來像JSON字符串，則進行清理
+                if (value.startswith('{') and value.endswith('}')) or (value.startswith('[') and value.endswith(']')):
+                    # 嘗試提取純文本
+                    cleaned_value = value
+                    cleaned_value = cleaned_value.replace('{', '').replace('}', '')
+                    cleaned_value = cleaned_value.replace('"', '').replace(',', '\n')
+                    analysis[key] = cleaned_value
+        
+        # 添加短網址信息
+        if is_short_url:
+            # 如果是短網址，添加相關信息
+            short_url_warning = "⚠️ 這個網址是短網址或轉址服務，這類網址可能隱藏了真實目的地，建議謹慎使用。"
+            analysis["short_url_warning"] = short_url_warning
+            
+            # 如果成功展開短網址，添加展開信息
+            if expanded_url and expanded_url != original_url:
+                analysis["original_url"] = original_url
+                analysis["expanded_url"] = expanded_url
+                
+                # 在分析原因中添加展開後的URL信息
+                if "reason" in analysis:
+                    analysis["reason"] = f"- 這是短網址，已展開為:{expanded_url}\n" + str(analysis["reason"])
+                
+                    # 如果是短網址，提高風險等級
+                    if analysis_result.get("risk_level", "") == "低":
+                        analysis_result["risk_level"] = "中"
+                    elif analysis_result.get("risk_level", "") == "中":
+                        analysis_result["risk_level"] = "高"
+                    
+                    # 添加短網址警告
+                    short_url_warning = "⚠️ 這個網址似乎是短網址或轉址服務，這類網址可能隱藏了真實目的地，建議謹慎使用。"
+                    analysis_result["short_url_warning"] = short_url_warning
+                    
+                    # 在分析原因中添加短網址警告
+                    if "reason" in analysis_result:
+                        analysis_result["reason"] = "- 這是短網址，可能隱藏真實目的地\n" + str(analysis_result["reason"])
+                    
+                    # 在建議中強調謹慎
+                    if "suggestion" in analysis_result:
+                        analysis_result["suggestion"] = "- 短網址可能導向風險網站，請特別小心\n" + str(analysis_result["suggestion"])
+                
+                
+                # 修復JSON顯示問題
+                try:
+                    # 嘗試導入並使用修復函數
+                    from fix_json_display import fix_url_analysis_result
+                    analysis_result = fix_url_analysis_result(analysis_result)
+                    logger.info("使用 fix_json_display 模塊處理了 URL 分析結果")
+                except ImportError:
+                    logger.warning("無法導入 fix_json_display 模塊")
+                
+                # 確保所有必要字段都有值
+                if not analysis_result.get("reason"):
+                    analysis_result["reason"] = "無具體原因說明"
+                if not analysis_result.get("purpose"):
+                    analysis_result["purpose"] = "未提供網站用途資訊"
+                if not analysis_result.get("suggestion"):
+                    analysis_result["suggestion"] = "請謹慎使用，如有疑慮請勿點擊"
+                
+# 確保風險等級有值
+                if not analysis_result.get("risk_level") or analysis_result.get("risk_level") == "":
+                    analysis_result["risk_level"] = "不確定"
+                
+                # 創建Flex Message顯示分析結果
+                flex_message = create_url_analysis_flex_message(analysis_result, url)
+                
+                # 如果是高風險或中風險的短網址，添加文字說明
+                if is_short_url and analysis_result.get("risk_level", "") in ["高", "中"]:
+                    text_warning = TextSendMessage(text=f"謹慎使用這個連結！從網址「{url}」來看，這個網址比正常網址短，且「{'未使用' if not url.startswith('https') else '雖使用'}」安全連線。短網址常被用來掩飾不法行為，建議不要點擊或輸入任何個人資料，特別是金融相關資訊。")
+                    line_bot_api.reply_message(event.reply_token, [flex_message, text_warning])
+                else:
+                    line_bot_api.reply_message(event.reply_token, flex_message)
+#             try:
+                pass
+#             except Exception as e:
+                logger.error(f"URL分析顯示過程中發生錯誤: {e}")
+                safe_message = TextSendMessage(text=f"分析此網址時發生錯誤。建議您謹慎使用任何不熟悉的連結，尤其是短網址或要求個人資料的網站。")
+                line_bot_api.reply_message(event.reply_token, safe_message)
+            return
+        else:
+            # 如果找不到URL，請求用戶提供URL
+            response_message = "請提供您想要分析的網址連結，例如：「分析這個網站 https://example.com」"
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=response_message))
+            return
+    
     # 檢查是否為首次對話的用戶
     is_first_time = user_id not in first_time_chatters
     if is_first_time:
@@ -823,7 +1112,7 @@ def handle_message(event):
     pending_state = user_pending_analysis.get(user_id)
     if pending_state and pending_state.get("waiting_for_clarification"):
         logger.info(f"User {user_id} is providing clarification for: {pending_state.get('original_message')}")
-        clarification = text_message
+        clarification = user_message
         original_message_to_analyze = pending_state.get("original_message")
         
         # 將原始訊息與用戶的澄清合併後進行分析
@@ -857,7 +1146,7 @@ def handle_message(event):
             QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text="詐騙類型列表"))
         ])
 
-        line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_message_text, quick_reply=quick_reply))
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_message_text, quick_reply=quick_reply))
         firebase_manager.save_user_interaction(
             user_id, display_name, 
             f"Original: {original_message_to_analyze} | Clarification: {clarification}", 
@@ -887,7 +1176,7 @@ def handle_message(event):
         user_last_chat_time[user_id] = current_time
         
         # 處理功能詢問
-        if any(keyword in text_message.lower() for keyword in function_inquiry_keywords):
+        if any(keyword in user_message.lower() for keyword in function_inquiry_keywords):
             reply_text = f"{display_name}您好！我是防詐騙小幫手，我的功能包括：\n\n" \
                         f"1️⃣ 詐騙風險分析：我可以分析您收到的可疑訊息，評估是否為詐騙\n\n" \
                         f"2️⃣ 詐騙類型查詢：您可以輸入「詐騙類型列表」查看各種常見詐騙\n\n" \
@@ -900,12 +1189,12 @@ def handle_message(event):
                 QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text="詐騙類型列表"))
             ])
             
-            line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
-            firebase_manager.save_user_interaction(user_id, display_name, text_message, "回覆功能說明", is_fraud_related=False)
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
+            firebase_manager.save_user_interaction(user_id, display_name, user_message, "回覆功能說明", is_fraud_related=False)
             return
         
         # 處理需要追問的情況 (例如用戶明確表示被詐騙)
-        if any(pattern in text_message.lower() for pattern in follow_up_patterns):
+        if any(pattern in user_message.lower() for pattern in follow_up_patterns):
             follow_up_reply_text = (
                 f"{display_name}您好！請不要擔心，我了解您可能正在擔心遇到詐騙情況。\n\n"
                 f"為了能更準確地幫助您分析，請您告訴我更多詳細情況：\n\n"
@@ -924,24 +1213,24 @@ def handle_message(event):
             
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=follow_up_reply_text, quick_reply=quick_reply))
             firebase_manager.save_user_interaction(
-                user_id, display_name, text_message, 
+                user_id, display_name, user_message, 
                 "Responded to follow-up pattern with clarifying questions", 
                 is_fraud_related=True 
             )
             return
 
     # 處理「選哪顆土豆」遊戲觸發 (注意：這部分代碼從user_game_state條件內移出)
-    if any(keyword in text_message.lower() for keyword in potato_game_trigger_keywords):
+    if any(keyword in user_message.lower() for keyword in potato_game_trigger_keywords):
         logger.info(f"User {user_id} triggered potato game.")
         firebase_manager.save_user_interaction(
-            user_id, display_name, text_message, 
+            user_id, display_name, user_message, 
             "啟動「選哪顆土豆」遊戲", is_fraud_related=False
         )
-        send_potato_game_question(user_id, reply_token)
+        send_potato_game_question(user_id, event.reply_token)
         return
 
     # 處理詐騙類型列表查詢
-    if text_message.lower() == "詐騙類型列表" or text_message.lower() == "詐騙類型":
+    if user_message.lower() == "詐騙類型列表" or user_message.lower() == "詐騙類型":
         logger.info(f"User {user_id} is querying fraud types list")
         types_text = "目前已收集的詐騙類型有：\n"
         for f_type, info in fraud_types.items():
@@ -953,12 +1242,12 @@ def handle_message(event):
         for f_type in list(fraud_types.keys())[:4]:  # 只取前4個詐騙類型作為快速回覆
             quick_reply_items.append(QuickReplyButton(action=MessageAction(label=f_type, text=f"什麼是{f_type}")))
 
-        line_bot_api.reply_message(reply_token, TextSendMessage(text=types_text, quick_reply=QuickReply(items=quick_reply_items) if quick_reply_items else None))
-        firebase_manager.save_user_interaction(user_id, display_name, text_message, "Provided list of fraud types", is_fraud_related=False)
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=types_text, quick_reply=QuickReply(items=quick_reply_items) if quick_reply_items else None))
+        firebase_manager.save_user_interaction(user_id, display_name, user_message, "Provided list of fraud types", is_fraud_related=False)
         return
         
     # 處理特定詐騙類型資訊查詢 (例如 "什麼是網路購物詐騙")
-    specific_type_query_match = re.match(r"^(什麼是|查詢|我想了解|我想知道)(.+詐騙)$", text_message.strip())
+    specific_type_query_match = re.match(r"^(什麼是|查詢|我想了解|我想知道)(.+詐騙)$", user_message.strip())
     if specific_type_query_match:
         query_type = specific_type_query_match.group(2).strip()
         logger.info(f"User {user_id} is querying about specific fraud type: {query_type}")
@@ -985,8 +1274,8 @@ def handle_message(event):
                 QuickReplyButton(action=MessageAction(label="分析可疑訊息", text="請幫我分析這則訊息："))
             ])
             
-            line_bot_api.reply_message(reply_token, TextSendMessage(text=response_text, quick_reply=quick_reply))
-            firebase_manager.save_user_interaction(user_id, display_name, text_message, f"Provided info about {matched_fraud_type}", is_fraud_related=False)
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=response_text, quick_reply=quick_reply))
+            firebase_manager.save_user_interaction(user_id, display_name, user_message, f"Provided info about {matched_fraud_type}", is_fraud_related=False)
             return
         else:
             # 未找到匹配的詐騙類型，給出一般性回覆
@@ -999,13 +1288,13 @@ def handle_message(event):
                 QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text="選哪顆土豆"))
             ])
             
-            line_bot_api.reply_message(reply_token, TextSendMessage(text=response_text, quick_reply=quick_reply))
-            firebase_manager.save_user_interaction(user_id, display_name, text_message, "Responded to unknown fraud type query", is_fraud_related=False)
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=response_text, quick_reply=quick_reply))
+            firebase_manager.save_user_interaction(user_id, display_name, user_message, "Responded to unknown fraud type query", is_fraud_related=False)
             return
 
     # 檢查是否為請求分析的提示語
     analysis_prompts = ["請幫我分析這則訊息：", "幫我分析這則訊息", "分析這則訊息", "幫我分析訊息"]
-    if any(text_message.strip() == prompt or text_message.strip() == prompt.rstrip("：") for prompt in analysis_prompts):
+    if any(user_message.strip() == prompt or user_message.strip() == prompt.rstrip("：") for prompt in analysis_prompts):
         logger.info(f"User {user_id} requested message analysis but didn't provide message content")
         prompt_reply = f"{display_name}，您好！請將您想要分析的可疑訊息完整發送給我，我會立即為您進行詐騙風險評估。\n\n例如：\n- 銀行通知您的帳戶異常需要操作ATM\n- 不明網拍賣家要求私下交易\n- 陌生人傳來的投資理財訊息\n等等。"
         
@@ -1014,28 +1303,28 @@ def handle_message(event):
             QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text="詐騙類型列表"))
         ])
         
-        line_bot_api.reply_message(reply_token, TextSendMessage(text=prompt_reply, quick_reply=quick_reply))
-        firebase_manager.save_user_interaction(user_id, display_name, text_message, "Responded to analysis request prompt", is_fraud_related=False)
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=prompt_reply, quick_reply=quick_reply))
+        firebase_manager.save_user_interaction(user_id, display_name, user_message, "Responded to analysis request prompt", is_fraud_related=False)
         return
 
     # 檢查是否需要對消息進行詐騙分析的邏輯
-    def should_perform_fraud_analysis(text_message):
+    def should_perform_fraud_analysis(user_message):
         # 1. 檢查是否包含常見問候詞
         common_greetings = ["你好", "嗨", "哈囉", "嘿", "hi", "hello", "hey", "早安", "午安", "晚安"]
-        if text_message.lower() in common_greetings or (len(text_message) <= 5 and any(greeting in text_message.lower() for greeting in common_greetings)):
+        if user_message.lower() in common_greetings or (len(user_message) <= 5 and any(greeting in user_message.lower() for greeting in common_greetings)):
             return False
             
         # 2. 檢查是否是功能相關指令
-        if any(keyword in text_message.lower() for keyword in function_inquiry_keywords + potato_game_trigger_keywords) or "詐騙類型" in text_message:
+        if any(keyword in user_message.lower() for keyword in function_inquiry_keywords + potato_game_trigger_keywords) or "詐騙類型" in user_message:
             return False
             
         # 3. 檢查是否是跟踪模式的問句
-        if any(pattern in text_message.lower() for pattern in follow_up_patterns):
+        if any(pattern in user_message.lower() for pattern in follow_up_patterns):
             return True
             
         # 4. 檢查是否是請求分析的明顯特徵
         analysis_indicators = ["幫我分析", "幫忙看看", "這是不是詐騙", "這是真的嗎", "這可靠嗎", "分析一下", "這樣是詐騙嗎"]
-        if any(indicator in text_message for indicator in analysis_indicators):
+        if any(indicator in user_message for indicator in analysis_indicators):
             return True
             
         # 5. 檢查是否包含特定詐騙相關關鍵詞
@@ -1045,7 +1334,7 @@ def handle_message(event):
                                 "監管帳戶", "解凍", "安全帳戶", "簽證", "保證金", "違法", "洗錢", "警察", "檢察官"]
                                 
         # 要求至少包含兩個詐騙相關關鍵詞
-        keyword_count = sum(1 for keyword in fraud_related_keywords if keyword in text_message)
+        keyword_count = sum(1 for keyword in fraud_related_keywords if keyword in user_message)
         if keyword_count >= 2:
             return True
             
@@ -1056,13 +1345,13 @@ def handle_message(event):
         return False
 
     # 預設使用ChatGPT進行閒聊回應或詐騙分析
-    logger.info(f"Message from {user_id}: {text_message} - Determining if fraud analysis is needed")
+    logger.info(f"Message from {user_id}: {user_message} - Determining if fraud analysis is needed")
     
     # 判斷是否需要進行詐騙分析
-    if should_perform_fraud_analysis(text_message):
-        logger.info(f"Performing fraud analysis for message from {user_id}: {text_message}")
+    if should_perform_fraud_analysis(user_message):
+        logger.info(f"Performing fraud analysis for message from {user_id}: {user_message}")
         # 使用現有的詐騙分析邏輯，傳入user_id
-        analysis_result_text = detect_fraud_with_chatgpt(text_message, display_name, user_id)
+        analysis_result_text = detect_fraud_with_chatgpt(user_message, display_name, user_id)
         analysis_data = parse_fraud_analysis(analysis_result_text)
 
         risk_level = analysis_data.get("risk_level", "不確定")
@@ -1076,7 +1365,7 @@ def handle_message(event):
         if is_emerging and fraud_type != "非詐騙相關":
             emerging_text = "\n\n⚠️ 這可能是一種新的詐騙手法，我已經記錄下來了，謝謝您的資訊！"
             reply_text += emerging_text
-            firebase_manager.save_emerging_fraud_report(user_id, display_name, text_message, analysis_result_text)
+            firebase_manager.save_emerging_fraud_report(user_id, display_name, user_message, analysis_result_text)
             is_fraud_related = True
         elif fraud_type != "非詐騙相關" and risk_level not in ["無風險", "低"]: 
             is_fraud_related = True
@@ -1084,7 +1373,7 @@ def handle_message(event):
             is_fraud_related = False
     else:
         # 使用ChatGPT進行閒聊回應
-        logger.info(f"Using chat response for message from {user_id}: {text_message}")
+        logger.info(f"Using chat response for message from {user_id}: {user_message}")
         
         try:
             # 獲取用戶最近的對話歷史
@@ -1125,7 +1414,7 @@ def handle_message(event):
             # 添加當前用戶消息
             current_user_message = {
                 "role": "user",
-                "content": text_message
+                "content": user_message
             }
             
             # 構建完整的消息列表
@@ -1157,6 +1446,8 @@ def handle_message(event):
             
             is_fraud_related = False
             
+        try:
+            pass
         except Exception as e:
             logger.error(f"閒聊回應錯誤: {e}")
             # 如果閒聊回應失敗，使用簡單的問候
@@ -1177,11 +1468,11 @@ def handle_message(event):
         QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text="詐騙類型列表"))
     ])
     
-    line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
+    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
     
     # 保存互動記錄到Firebase
     firebase_manager.save_user_interaction(
-        user_id, display_name, text_message, reply_text,
+        user_id, display_name, user_message, reply_text,
         is_fraud_related=is_fraud_related,
         fraud_type=fraud_type if is_fraud_related else None,
         risk_level=risk_level if is_fraud_related else None
@@ -1296,6 +1587,8 @@ def load_potato_game_questions():
     except json.JSONDecodeError:
         logger.error(f"解析詐騙題庫文件 {POTATO_GAME_QUESTIONS_DB} 失敗。")
         potato_game_questions = []
+    try:
+        pass
     except Exception as e:
         logger.error(f"加載詐騙題庫時發生未知錯誤: {e}")
         potato_game_questions = []
