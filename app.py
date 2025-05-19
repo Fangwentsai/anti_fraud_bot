@@ -963,49 +963,81 @@ def display_url_analysis_result(analysis_result):
     purpose = analysis_result.get("purpose", "未提供網站用途資訊")
     suggestion = analysis_result.get("suggestion", "請謹慎使用，如有疑慮請勿點擊")
     
-    # 使用 Flex Message 創建類似「選哪顆土豆」的顯示介面
+    # 準備Flex Message內容
+    content_blocks = [
+        TextComponent(text='URL風險分析結果', weight='bold', size='xl', align='center', color='#1DB446'),
+        TextComponent(text=f'{risk_icon} 風險等級：{risk_level}', weight='bold', size='xl', margin='md', color=risk_color),
+        SeparatorComponent(margin='xxl')
+    ]
+    
+    # 如果有短網址警告，添加到內容中
+    if "short_url_warning" in analysis_result:
+        content_blocks.append(
+            BoxComponent(
+                layout='vertical',
+                margin='md',
+                contents=[
+                    TextComponent(text=analysis_result["short_url_warning"], wrap=True, size='sm', color='#ff0000', weight='bold')
+                ]
+            )
+        )
+        content_blocks.append(SeparatorComponent(margin='md'))
+    
+    # 添加分析原因
+    content_blocks.append(
+        BoxComponent(
+            layout='vertical',
+            margin='xxl',
+            contents=[
+                TextComponent(text='🔍 分析原因：', weight='bold', size='md', color='#555555'),
+                TextComponent(text=reason, wrap=True, size='sm', margin='sm')
+            ]
+        )
+    )
+    
+    # 添加可能用途
+    content_blocks.append(
+        BoxComponent(
+            layout='vertical',
+            margin='xxl',
+            contents=[
+                TextComponent(text='📱 可能用途：', weight='bold', size='md', color='#555555'),
+                TextComponent(text=purpose, wrap=True, size='sm', margin='sm')
+            ]
+        )
+    )
+    
+    # 添加安全建議
+    content_blocks.append(
+        BoxComponent(
+            layout='vertical',
+            margin='xxl',
+            contents=[
+                TextComponent(text='💡 安全建議：', weight='bold', size='md', color='#555555'),
+                TextComponent(text=suggestion, wrap=True, size='sm', margin='sm')
+            ]
+        )
+    )
+    
+    # 添加提醒
+    content_blocks.append(
+        BoxComponent(
+            layout='vertical',
+            margin='xxl',
+            contents=[
+                TextComponent(text='⚠️ 提醒：即使風險較低的網址也應謹慎使用，特別是涉及個人資料或金融操作時。', 
+                            wrap=True, size='xs', margin='sm', color='#aaaaaa')
+            ]
+        )
+    )
+    
+    # 創建完整的Flex Message
     flex_message = FlexSendMessage(
         alt_text='URL風險分析結果',
         contents=BubbleContainer(
             body=BoxComponent(
                 layout='vertical',
-                contents=[
-                    TextComponent(text='URL風險分析結果', weight='bold', size='xl', align='center', color='#1DB446'),
-                    TextComponent(text=f'{risk_icon} 風險等級：{risk_level}', weight='bold', size='xl', margin='md', color=risk_color),
-                    SeparatorComponent(margin='xxl'),
-                    BoxComponent(
-                        layout='vertical',
-                        margin='xxl',
-                        contents=[
-                            TextComponent(text='📝 分析原因：', weight='bold', size='md', color='#555555'),
-                            TextComponent(text=reason, wrap=True, size='sm', margin='sm')
-                        ]
-                    ),
-                    BoxComponent(
-                        layout='vertical',
-                        margin='xxl',
-                        contents=[
-                            TextComponent(text='🔍 可能用途：', weight='bold', size='md', color='#555555'),
-                            TextComponent(text=purpose, wrap=True, size='sm', margin='sm')
-                        ]
-                    ),
-                    BoxComponent(
-                        layout='vertical',
-                        margin='xxl',
-                        contents=[
-                            TextComponent(text='💡 安全建議：', weight='bold', size='md', color='#555555'),
-                            TextComponent(text=suggestion, wrap=True, size='sm', margin='sm')
-                        ]
-                    ),
-                    BoxComponent(
-                        layout='vertical',
-                        margin='xxl',
-                        contents=[
-                            TextComponent(text='⚠️ 提醒：即使風險較低的網址也應謹慎使用，特別是涉及個人資料或金融操作時。', 
-                                        wrap=True, size='xs', margin='sm', color='#aaaaaa')
-                        ]
-                    )
-                ]
+                contents=content_blocks
             )
         )
     )
@@ -1068,11 +1100,48 @@ def handle_message(event):
         url_match = url_pattern.search(user_message)
         if url_match:
             url = url_match.group(0)
+            
+            # 記錄用戶分析的URL
+            logger.info(f"用戶 {user_id} 請求分析URL: {url}")
+            firebase_manager.save_user_interaction(
+                user_id, display_name, f"URL分析請求: {url}", 
+                "分析URL", is_fraud_related=False
+            )
+            
             # 進行URL風險分析
             analysis_result = analyze_url(url)
-            # 顯示分析結果
+            
+            # 針對短網址或高風險網址添加額外警告
+            is_short_url = len(url.split('//')[-1].split('/')[0]) < 15 and any(short_domain in url.lower() for short_domain in ["bit.ly", "tinyurl", "goo.gl", "t.co", "is.gd", "etf8", "fun", "xyz", "link", "tiny", "short", "go"])
+            
+            if is_short_url:
+                # 如果是短網址，提高風險等級
+                if analysis_result["risk_level"] == "低":
+                    analysis_result["risk_level"] = "中"
+                elif analysis_result["risk_level"] == "中":
+                    analysis_result["risk_level"] = "高"
+                
+                # 添加短網址警告
+                short_url_warning = "⚠️ 這個網址似乎是短網址或轉址服務，這類網址可能隱藏了真實目的地，建議謹慎使用。"
+                analysis_result["short_url_warning"] = short_url_warning
+                
+                # 在分析原因中添加短網址警告
+                if "reason" in analysis_result:
+                    analysis_result["reason"] = "- 這是短網址，可能隱藏真實目的地\n" + analysis_result["reason"]
+                
+                # 在建議中強調謹慎
+                if "suggestion" in analysis_result:
+                    analysis_result["suggestion"] = "- 短網址可能導向風險網站，請特別小心\n" + analysis_result["suggestion"]
+            
+            # 顯示分析結果（統一使用Flex Message）
             response_message = display_url_analysis_result(analysis_result)
-            line_bot_api.reply_message(event.reply_token, response_message)
+            
+            # 如果是高風險或中風險的短網址，添加文字說明
+            if is_short_url and analysis_result["risk_level"] in ["高", "中"]:
+                text_warning = TextSendMessage(text=f"謹慎使用這個連結！從網址「{url}」來看，這個網址比正常網址短，且「{'未使用' if not url.startswith('https') else '雖使用'}」安全連線。短網址常被用來掩飾不法行為，建議不要點擊或輸入任何個人資料，特別是金融相關資訊。")
+                line_bot_api.reply_message(event.reply_token, [response_message, text_warning])
+            else:
+                line_bot_api.reply_message(event.reply_token, response_message)
             return
         else:
             # 如果找不到URL，請求用戶提供URL
