@@ -17,9 +17,15 @@ app = Flask(__name__,
 from firebase_manager import FirebaseManager
 firebase_manager = FirebaseManager()
 
+# 加载诈骗类型数据
+fraud_tactics_path = os.path.join(anti_fraud_clean_dir, "fraud_tactics.json")
+with open(fraud_tactics_path, 'r', encoding='utf-8') as f:
+    fraud_tactics_data = json.load(f)
+
 @app.route("/", methods=["GET"])
 def index():
-    return render_template("index.html")
+    # 传递fraud_types变量给模板
+    return render_template("index.html", fraud_types=fraud_tactics_data)
 
 @app.route("/callback", methods=["POST"])
 def callback():
