@@ -451,8 +451,8 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
 {
 "risk_level": "高/中/低/無風險",
 "fraud_type": "詐騙類型或'非詐騙相關'",
-"explanation": "詳細解釋為什麼這是或不是詐騙（100-200字），請使用平易近人、簡單易懂的語言，像是在跟長輩解釋一樣，避免使用專業術語，用具體實例說明",
-"suggestions": "給用戶的建議（如果有風險），提供清晰、具體、易於執行的指示",
+"explanation": "簡短解釋分析結果（50-80字）。請使用非常口語化、對話式的語言，就像跟60歲長輩說話一樣。避免專業術語和複雜句構，用日常生活的比喻。像是在LINE上聊天的語氣，簡短有力。",
+"suggestions": "簡短具體的建議（30-50字），用點列式更好",
 "is_emerging": true/false（是否可能是新型詐騙手法）
 }
 
@@ -464,7 +464,8 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
 5. 是否有拼寫或語法錯誤
 
 請客觀分析內容，不要過度敏感，也不要放過可疑跡象。
-重要：只回傳JSON格式，不要有任何額外說明或前導文字。"""
+重要：只回傳JSON格式，不要有任何額外說明或前導文字。回答風格要像在跟長輩聊天，非常直白簡單。
+"""
 
         # 如果提供了user_id，嘗試獲取歷史對話作為上下文
         messages = [{"role": "system", "content": system_prompt}]
@@ -496,7 +497,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
 
 {user_message}
 
-這是來自「{display_name}」的訊息。請依照系統提示的格式提供JSON格式的分析結果。記得只回傳純JSON，不要有任何額外說明或前導文字。"""
+這是來自「{display_name}」的訊息。請提供JSON格式的分析結果。記得只回傳純JSON，不要有任何額外說明。請讓explanation字段非常口語化，就像在LINE上跟朋友聊天那樣直白簡短。"""
 
         messages.append({"role": "user", "content": analysis_prompt})
         
@@ -505,7 +506,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         response = openai.chat.completions.create(
             model=os.environ.get('OPENAI_MODEL', 'gpt-3.5-turbo'),
             messages=messages,
-            temperature=0.2,  # 較低的溫度，使結果更確定性
+            temperature=0.3,  # 略微提高溫度使語言更自然
             max_tokens=800,
             response_format={"type": "json_object"}  # 強制返回JSON格式
         )
