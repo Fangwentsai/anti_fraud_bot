@@ -795,65 +795,43 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
     fraud_type = analysis_data.get("fraud_type", "未知")
     explanation = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
     suggestions = analysis_data.get("suggestions", "請隨時保持警惕。")
+    is_emerging = analysis_data.get("is_emerging", False)
     
     # 根據風險等級設置顏色和圖標
     if risk_level in ["高", "高風險"]:
         risk_color = "#FF0000"  # 紅色
         risk_emoji = "⚠️"
         risk_background = "#FFF0F0"  # 淺紅背景
-        header_icon = "https://i.imgur.com/HwgTYUL.png"  # 高風險圖標URL
     elif risk_level in ["中", "中風險"]:
         risk_color = "#FF9900"  # 橙色
         risk_emoji = "⚠️"
         risk_background = "#FFF8F0"  # 淺橙背景
-        header_icon = "https://i.imgur.com/SU8yKSP.png"  # 中風險圖標URL
     elif risk_level in ["低", "低風險"]:
         risk_color = "#28A745"  # 綠色
         risk_emoji = "✅"
         risk_background = "#F0FFF5"  # 淺綠背景
-        header_icon = "https://i.imgur.com/VGXp1ph.png"  # 低風險圖標URL
     else:
         risk_color = "#6C757D"  # 灰色
         risk_emoji = "❓"
         risk_background = "#F8F9FA"  # 淺灰背景
-        header_icon = "https://i.imgur.com/x9M9wLt.png"  # 不確定風險圖標URL
+    
+    # 將URL縮短，避免過長
+    url_display = message_to_analyze
+    if len(url_display) > 60:
+        url_display = url_display[:57] + "..."
     
     # 構建更美觀的Flex Message
     bubble = BubbleContainer(
         size="mega",
         header=BoxComponent(
-            layout='horizontal',
+            layout='vertical',
             contents=[
-                BoxComponent(
-                    layout='vertical',
-                    width='70%',
-                    contents=[
-                        TextComponent(
-                            text=f"風險分析結果 {risk_emoji}",
-                            weight='bold',
-                            size='xl',
-                            color='#ffffff'
-                        ),
-                        TextComponent(
-                            text=f"{risk_level}",
-                            weight='bold',
-                            size='xxl',
-                            color='#ffffff',
-                            margin='md'
-                        )
-                    ]
-                ),
-                BoxComponent(
-                    layout='vertical',
-                    width='30%',
-                    contents=[
-                        TextComponent(
-                            text="今天",
-                            size='xs',
-                            color='#ffffffcc',
-                            align='end'
-                        )
-                    ]
+                TextComponent(
+                    text=f"風險分析結果 {risk_emoji}",
+                    weight='bold',
+                    size='xl',
+                    color='#ffffff',
+                    align='center'
                 )
             ],
             background_color=risk_color,
@@ -865,61 +843,65 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
             padding_all='15px',
             contents=[
                 BoxComponent(
-                    layout='horizontal',
-                    margin='md',
+                    layout='vertical',
+                    margin='none',
                     contents=[
-                        BoxComponent(
-                            layout='vertical',
-                            width='30%',
-                            contents=[
-                                TextComponent(
-                                    text='風險等級',
-                                    weight='bold',
-                                    color='#555555',
-                                    size='sm'
-                                )
-                            ]
+                        TextComponent(
+                            text="風險等級：",
+                            weight='bold',
+                            size='md',
+                            color='#555555'
                         ),
-                        BoxComponent(
-                            layout='vertical',
-                            width='70%',
-                            contents=[
-                                TextComponent(
-                                    text=risk_level,
-                                    weight='bold',
-                                    color=risk_color,
-                                    size='sm'
-                                )
-                            ]
+                        TextComponent(
+                            text=risk_level,
+                            weight='bold',
+                            size='lg',
+                            color=risk_color,
+                            margin='sm'
                         )
                     ]
                 ),
                 BoxComponent(
-                    layout='horizontal',
-                    margin='md',
+                    layout='vertical',
+                    margin='lg',
                     contents=[
-                        BoxComponent(
-                            layout='vertical',
-                            width='30%',
-                            contents=[
-                                TextComponent(
-                                    text='詐騙類型',
-                                    weight='bold',
-                                    color='#555555',
-                                    size='sm'
-                                )
-                            ]
+                        TextComponent(
+                            text="詐騙類型：",
+                            weight='bold',
+                            size='md',
+                            color='#555555'
+                        ),
+                        TextComponent(
+                            text=fraud_type,
+                            size='md',
+                            color='#333333',
+                            margin='sm',
+                            wrap=True
+                        )
+                    ]
+                ),
+                BoxComponent(
+                    layout='vertical',
+                    margin='lg',
+                    contents=[
+                        TextComponent(
+                            text="分析內容：",
+                            weight='bold',
+                            size='md',
+                            color='#555555'
                         ),
                         BoxComponent(
                             layout='vertical',
-                            width='70%',
+                            margin='sm',
+                            padding_all='10px',
+                            background_color='#EFEFEF',
+                            corner_radius='md',
                             contents=[
                                 TextComponent(
-                                    text=fraud_type,
-                                    weight='bold',
-                                    color='#666666',
-                                    size='sm',
-                                    wrap=True
+                                    text=url_display,
+                                    size='xs',
+                                    wrap=True,
+                                    color='#555555'
                                 )
                             ]
                         )
@@ -934,83 +916,55 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
                     margin='lg',
                     contents=[
                         TextComponent(
-                            text='分析內容',
+                            text="分析說明：",
                             weight='bold',
                             size='md',
                             color='#555555'
                         ),
-                        BoxComponent(
-                            layout='vertical',
-                            margin='sm',
-                            padding_all='13px',
-                            background_color='#EFEFEF',
-                            corner_radius='md',
-                            contents=[
-                                TextComponent(
-                                    text=message_to_analyze[:100] + '...' if len(message_to_analyze) > 100 else message_to_analyze,
-                                    size='xs',
-                                    wrap=True,
-                                    color='#555555'
-                                )
-                            ]
+                        TextComponent(
+                            text=explanation,
+                            wrap=True,
+                            size='sm',
+                            color='#333333',
+                            margin='sm'
                         )
                     ]
                 ),
                 BoxComponent(
                     layout='vertical',
-                    margin='xl',
+                    margin='lg',
                     contents=[
                         TextComponent(
-                            text='分析說明',
+                            text="建議：",
                             weight='bold',
                             size='md',
                             color='#555555'
                         ),
-                        BoxComponent(
-                            layout='vertical',
-                            margin='sm',
-                            padding_all='13px',
-                            background_color='#FFFFFF',
-                            border_width='1px',
-                            border_color='#DDDDDD',
-                            corner_radius='md',
-                            contents=[
-                                TextComponent(
-                                    text=explanation,
-                                    wrap=True,
-                                    size='sm',
-                                    color='#333333'
-                                )
-                            ]
+                        TextComponent(
+                            text=suggestions,
+                            wrap=True,
+                            size='sm',
+                            color='#0056b3',
+                            margin='sm'
                         )
                     ]
                 ),
                 BoxComponent(
                     layout='vertical',
-                    margin='xl',
+                    margin='lg',
                     contents=[
                         TextComponent(
-                            text='建議',
+                            text="新興手法：",
                             weight='bold',
                             size='md',
                             color='#555555'
                         ),
-                        BoxComponent(
-                            layout='vertical',
+                        TextComponent(
+                            text="是" if is_emerging else "否",
+                            size='sm',
+                            color='#FF6B6B' if is_emerging else '#333333',
                             margin='sm',
-                            padding_all='13px',
-                            background_color='#E6F7FF',
-                            border_width='1px',
-                            border_color='#BBDEFB',
-                            corner_radius='md',
-                            contents=[
-                                TextComponent(
-                                    text=suggestions,
-                                    wrap=True,
-                                    size='sm',
-                                    color='#0056b3'
-                                )
-                            ]
+                            weight='bold' if is_emerging else 'regular'
                         )
                     ]
                 )
