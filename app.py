@@ -805,6 +805,7 @@ def analyze_url(url):
 4. 是否使用HTTPS等安全協議
 5. 網域註冊信息和知名度
 
+請務必提供詳細的分析原因、可能用途和安全建議，不要留空。
 請保持客觀並提供有用的安全建議。"""
 
         messages = [
@@ -823,7 +824,13 @@ def analyze_url(url):
         result = response.choices[0].message.content.strip()
         
         # 解析分析結果
-        analysis = {}
+        analysis = {
+            "risk_level": "不確定",
+            "reason": "無法確定風險原因，請謹慎使用",
+            "purpose": "未能確定此網址的用途",
+            "suggestion": "建議不要點擊此連結，或先使用其他工具進行驗證"
+        }
+        
         for line in result.split('\n'):
             if line.startswith("風險等級："):
                 analysis["risk_level"] = line.replace("風險等級：", "").strip()
@@ -834,9 +841,19 @@ def analyze_url(url):
             elif line.startswith("建議："):
                 analysis["suggestion"] = line.replace("建議：", "").strip()
         
+        # 確保每個字段都有值
+        if not analysis["reason"] or analysis["reason"] == "":
+            analysis["reason"] = "API未返回具體原因，請謹慎處理"
+            
+        if not analysis["purpose"] or analysis["purpose"] == "":
+            analysis["purpose"] = "API未返回可能用途信息"
+            
+        if not analysis["suggestion"] or analysis["suggestion"] == "":
+            analysis["suggestion"] = "無具體建議，建議不要點擊不明來源的連結"
+            
         # 如果沒有成功解析，則保存原始回應
-        if not analysis:
-            analysis = {"raw_response": result}
+        if analysis["risk_level"] == "不確定" and "raw_response" not in analysis:
+            analysis["raw_response"] = result
             
         return analysis
     except Exception as e:
@@ -845,47 +862,89 @@ def analyze_url(url):
 
 def display_url_analysis_result(analysis_result):
     """
-    將URL分析結果轉換為易讀的文本格式
+    將URL分析結果轉換為易讀的文本格式，以Flex Message方式呈現
     
     Args:
         analysis_result: 分析結果字典
         
     Returns:
-        格式化的分析結果文本
+        格式化的分析結果訊息
     """
     if "error" in analysis_result:
-        return f"抱歉，分析URL時發生錯誤：{analysis_result['error']}\n\n建議您謹慎使用該連結，或使用其他工具進一步驗證。"
+        error_message = f"抱歉，分析URL時發生錯誤：{analysis_result['error']}\n\n建議您謹慎使用該連結，或使用其他工具進一步驗證。"
+        return TextSendMessage(text=error_message)
         
     if "raw_response" in analysis_result:
         # 如果有原始回應但結構化解析失敗
-        return f"URL分析結果：\n\n{analysis_result['raw_response']}"
+        raw_response = f"URL分析結果：\n\n{analysis_result['raw_response']}"
+        return TextSendMessage(text=raw_response)
         
-    # 根據風險等級設置對應的表情符號
-    risk_icons = {
-        "高": "🔴",
-        "中": "🟠",
-        "低": "🟢",
-        "不確定": "⚪"
+    # 根據風險等級設置對應的表情符號和顏色
+    risk_level = analysis_result.get("risk_level", "不確定")
+    risk_mapping = {
+        "高": {"icon": "🔴", "color": "#FF5252"},
+        "中": {"icon": "🟠", "color": "#FFA726"},
+        "低": {"icon": "🟢", "color": "#66BB6A"},
+        "不確定": {"icon": "⚪", "color": "#9E9E9E"}
     }
     
-    risk_level = analysis_result.get("risk_level", "不確定")
-    risk_icon = risk_icons.get(risk_level, "⚪")
+    risk_info = risk_mapping.get(risk_level, risk_mapping["不確定"])
+    risk_icon = risk_info["icon"]
+    risk_color = risk_info["color"]
     
-    result_text = f"URL風險分析結果：\n\n{risk_icon} 風險等級：{risk_level}\n\n"
+    # 確保所有值都不為空
+    reason = analysis_result.get("reason", "無具體原因說明")
+    purpose = analysis_result.get("purpose", "未提供網站用途資訊")
+    suggestion = analysis_result.get("suggestion", "請謹慎使用，如有疑慮請勿點擊")
     
-    if "reason" in analysis_result:
-        result_text += f"📝 分析原因：\n{analysis_result['reason']}\n\n"
-        
-    if "purpose" in analysis_result:
-        result_text += f"🔍 可能用途：\n{analysis_result['purpose']}\n\n"
-        
-    if "suggestion" in analysis_result:
-        result_text += f"💡 安全建議：\n{analysis_result['suggestion']}"
+    # 使用 Flex Message 創建類似「選哪顆土豆」的顯示介面
+    flex_message = FlexSendMessage(
+        alt_text='URL風險分析結果',
+        contents=BubbleContainer(
+            body=BoxComponent(
+                layout='vertical',
+                contents=[
+                    TextComponent(text='URL風險分析結果', weight='bold', size='xl', align='center', color='#1DB446'),
+                    TextComponent(text=f'{risk_icon} 風險等級：{risk_level}', weight='bold', size='xl', margin='md', color=risk_color),
+                    SeparatorComponent(margin='xxl'),
+                    BoxComponent(
+                        layout='vertical',
+                        margin='xxl',
+                        contents=[
+                            TextComponent(text='📝 分析原因：', weight='bold', size='md', color='#555555'),
+                            TextComponent(text=reason, wrap=True, size='sm', margin='sm')
+                        ]
+                    ),
+                    BoxComponent(
+                        layout='vertical',
+                        margin='xxl',
+                        contents=[
+                            TextComponent(text='🔍 可能用途：', weight='bold', size='md', color='#555555'),
+                            TextComponent(text=purpose, wrap=True, size='sm', margin='sm')
+                        ]
+                    ),
+                    BoxComponent(
+                        layout='vertical',
+                        margin='xxl',
+                        contents=[
+                            TextComponent(text='💡 安全建議：', weight='bold', size='md', color='#555555'),
+                            TextComponent(text=suggestion, wrap=True, size='sm', margin='sm')
+                        ]
+                    ),
+                    BoxComponent(
+                        layout='vertical',
+                        margin='xxl',
+                        contents=[
+                            TextComponent(text='⚠️ 提醒：即使風險較低的網址也應謹慎使用，特別是涉及個人資料或金融操作時。', 
+                                        wrap=True, size='xs', margin='sm', color='#aaaaaa')
+                        ]
+                    )
+                ]
+            )
+        )
+    )
     
-    # 添加額外提示
-    result_text += "\n\n⚠️ 提醒：即使風險較低的網址也應謹慎使用，特別是涉及個人資料或金融操作時。"
-    
-    return result_text
+    return flex_message
 
 @app.route("/callback", methods=['POST'])
 def callback():
