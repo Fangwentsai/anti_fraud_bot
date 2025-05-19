@@ -994,7 +994,7 @@ def handle_message(event):
             analysis_result = analyze_url(url)
             # 顯示分析結果
             response_message = display_url_analysis_result(analysis_result)
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=response_message))
+            line_bot_api.reply_message(event.reply_token, response_message)
             return
         else:
             # 如果找不到URL，請求用戶提供URL
