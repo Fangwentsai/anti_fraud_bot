@@ -328,45 +328,108 @@ def parse_fraud_analysis(analysis_result):
             "suggestions": "請稍後再試或聯繫客服。",
             "is_emerging": False
         }
-
-    lines = analysis_result.strip().split('\n')
-    result = {
-        "risk_level": "不確定",
-        "fraud_type": "未知",
-        "explanation": analysis_result, # Default to full analysis if parsing fails for explanation
-        "suggestions": "請保持警惕，如有疑問可諮詢165反詐騙專線。",
-        "is_emerging": False
-    }
-
-    for line in lines:
-        if line.startswith("風險等級："):
-            result["risk_level"] = line.split("風險等級：")[1].strip()
-        elif line.startswith("可能詐騙類型："):
-            result["fraud_type"] = line.split("可能詐騙類型：")[1].strip()
-            if result["fraud_type"].lower() == "不適用" or result["fraud_type"].lower() == "無":
-                 result["fraud_type"] = "非詐騙相關"
-        elif line.startswith("說明："):
-            result["explanation"] = line.split("說明：")[1].strip()
-        elif line.startswith("建議："):
-            result["suggestions"] = line.split("建議：")[1].strip()
-        elif line.startswith("新興手法："):
-            is_emerging_text = line.split("新興手法：")[1].strip().lower()
-            result["is_emerging"] = (is_emerging_text == "是")
-
-    # 如果解析後explanation還是原始完整訊息，且有單獨的說明字段，則用單獨的說明
-    if result["explanation"] == analysis_result and "說明：" in analysis_result:
-        pass # Keep as is, maybe it was just one line of explanation
-    elif "說明：" not in analysis_result and "建議：" not in analysis_result : # if no specific fields, use the whole thing as explanation
-         result["explanation"] = analysis_result
     
-    # 如果詐騙類型包含多個，取第一個主要的
-    if isinstance(result["fraud_type"], str) and ',' in result["fraud_type"]:
-        result["fraud_type"] = result["fraud_type"].split(',')[0].strip()
-    if isinstance(result["fraud_type"], str) and '、' in result["fraud_type"]:
-        result["fraud_type"] = result["fraud_type"].split('、')[0].strip()
+    # 嘗試解析JSON格式的回應
+    try:
+        # 檢查是否為JSON格式
+        if analysis_result.strip().startswith('{') and analysis_result.strip().endswith('}'):
+            import json
+            try:
+                # 嘗試直接解析JSON
+                parsed_data = json.loads(analysis_result)
+                
+                # 確保返回的鍵名一致
+                result = {}
+                
+                # 風險等級
+                if "risk_level" in parsed_data:
+                    result["risk_level"] = parsed_data["risk_level"]
+                
+                # 詐騙類型
+                if "fraud_type" in parsed_data:
+                    result["fraud_type"] = parsed_data["fraud_type"]
+                elif "type" in parsed_data:
+                    result["fraud_type"] = parsed_data["type"]
+                else:
+                    result["fraud_type"] = "未知"
+                
+                # 解釋說明
+                if "explanation" in parsed_data:
+                    result["explanation"] = parsed_data["explanation"]
+                
+                # 建議
+                if "suggestions" in parsed_data:
+                    result["suggestions"] = parsed_data["suggestions"]
+                elif "suggestion" in parsed_data:
+                    result["suggestions"] = parsed_data["suggestion"]
+                
+                # 新興手法
+                if "is_emerging" in parsed_data:
+                    result["is_emerging"] = parsed_data["is_emerging"]
+                
+                return result
+            except json.JSONDecodeError:
+                # JSON解析失敗，回退到文本解析
+                logger.warning("JSON解析失敗，改用文本解析")
+        
+        # 如果不是JSON或JSON解析失敗，使用文本解析方式
+        lines = analysis_result.strip().split('\n')
+        result = {
+            "risk_level": "不確定",
+            "fraud_type": "未知",
+            "explanation": "無法解析分析結果。",
+            "suggestions": "請保持警惕，如有疑問可諮詢165反詐騙專線。",
+            "is_emerging": False
+        }
 
-
-    return result
+        for line in lines:
+            if "風險等級" in line or "risk_level" in line.lower():
+                if ":" in line:
+                    result["risk_level"] = line.split(":", 1)[1].strip()
+                elif "：" in line:
+                    result["risk_level"] = line.split("：", 1)[1].strip()
+            
+            elif "詐騙類型" in line or "fraud_type" in line.lower() or "可能詐騙類型" in line:
+                if ":" in line:
+                    result["fraud_type"] = line.split(":", 1)[1].strip()
+                elif "：" in line:
+                    result["fraud_type"] = line.split("：", 1)[1].strip()
+                    
+                if result["fraud_type"].lower() in ["不適用", "無", "none", "n/a"]:
+                    result["fraud_type"] = "非詐騙相關"
+            
+            elif "說明" in line or "explanation" in line.lower():
+                if ":" in line:
+                    result["explanation"] = line.split(":", 1)[1].strip()
+                elif "：" in line:
+                    result["explanation"] = line.split("：", 1)[1].strip()
+            
+            elif "建議" in line or "suggestions" in line.lower():
+                if ":" in line:
+                    result["suggestions"] = line.split(":", 1)[1].strip()
+                elif "：" in line:
+                    result["suggestions"] = line.split("：", 1)[1].strip()
+            
+            elif "新興手法" in line or "is_emerging" in line.lower():
+                emerging_text = ""
+                if ":" in line:
+                    emerging_text = line.split(":", 1)[1].strip().lower()
+                elif "：" in line:
+                    emerging_text = line.split("：", 1)[1].strip().lower()
+                
+                result["is_emerging"] = emerging_text in ["是", "true", "yes"]
+        
+        return result
+    
+    except Exception as e:
+        logger.error(f"解析詐騙分析結果時發生錯誤: {e}")
+        return {
+            "risk_level": "不確定",
+            "fraud_type": "未知",
+            "explanation": "無法解析分析結果。",
+            "suggestions": "請稍後再試或聯繫客服。",
+            "is_emerging": False
+        }
 
 # ChatGPT檢測詐騙訊息函數
 def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None):
@@ -384,7 +447,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         # 構建基本系統提示
         system_prompt = """你是一個專業的詐騙分析專家，請分析以下訊息是否可能是詐騙：
 
-提供分析結果時，請使用以下格式（用中文回答）：
+請以純JSON格式回答，不要有其他文字。JSON格式如下：
 {
 "risk_level": "高/中/低/無風險",
 "fraud_type": "詐騙類型或'非詐騙相關'",
@@ -401,8 +464,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
 5. 是否有拼寫或語法錯誤
 
 請客觀分析內容，不要過度敏感，也不要放過可疑跡象。
-
-重要！分析說明必須使用平易近人、簡單易懂的語言，就像跟50歲以上的長輩說話一樣，避免使用專業術語，多用日常生活中的比喻和例子來解釋。"""
+重要：只回傳JSON格式，不要有任何額外說明或前導文字。"""
 
         # 如果提供了user_id，嘗試獲取歷史對話作為上下文
         messages = [{"role": "system", "content": system_prompt}]
@@ -434,7 +496,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
 
 {user_message}
 
-這是來自「{display_name}」的訊息。請依照系統提示的格式提供JSON格式的分析結果。"""
+這是來自「{display_name}」的訊息。請依照系統提示的格式提供JSON格式的分析結果。記得只回傳純JSON，不要有任何額外說明或前導文字。"""
 
         messages.append({"role": "user", "content": analysis_prompt})
         
@@ -444,7 +506,8 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
             model=os.environ.get('OPENAI_MODEL', 'gpt-3.5-turbo'),
             messages=messages,
             temperature=0.2,  # 較低的溫度，使結果更確定性
-            max_tokens=800
+            max_tokens=800,
+            response_format={"type": "json_object"}  # 強制返回JSON格式
         )
         
         result = response.choices[0].message.content.strip()
