@@ -799,7 +799,7 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
         risk_color = "#FF0000"  # 紅色
         risk_emoji = "⚠️"
     elif risk_level in ["中", "中風險"]:
-        risk_color = "#FFA500"  # 橙色
+        risk_color = "#FFCC00"  # 黃色
         risk_emoji = "⚠️"
     elif risk_level in ["低", "低風險"]:
         risk_color = "#008000"  # 綠色
@@ -825,29 +825,9 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
         body=BoxComponent(
             layout='vertical',
             contents=[
-                TextComponent(
-                    text=f"您好，{display_name}",
-                    weight='bold',
-                    size='md',
-                    wrap=True,
-                    margin='md'
-                ),
-                TextComponent(
-                    text=f"我已分析您提供的信息：",
-                    size='sm',
-                    wrap=True,
-                    margin='md'
-                ),
-                TextComponent(
-                    text=message_to_analyze[:60] + "..." if len(message_to_analyze) > 60 else message_to_analyze,
-                    size='sm',
-                    wrap=True,
-                    margin='md',
-                    color='#555555'
-                ),
                 BoxComponent(
                     layout='vertical',
-                    margin='lg',
+                    margin='xs',
                     spacing='sm',
                     contents=[
                         BoxComponent(
@@ -888,6 +868,13 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
                             ]
                         )
                     ]
+                ),
+                TextComponent(
+                    text=f"幫我分析這個網站是不是詐騙：\n{message_to_analyze[:60] + '...' if len(message_to_analyze) > 60 else message_to_analyze}",
+                    size='xs',
+                    wrap=True,
+                    margin='md',
+                    color='#555555'
                 ),
                 SeparatorComponent(margin='lg'),
                 BoxComponent(
@@ -938,6 +925,14 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
                     wrap=True,
                     align='center',
                     color='#aaaaaa'
+                ),
+                TextComponent(
+                    text='本風險分析僅作參考使用，請自行評估實際風險',
+                    size='xs',
+                    wrap=True,
+                    align='center',
+                    color='#aaaaaa',
+                    margin='md'
                 ),
                 SeparatorComponent(margin='md'),
                 ButtonComponent(
