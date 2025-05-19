@@ -799,26 +799,25 @@ def analyze_url(url):
         is_official_site = any(org in domain for org in [".edu", ".org", ".gov", ".mil"])
         
         # 使用ChatGPT進行URL分析
-        system_prompt = """你是一位網路安全專家，請分析以下URL的風險等級和安全性：
+        system_prompt = """你是一位網路安全專家，請簡明扼要地分析以下URL的風險：
         
-請依照以下格式回覆（用中文回答，務必提供詳細內容）：
+請依照以下格式回覆（用中文回答，使用簡單易懂的語言，適合非技術人士理解）：
 風險等級：[高/中/低]
-原因：[詳細說明為什麼這個URL可能存在風險或是安全的]
-可能用途：[這個網址的可能用途]
-建議：[給用戶的建議和注意事項]
+原因：[3-4點簡短說明這個網址安全或有風險的原因]
+可能用途：[2-3點簡短說明這個網站可能的用途]
+建議：[2-3點簡短的安全建議]
 
-你的回答需要包含：
-1. 詳細的分析原因，不要只回覆"URL看起來安全"這類籠統說法
-2. 網站可能的用途和功能介紹
-3. 具體的安全建議
+注意：
+1. 請使用簡單的語言，避免技術術語
+2. 請用條列式回答，每點不超過20字
+3. 整體回答簡短精簡，重點是讓一般用戶容易理解
 
-分析時請考慮以下因素：
-1. 網域是否為官方或政府組織 (.gov、.edu等)
-2. 是否使用HTTPS安全協議
-3. URL結構是否合理，沒有可疑參數
-4. 網站的可能用途和受眾
-
-無論風險等級如何，都必須提供詳細的分析原因、用途說明和安全建議，不要留空。"""
+分析考慮因素：
+- 網域是政府或知名組織嗎？
+- 有使用HTTPS嗎？
+- URL結構是否合理？
+- 網站的可能用途？
+"""
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -830,7 +829,7 @@ def analyze_url(url):
             model=os.environ.get('OPENAI_MODEL', 'gpt-3.5-turbo'),
             messages=messages,
             temperature=0.2,
-            max_tokens=800  # 增加tokens以獲取更詳細的回應
+            max_tokens=500  # 減少token以獲取更簡潔的回應
         )
         
         result = response.choices[0].message.content.strip()
@@ -839,19 +838,19 @@ def analyze_url(url):
         # 解析分析結果 - 首先設置預設值
         if is_gov_site:
             default_risk = "低"
-            default_reason = f"此網址使用了政府網域(.gov)，一般來說政府官方網站是可信的。此網址{'' if https_secure else '不'}使用HTTPS安全連線。"
-            default_purpose = "這看起來是一個政府機構或部門的官方網站，可能提供政府服務、資訊或線上申請功能。"
-            default_suggestion = "此網站看起來是官方政府網站，但仍建議確認網址是否正確，並且不要隨意提供個人敏感資料。"
+            default_reason = f"1. 網域分析：該URL屬於政府網站\n2. 一般政府網站可信度高\n3. {'使用' if https_secure else '未使用'}HTTPS安全連線"
+            default_purpose = "- 提供政府服務和資訊\n- 官方新聞或公告平台"
+            default_suggestion = "1. 確認網址是否正確\n2. 不要隨意點擊頁面中的其他連結"
         elif is_official_site:
             default_risk = "低"
-            default_reason = f"此網址使用了官方組織網域({'.edu' if '.edu' in domain else '.org' if '.org' in domain else '.mil' if '.mil' in domain else '官方'})，一般來說這類網站是可信的。此網址{'' if https_secure else '不'}使用HTTPS安全連線。"
-            default_purpose = "這看起來是一個官方組織或機構的網站，可能提供相關服務、資訊或內容。"
-            default_suggestion = "此網站看起來來自正規組織，但仍建議確認網址是否正確，注意保護個人資料。"
+            default_reason = f"1. 網域分析：該URL使用正規組織網域\n2. 此類網站通常可信度高\n3. {'使用' if https_secure else '未使用'}HTTPS安全連線"
+            default_purpose = "- 提供組織服務和資訊\n- 官方資訊平台"
+            default_suggestion = "1. 確認網址是否正確\n2. 不要隨意提供個人資料"
         else:
             default_risk = "中" if https_secure else "高"
-            default_reason = f"此網址{'' if https_secure else '不'}使用HTTPS安全連線。{'存在可能的可疑參數，需要謹慎對待。' if has_suspicious_params else ''}"
-            default_purpose = "無法確定此網站的具體用途，可能是個人網站、企業網站或其他類型網站。"
-            default_suggestion = "請謹慎使用此網站，避免提供個人敏感資訊，特別是財務相關資料。"
+            default_reason = f"1. 網域分析：非官方組織網域\n2. {'使用' if https_secure else '未使用'}HTTPS安全連線\n3. {'有' if has_suspicious_params else '無'}可疑參數"
+            default_purpose = "- 可能是個人或商業網站\n- 功能需進一步確認"
+            default_suggestion = "1. 不建議提供敏感資訊\n2. 避免下載檔案或軟體"
         
         # 使用正則表達式解析ChatGPT回應
         analysis = {
@@ -1040,7 +1039,19 @@ def fraud_statistics():
 def handle_message(event):
     user_id = event.source.user_id
     user_message = event.message.text.strip()
-    display_name = get_user_profile(user_id)
+    display_name = "您好"  # 預設問候語，避免顯示個人資料
+    
+    # 獲取用戶資料，但只在必要時使用
+    profile = get_user_profile(user_id)
+    if profile and hasattr(profile, 'display_name'):
+        display_name = profile.display_name
+    
+    # 過濾可能的敏感資訊
+    if "{" in user_message and "}" in user_message and any(keyword in user_message for keyword in ["displayName", "userId", "pictureUrl"]):
+        # 檢測到可能是JSON或Firebase數據，清理訊息
+        cleaned_message = "請幫我分析這則訊息"
+        logger.warning(f"檢測到用戶訊息中可能包含敏感資料，已清理: {user_id}")
+        user_message = cleaned_message
     
     # 記錄用戶互動
     current_time = datetime.datetime.now()
