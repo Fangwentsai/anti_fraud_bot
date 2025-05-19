@@ -789,24 +789,36 @@ def analyze_url(url):
         分析結果字典
     """
     try:
+        # 預先提供一些基本的安全特徵評估
+        https_secure = url.startswith("https://")
+        has_suspicious_params = "?" in url and any(param in url.lower() for param in ["redirect", "url=", "goto=", "return="])
+        domain = url.split("//")[-1].split("/")[0].lower()
+        
+        # 判斷是否為政府網站
+        is_gov_site = ".gov" in domain
+        is_official_site = any(org in domain for org in [".edu", ".org", ".gov", ".mil"])
+        
         # 使用ChatGPT進行URL分析
         system_prompt = """你是一位網路安全專家，請分析以下URL的風險等級和安全性：
         
-請依照以下格式回覆（用中文回答）：
+請依照以下格式回覆（用中文回答，務必提供詳細內容）：
 風險等級：[高/中/低]
 原因：[詳細說明為什麼這個URL可能存在風險或是安全的]
 可能用途：[這個網址的可能用途]
 建議：[給用戶的建議和注意事項]
 
-分析時請考慮以下因素：
-1. URL結構和域名的可信度
-2. 是否是釣魚網站的已知特徵
-3. 是否含有可疑參數或重定向
-4. 是否使用HTTPS等安全協議
-5. 網域註冊信息和知名度
+你的回答需要包含：
+1. 詳細的分析原因，不要只回覆"URL看起來安全"這類籠統說法
+2. 網站可能的用途和功能介紹
+3. 具體的安全建議
 
-請務必提供詳細的分析原因、可能用途和安全建議，不要留空。
-請保持客觀並提供有用的安全建議。"""
+分析時請考慮以下因素：
+1. 網域是否為官方或政府組織 (.gov、.edu等)
+2. 是否使用HTTPS安全協議
+3. URL結構是否合理，沒有可疑參數
+4. 網站的可能用途和受眾
+
+無論風險等級如何，都必須提供詳細的分析原因、用途說明和安全建議，不要留空。"""
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -818,38 +830,87 @@ def analyze_url(url):
             model=os.environ.get('OPENAI_MODEL', 'gpt-3.5-turbo'),
             messages=messages,
             temperature=0.2,
-            max_tokens=500
+            max_tokens=800  # 增加tokens以獲取更詳細的回應
         )
         
         result = response.choices[0].message.content.strip()
+        logger.info(f"ChatGPT URL分析回應: {result}")
         
-        # 解析分析結果
+        # 解析分析結果 - 首先設置預設值
+        if is_gov_site:
+            default_risk = "低"
+            default_reason = f"此網址使用了政府網域(.gov)，一般來說政府官方網站是可信的。此網址{'' if https_secure else '不'}使用HTTPS安全連線。"
+            default_purpose = "這看起來是一個政府機構或部門的官方網站，可能提供政府服務、資訊或線上申請功能。"
+            default_suggestion = "此網站看起來是官方政府網站，但仍建議確認網址是否正確，並且不要隨意提供個人敏感資料。"
+        elif is_official_site:
+            default_risk = "低"
+            default_reason = f"此網址使用了官方組織網域({'.edu' if '.edu' in domain else '.org' if '.org' in domain else '.mil' if '.mil' in domain else '官方'})，一般來說這類網站是可信的。此網址{'' if https_secure else '不'}使用HTTPS安全連線。"
+            default_purpose = "這看起來是一個官方組織或機構的網站，可能提供相關服務、資訊或內容。"
+            default_suggestion = "此網站看起來來自正規組織，但仍建議確認網址是否正確，注意保護個人資料。"
+        else:
+            default_risk = "中" if https_secure else "高"
+            default_reason = f"此網址{'' if https_secure else '不'}使用HTTPS安全連線。{'存在可能的可疑參數，需要謹慎對待。' if has_suspicious_params else ''}"
+            default_purpose = "無法確定此網站的具體用途，可能是個人網站、企業網站或其他類型網站。"
+            default_suggestion = "請謹慎使用此網站，避免提供個人敏感資訊，特別是財務相關資料。"
+        
+        # 使用正則表達式解析ChatGPT回應
         analysis = {
-            "risk_level": "不確定",
-            "reason": "無法確定風險原因，請謹慎使用",
-            "purpose": "未能確定此網址的用途",
-            "suggestion": "建議不要點擊此連結，或先使用其他工具進行驗證"
+            "risk_level": default_risk,
+            "reason": default_reason,
+            "purpose": default_purpose,
+            "suggestion": default_suggestion
         }
         
-        for line in result.split('\n'):
+        # 解析ChatGPT的回應
+        lines = result.split('\n')
+        current_section = None
+        section_content = []
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
             if line.startswith("風險等級："):
                 analysis["risk_level"] = line.replace("風險等級：", "").strip()
+                current_section = None
             elif line.startswith("原因："):
-                analysis["reason"] = line.replace("原因：", "").strip()
+                current_section = "reason"
+                content = line.replace("原因：", "").strip()
+                if content:
+                    section_content.append(content)
             elif line.startswith("可能用途："):
-                analysis["purpose"] = line.replace("可能用途：", "").strip()
+                if current_section == "reason" and section_content:
+                    analysis["reason"] = "\n".join(section_content)
+                current_section = "purpose"
+                section_content = []
+                content = line.replace("可能用途：", "").strip()
+                if content:
+                    section_content.append(content)
             elif line.startswith("建議："):
-                analysis["suggestion"] = line.replace("建議：", "").strip()
+                if current_section == "purpose" and section_content:
+                    analysis["purpose"] = "\n".join(section_content)
+                current_section = "suggestion"
+                section_content = []
+                content = line.replace("建議：", "").strip()
+                if content:
+                    section_content.append(content)
+            elif current_section:
+                section_content.append(line)
         
-        # 確保每個字段都有值
+        # 處理最後一個區段的內容
+        if current_section == "suggestion" and section_content:
+            analysis["suggestion"] = "\n".join(section_content)
+        
+        # 檢查並使用預設值填充空白區域
         if not analysis["reason"] or analysis["reason"] == "":
-            analysis["reason"] = "API未返回具體原因，請謹慎處理"
+            analysis["reason"] = default_reason
             
         if not analysis["purpose"] or analysis["purpose"] == "":
-            analysis["purpose"] = "API未返回可能用途信息"
+            analysis["purpose"] = default_purpose
             
         if not analysis["suggestion"] or analysis["suggestion"] == "":
-            analysis["suggestion"] = "無具體建議，建議不要點擊不明來源的連結"
+            analysis["suggestion"] = default_suggestion
             
         # 如果沒有成功解析，則保存原始回應
         if analysis["risk_level"] == "不確定" and "raw_response" not in analysis:
@@ -858,7 +919,13 @@ def analyze_url(url):
         return analysis
     except Exception as e:
         logger.error(f"URL分析錯誤: {e}")
-        return {"error": str(e), "risk_level": "不確定", "reason": "分析時發生錯誤，無法確定風險等級。"}
+        return {
+            "error": str(e), 
+            "risk_level": "不確定", 
+            "reason": "分析時發生錯誤，無法確定風險等級。請謹慎使用該連結。",
+            "purpose": "由於分析錯誤，無法確定網站用途。",
+            "suggestion": "建議不要點擊此連結，或先向發送者確認其安全性。"
+        }
 
 def display_url_analysis_result(analysis_result):
     """
