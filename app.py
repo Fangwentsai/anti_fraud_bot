@@ -17,6 +17,7 @@ from firebase_manager import FirebaseManager
 import random
 import datetime  # 導入datetime用於時間比較
 import re
+import requests  # 添加 requests 庫用於展開短網址
 
 load_dotenv()
 
@@ -789,6 +790,20 @@ def analyze_url(url):
         分析結果字典
     """
     try:
+        # 檢查是否為短網址
+        is_short_url = len(url.split('//')[-1].split('/')[0]) < 15 and any(short_domain in url.lower() for short_domain in ["bit.ly", "tinyurl", "goo.gl", "t.co", "is.gd", "etf8", "fun", "xyz", "link", "tiny", "short", "go"])
+        
+        original_url = url
+        expanded_url = None
+        
+        # 如果是短網址，嘗試展開
+        if is_short_url:
+            expanded_url = expand_short_url(url)
+            # 如果成功展開，將展開後的URL用於分析
+            if expanded_url != url:
+                url = expanded_url
+                logger.info(f"使用展開後的URL進行分析: {url}")
+        
         # 預先提供一些基本的安全特徵評估
         https_secure = url.startswith("https://")
         has_suspicious_params = "?" in url and any(param in url.lower() for param in ["redirect", "url=", "goto=", "return="])
@@ -811,6 +826,8 @@ def analyze_url(url):
 1. 請使用簡單的語言，避免技術術語
 2. 請用條列式回答，每點不超過20字
 3. 整體回答簡短精簡，重點是讓一般用戶容易理解
+4. 請不要返回JSON格式，直接使用純文本回應
+5. 不要使用markdown格式
 
 分析考慮因素：
 - 網域是政府或知名組織嗎？
@@ -834,6 +851,59 @@ def analyze_url(url):
         
         result = response.choices[0].message.content.strip()
         logger.info(f"ChatGPT URL分析回應: {result}")
+        
+        # 檢查結果是否為 JSON 格式，並嘗試提取內容
+        json_start = result.find('{')
+        json_end = result.rfind('}')
+        
+        # 如果發現 JSON 結構，嘗試提取並解析
+        if json_start >= 0 and json_end > json_start:
+            try:
+                json_part = result[json_start:json_end+1]
+                parsed_json = json.loads(json_part)
+                logger.info(f"從回應中提取JSON: {json_part}")
+                
+                # 將JSON內容轉換為標準分析結果格式
+                extracted_result = {}
+                
+                # 提取各個字段
+                if "risk_level" in parsed_json:
+                    extracted_result["risk_level"] = parsed_json["risk_level"]
+                
+                # 提取或組合分析原因
+                if "explanation" in parsed_json:
+                    extracted_result["reason"] = parsed_json["explanation"]
+                elif "reason" in parsed_json:
+                    extracted_result["reason"] = parsed_json["reason"]
+                    
+                # 提取或組合用途信息
+                if "purpose" in parsed_json:
+                    extracted_result["purpose"] = parsed_json["purpose"]
+                else:
+                    # 如果沒有用途字段，嘗試從其他字段提取相關信息
+                    extracted_result["purpose"] = "- 根據網址分析確定可能用途\n- 請謹慎判斷網站真實意圖"
+                
+                # 提取或組合建議
+                if "suggestions" in parsed_json:
+                    extracted_result["suggestion"] = parsed_json["suggestions"]
+                elif "suggestion" in parsed_json:
+                    extracted_result["suggestion"] = parsed_json["suggestion"]
+                
+                # 記錄提取的結果
+                logger.info(f"從JSON提取的分析結果: {extracted_result}")
+                
+                # 更新結果，但保留原始 JSON 以供參考
+                result = "風險等級：" + extracted_result.get("risk_level", "不確定") + "\n"
+                if "reason" in extracted_result and extracted_result["reason"]:
+                    result += "原因：" + extracted_result["reason"] + "\n"
+                if "purpose" in extracted_result and extracted_result["purpose"]:
+                    result += "可能用途：" + extracted_result["purpose"] + "\n"
+                if "suggestion" in extracted_result and extracted_result["suggestion"]:
+                    result += "建議：" + extracted_result["suggestion"]
+                
+                logger.info(f"重新格式化後的分析結果: {result}")
+            except json.JSONDecodeError as e:
+                logger.warning(f"JSON解析失敗，將使用原始文本: {e}")
         
         # 解析分析結果 - 首先設置預設值
         if is_gov_site:
@@ -915,450 +985,54 @@ def analyze_url(url):
         if analysis["risk_level"] == "不確定" and "raw_response" not in analysis:
             analysis["raw_response"] = result
             
-        return analysis
-    except Exception as e:
-        logger.error(f"URL分析錯誤: {e}")
-        return {
-            "error": str(e), 
-            "risk_level": "不確定", 
-            "reason": "分析時發生錯誤，無法確定風險等級。請謹慎使用該連結。",
-            "purpose": "由於分析錯誤，無法確定網站用途。",
-            "suggestion": "建議不要點擊此連結，或先向發送者確認其安全性。"
-        }
-
-def display_url_analysis_result(analysis_result):
-    """
-    將URL分析結果轉換為易讀的文本格式，以Flex Message方式呈現
-    
-    Args:
-        analysis_result: 分析結果字典
+        # 檢查是否有未處理的JSON字符串
+        for key, value in analysis.items():
+            if isinstance(value, str) and (value.startswith('{') and value.endswith('}')):
+                try:
+                    # 嘗試解析JSON
+                    parsed_json = json.loads(value)
+                    # 如果成功解析，提取文本
+                    if isinstance(parsed_json, dict):
+                        if "explanation" in parsed_json:
+                            analysis[key] = parsed_json.get("explanation", "無法解析內容")
+                        elif "suggestions" in parsed_json:
+                            analysis[key] = parsed_json.get("suggestions", "無建議")
+                        else:
+                            # 取第一個有值的字段
+                            for json_key, json_value in parsed_json.items():
+                                if json_value and isinstance(json_value, str):
+                                    analysis[key] = json_value
+                                    break
+                except json.JSONDecodeError:
+                    # 如果不是有效的JSON，保留原始值但移除花括號
+                    analysis[key] = value[1:-1].replace('"', '').replace(',', '\n')
+                    
+        # 確保所有值都是字符串且不是JSON格式
+        for key, value in analysis.items():
+            if value and isinstance(value, str):
+                # 如果值看起來像JSON字符串，則進行清理
+                if (value.startswith('{') and value.endswith('}')) or (value.startswith('[') and value.endswith(']')):
+                    # 嘗試提取純文本
+                    cleaned_value = value
+                    cleaned_value = cleaned_value.replace('{', '').replace('}', '')
+                    cleaned_value = cleaned_value.replace('"', '').replace(',', '\n')
+                    analysis[key] = cleaned_value
         
-    Returns:
-        格式化的分析結果訊息
-    """
-    if "error" in analysis_result:
-        error_message = f"抱歉，分析URL時發生錯誤：{analysis_result['error']}\n\n建議您謹慎使用該連結，或使用其他工具進一步驗證。"
-        return TextSendMessage(text=error_message)
-        
-    if "raw_response" in analysis_result:
-        # 如果有原始回應但結構化解析失敗
-        raw_response = f"URL分析結果：\n\n{analysis_result['raw_response']}"
-        return TextSendMessage(text=raw_response)
-        
-    # 根據風險等級設置對應的表情符號和顏色
-    risk_level = analysis_result.get("risk_level", "不確定")
-    risk_mapping = {
-        "高": {"icon": "🔴", "color": "#FF5252"},
-        "中": {"icon": "🟠", "color": "#FFA726"},
-        "低": {"icon": "🟢", "color": "#66BB6A"},
-        "不確定": {"icon": "⚪", "color": "#9E9E9E"}
-    }
-    
-    risk_info = risk_mapping.get(risk_level, risk_mapping["不確定"])
-    risk_icon = risk_info["icon"]
-    risk_color = risk_info["color"]
-    
-    # 確保所有值都不為空
-    reason = analysis_result.get("reason", "無具體原因說明")
-    purpose = analysis_result.get("purpose", "未提供網站用途資訊")
-    suggestion = analysis_result.get("suggestion", "請謹慎使用，如有疑慮請勿點擊")
-    
-    # 準備Flex Message內容
-    content_blocks = [
-        TextComponent(text='URL風險分析結果', weight='bold', size='xl', align='center', color='#1DB446'),
-        TextComponent(text=f'{risk_icon} 風險等級：{risk_level}', weight='bold', size='xl', margin='md', color=risk_color),
-        SeparatorComponent(margin='xxl')
-    ]
-    
-    # 如果有短網址警告，添加到內容中
-    if "short_url_warning" in analysis_result:
-        content_blocks.append(
-            BoxComponent(
-                layout='vertical',
-                margin='md',
-                contents=[
-                    TextComponent(text=analysis_result["short_url_warning"], wrap=True, size='sm', color='#ff0000', weight='bold')
-                ]
-            )
-        )
-        content_blocks.append(SeparatorComponent(margin='md'))
-    
-    # 添加分析原因
-    content_blocks.append(
-        BoxComponent(
-            layout='vertical',
-            margin='xxl',
-            contents=[
-                TextComponent(text='🔍 分析原因：', weight='bold', size='md', color='#555555'),
-                TextComponent(text=reason, wrap=True, size='sm', margin='sm')
-            ]
-        )
-    )
-    
-    # 添加可能用途
-    content_blocks.append(
-        BoxComponent(
-            layout='vertical',
-            margin='xxl',
-            contents=[
-                TextComponent(text='📱 可能用途：', weight='bold', size='md', color='#555555'),
-                TextComponent(text=purpose, wrap=True, size='sm', margin='sm')
-            ]
-        )
-    )
-    
-    # 添加安全建議
-    content_blocks.append(
-        BoxComponent(
-            layout='vertical',
-            margin='xxl',
-            contents=[
-                TextComponent(text='💡 安全建議：', weight='bold', size='md', color='#555555'),
-                TextComponent(text=suggestion, wrap=True, size='sm', margin='sm')
-            ]
-        )
-    )
-    
-    # 添加提醒
-    content_blocks.append(
-        BoxComponent(
-            layout='vertical',
-            margin='xxl',
-            contents=[
-                TextComponent(text='⚠️ 提醒：即使風險較低的網址也應謹慎使用，特別是涉及個人資料或金融操作時。', 
-                            wrap=True, size='xs', margin='sm', color='#aaaaaa')
-            ]
-        )
-    )
-    
-    # 創建完整的Flex Message
-    flex_message = FlexSendMessage(
-        alt_text='URL風險分析結果',
-        contents=BubbleContainer(
-            body=BoxComponent(
-                layout='vertical',
-                contents=content_blocks
-            )
-        )
-    )
-    
-    return flex_message
-
-def create_url_analysis_flex_message(analysis_result, url):
-    """
-    將URL分析結果轉換為 Flex Message 格式
-    
-    Args:
-        analysis_result: 分析結果字典
-        url: 原始分析的URL
-        
-    Returns:
-        格式化的 Flex Message 訊息
-    """
-    # 根據風險等級設置對應的表情符號和顏色
-    risk_level = analysis_result.get("risk_level", "不確定")
-    risk_mapping = {
-        "高": {"icon": "🔴", "color": "#FF5252"},
-        "中": {"icon": "🟠", "color": "#FFA726"},
-        "低": {"icon": "🟢", "color": "#66BB6A"},
-        "不確定": {"icon": "⚪", "color": "#9E9E9E"}
-    }
-    
-    risk_info = risk_mapping.get(risk_level, risk_mapping["不確定"])
-    risk_icon = risk_info["icon"]
-    risk_color = risk_info["color"]
-    
-    # 確保所有值都不為空並轉為字符串
-    def ensure_string(value):
-        if value is None:
-            return ""
-        if isinstance(value, dict) or isinstance(value, list):
-            try:
-                return json.dumps(value, ensure_ascii=False)
-            except:
-                return str(value)
-        return str(value)
-    
-    # 獲取分析內容並確保是字符串
-    reason = ensure_string(analysis_result.get("reason", "無具體原因說明"))
-    purpose = ensure_string(analysis_result.get("purpose", "未提供網站用途資訊"))
-    suggestion = ensure_string(analysis_result.get("suggestion", "請謹慎使用，如有疑慮請勿點擊"))
-    
-    # 清理可能的 JSON 格式
-    for field in [reason, purpose, suggestion]:
-        if field.startswith('{') and field.endswith('}'):
-            try:
-                # 嘗試解析 JSON
-                parsed = json.loads(field)
-                if isinstance(parsed, dict):
-                    # 提取字符串值
-                    for k, v in parsed.items():
-                        if isinstance(v, str) and len(v) > 10:
-                            field = v
-                            break
-            except:
-                # 如果不是有效的 JSON，保留原始值
-                pass
-    
-    # 構建 Flex Message 內容
-    flex_contents = {
-        "type": "bubble",
-        "body": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-                {
-                    "type": "text",
-                    "text": "URL風險分析結果",
-                    "weight": "bold",
-                    "size": "xl",
-                    "align": "center",
-                    "color": "#1DB446"
-                },
-                {
-                    "type": "text",
-                    "text": f"{risk_icon} 風險等級：{risk_level}",
-                    "weight": "bold",
-                    "size": "xl",
-                    "margin": "md",
-                    "color": risk_color
-                },
-                {
-                    "type": "separator",
-                    "margin": "xxl"
-                }
-            ]
-        }
-    }
-    
-    # 如果有短網址警告，添加到內容中
-    if "short_url_warning" in analysis_result:
-        flex_contents["body"]["contents"].append({
-            "type": "box",
-            "layout": "vertical",
-            "margin": "md",
-            "contents": [
-                {
-                    "type": "text",
-                    "text": analysis_result["short_url_warning"],
-                    "wrap": True,
-                    "size": "sm",
-                    "color": "#ff0000",
-                    "weight": "bold"
-                }
-            ]
-        })
-        flex_contents["body"]["contents"].append({
-            "type": "separator",
-            "margin": "md"
-        })
-    
-    # 添加分析原因
-    if reason and not (reason.isspace() or reason == ""):
-        flex_contents["body"]["contents"].append({
-            "type": "box",
-            "layout": "vertical",
-            "margin": "xxl",
-            "contents": [
-                {
-                    "type": "text",
-                    "text": "🔍 分析原因：",
-                    "weight": "bold",
-                    "size": "md",
-                    "color": "#555555"
-                },
-                {
-                    "type": "text",
-                    "text": reason,
-                    "wrap": True,
-                    "size": "sm",
-                    "margin": "sm"
-                }
-            ]
-        })
-    
-    # 添加可能用途
-    if purpose and not (purpose.isspace() or purpose == ""):
-        flex_contents["body"]["contents"].append({
-            "type": "box",
-            "layout": "vertical",
-            "margin": "xxl",
-            "contents": [
-                {
-                    "type": "text",
-                    "text": "📱 可能用途：",
-                    "weight": "bold",
-                    "size": "md",
-                    "color": "#555555"
-                },
-                {
-                    "type": "text",
-                    "text": purpose,
-                    "wrap": True,
-                    "size": "sm",
-                    "margin": "sm"
-                }
-            ]
-        })
-    
-    # 添加安全建議
-    if suggestion and not (suggestion.isspace() or suggestion == ""):
-        flex_contents["body"]["contents"].append({
-            "type": "box",
-            "layout": "vertical",
-            "margin": "xxl",
-            "contents": [
-                {
-                    "type": "text",
-                    "text": "💡 安全建議：",
-                    "weight": "bold",
-                    "size": "md",
-                    "color": "#555555"
-                },
-                {
-                    "type": "text",
-                    "text": suggestion,
-                    "wrap": True,
-                    "size": "sm",
-                    "margin": "sm"
-                }
-            ]
-        })
-    
-    # 添加提醒
-    flex_contents["body"]["contents"].append({
-        "type": "box",
-        "layout": "vertical",
-        "margin": "xxl",
-        "contents": [
-            {
-                "type": "text",
-                "text": "⚠️ 提醒：即使風險較低的網址也應謹慎使用，特別是涉及個人資料或金融操作時。",
-                "wrap": True,
-                "size": "xs",
-                "margin": "sm",
-                "color": "#aaaaaa"
-            }
-        ]
-    })
-    
-    # 創建並返回 Flex Message
-    try:
-        flex_message = FlexSendMessage(
-            alt_text='URL風險分析結果',
-            contents=flex_contents
-        )
-        return flex_message
-    except Exception as e:
-        logger.error(f"創建Flex Message失敗: {e}")
-        # 備用方案：返回文本消息
-        formatted_text = f"URL風險分析結果：\n\n{risk_icon} 風險等級：{risk_level}\n\n"
-        if "short_url_warning" in analysis_result:
-            formatted_text += f"{analysis_result['short_url_warning']}\n\n"
-        if reason:
-            formatted_text += f"🔍 分析原因：\n{reason}\n\n"
-        if purpose:
-            formatted_text += f"📱 可能用途：\n{purpose}\n\n"
-        if suggestion:
-            formatted_text += f"💡 安全建議：\n{suggestion}\n\n"
-        formatted_text += "⚠️ 提醒：即使風險較低的網址也應謹慎使用，特別是涉及個人資料或金融操作時。"
-        return TextSendMessage(text=formatted_text)
-
-@app.route("/callback", methods=['POST'])
-def callback():
-    signature = request.headers['X-Line-Signature']
-    body = request.get_data(as_text=True)
-    app.logger.info("Request body: " + body)
-    
-    try:
-        handler.handle(body, signature)
-    except InvalidSignatureError:
-        abort(400)
-        
-    return 'OK'
-
-@app.route("/", methods=['GET'])
-def home():
-    return "Line Bot Anti-Fraud is running!"
-
-@app.route("/fraud-statistics", methods=['GET'])
-def fraud_statistics():
-    """顯示詐騙統計數據頁面"""
-    stats = firebase_manager.get_fraud_statistics()
-    return render_template('statistics.html', stats=stats)
-
-@handler.add(MessageEvent, message=TextMessage)
-def handle_message(event):
-    user_id = event.source.user_id
-    user_message = event.message.text.strip()
-    display_name = "您好"  # 預設問候語，避免顯示個人資料
-    
-    # 獲取用戶資料，但只在必要時使用
-    profile = get_user_profile(user_id)
-    if profile and hasattr(profile, 'display_name'):
-        display_name = profile.display_name
-    
-    # 過濾可能的敏感資訊
-    if "{" in user_message and "}" in user_message and any(keyword in user_message for keyword in ["displayName", "userId", "pictureUrl"]):
-        # 檢測到可能是JSON或Firebase數據，清理訊息
-        cleaned_message = "請幫我分析這則訊息"
-        logger.warning(f"檢測到用戶訊息中可能包含敏感資料，已清理: {user_id}")
-        user_message = cleaned_message
-    
-    # 記錄用戶互動
-    current_time = datetime.datetime.now()
-    user_last_chat_time[user_id] = current_time
-    
-    # 檢查是否為首次對話
-    first_time_chat = user_id not in first_time_chatters
-    if first_time_chat:
-        first_time_chatters.add(user_id)
-        
-    # 檢查是否為URL分析請求
-    if any(keyword in user_message for keyword in url_analysis_keywords):
-        # 提取URL
-        url_match = url_pattern.search(user_message)
-        if url_match:
-            url = url_match.group(0)
+        # 添加短網址信息
+        if is_short_url:
+            # 如果是短網址，添加相關信息
+            short_url_warning = "⚠️ 這個網址是短網址或轉址服務，這類網址可能隱藏了真實目的地，建議謹慎使用。"
+            analysis["short_url_warning"] = short_url_warning
             
-            # 記錄用戶分析的URL
-            logger.info(f"用戶 {user_id} 請求分析URL: {url}")
-            firebase_manager.save_user_interaction(
-                user_id, display_name, f"URL分析請求: {url}", 
-                "分析URL", is_fraud_related=False
-            )
-            
-            try:
-                # 進行URL風險分析
-                analysis_result = analyze_url(url)
+            # 如果成功展開短網址，添加展開信息
+            if expanded_url and expanded_url != original_url:
+                analysis["original_url"] = original_url
+                analysis["expanded_url"] = expanded_url
                 
-                # 檢查是否有JSON字串錯誤輸出
-                for key, value in analysis_result.items():
-                    if isinstance(value, str) and (value.startswith('{') and value.endswith('}')) or (value.startswith('[') and value.endswith(']')):
-                        try:
-                            # 嘗試解析JSON
-                            parsed_json = json.loads(value)
-                            # 如果成功解析，提取文本
-                            if isinstance(parsed_json, dict):
-                                if "explanation" in parsed_json:
-                                    analysis_result[key] = parsed_json.get("explanation", "無法解析內容")
-                                elif "suggestions" in parsed_json:
-                                    analysis_result[key] = parsed_json.get("suggestions", "無建議")
-                                else:
-                                    # 取第一個有值的字段
-                                    for json_key, json_value in parsed_json.items():
-                                        if json_value and isinstance(json_value, str):
-                                            analysis_result[key] = json_value
-                                            break
-                        except:
-                            # 如果不是有效的JSON，保留原始值但移除花括號
-                            if value.startswith('{') and value.endswith('}'):
-                                analysis_result[key] = value[1:-1].replace('"', '').replace(',', '\n')
+                # 在分析原因中添加展開後的URL信息
+                if "reason" in analysis:
+                    analysis["reason"] = f"- 這是短網址，已展開為:{expanded_url}\n" + str(analysis["reason"])
                 
-                # 針對短網址或高風險網址添加額外警告
-                is_short_url = len(url.split('//')[-1].split('/')[0]) < 15 and any(short_domain in url.lower() for short_domain in ["bit.ly", "tinyurl", "goo.gl", "t.co", "is.gd", "etf8", "fun", "xyz", "link", "tiny", "short", "go"])
-                
-                if is_short_url:
                     # 如果是短網址，提高風險等級
                     if analysis_result.get("risk_level", "") == "低":
                         analysis_result["risk_level"] = "中"
@@ -1377,7 +1051,25 @@ def handle_message(event):
                     if "suggestion" in analysis_result:
                         analysis_result["suggestion"] = "- 短網址可能導向風險網站，請特別小心\n" + str(analysis_result["suggestion"])
                 
-                # 確保風險等級有值
+                
+                # 修復JSON顯示問題
+                try:
+                    # 嘗試導入並使用修復函數
+                    from fix_json_display import fix_url_analysis_result
+                    analysis_result = fix_url_analysis_result(analysis_result)
+                    logger.info("使用 fix_json_display 模塊處理了 URL 分析結果")
+                except ImportError:
+                    logger.warning("無法導入 fix_json_display 模塊")
+                
+                # 確保所有必要字段都有值
+                if not analysis_result.get("reason"):
+                    analysis_result["reason"] = "無具體原因說明"
+                if not analysis_result.get("purpose"):
+                    analysis_result["purpose"] = "未提供網站用途資訊"
+                if not analysis_result.get("suggestion"):
+                    analysis_result["suggestion"] = "請謹慎使用，如有疑慮請勿點擊"
+                
+# 確保風險等級有值
                 if not analysis_result.get("risk_level") or analysis_result.get("risk_level") == "":
                     analysis_result["risk_level"] = "不確定"
                 
