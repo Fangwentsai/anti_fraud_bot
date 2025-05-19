@@ -17,6 +17,14 @@ function_inquiry_keywords = ["功能", "幫助", "會什麼", "能做什麼", "�
 follow_up_patterns = ["被騙", "詐騙", "可疑", "不確定", "幫我看看", "這是詐騙嗎", "這是真的嗎"]
 potato_game_trigger_keywords = ["選哪顆土豆", "玩遊戲", "土豆遊戲", "選土豆遊戲", "開始遊戲"]
 
+# 檢查訊息是否不包含任何已知指令的關鍵字，以判斷是否為一般閒聊
+general_chat_keywords = [
+    "詐騙類型列表", "詐騙類型", 
+    "選哪顆土豆", "玩遊戲",
+    "什麼是", "查詢", "我想了解", "我想知道", # 這些是類型查詢的前綴
+    "你好", "嗨", "哈囉", "嘿", "hi", "hello", "hey" # 添加基本問候詞，保證這些簡單問候不會被當作詐騙分析
+]
+
 def send_potato_game_question(user_id, reply_token):
     """
     Sends a new "選哪顆土豆" game question to the user.
