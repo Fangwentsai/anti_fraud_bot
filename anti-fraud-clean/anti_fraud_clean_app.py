@@ -1917,6 +1917,12 @@ def watch_ad(user_id):
     """显示Unity广告的页面"""
     return render_template('watch_ad.html', user_id=user_id)
 
+@app.route("/watch-ad", methods=['GET'])
+def watch_ad_without_id():
+    """处理LIFF重定向请求"""
+    # 从LIFF获取用户ID，如果没有则返回通用页面
+    return render_template('watch_ad.html')
+
 @app.route("/ad-completed", methods=['POST'])
 def ad_completed():
     """处理广告观看完成的回调"""

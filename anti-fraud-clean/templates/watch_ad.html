@@ -78,11 +78,19 @@
                 
                 // 從URL參數獲取傳入的user_id，並確認與LIFF用戶相符
                 const urlParams = new URLSearchParams(window.location.search);
-                const urlUserId = window.location.pathname.split('/').pop();
+                let urlUserId = '';
+                
+                // 检查路径中是否有user_id
+                const pathParts = window.location.pathname.split('/');
+                if (pathParts.length > 2) {
+                    urlUserId = pathParts[pathParts.length - 1];
+                }
                 
                 if (urlUserId && urlUserId !== userId) {
                     console.warn("URL中的user_id與LINE用戶ID不符，以LINE用戶ID為準");
                 }
+                
+                console.log("已获取用户ID: " + userId);
                 
                 // 初始化Unity Ads
                 initUnityAds();
