@@ -6,7 +6,7 @@
     <meta charset="UTF-8">
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script>
-        // LIFF ID - 請替換為您的LIFF ID
+        // LIFF ID - 請替換為您的LIFF ID (修正：移除錯誤的$符號)
         const liffId = "2007443743-46lWkm5J";
         
         // Unity Ads 參數 - 根據設備類型選擇正確的Game ID
@@ -50,7 +50,7 @@
             // 更新狀態
             updateStatus("正在初始化...");
             
-            // 初始化LIFF
+            // 初始化LIFF - 確保沒有使用$符號
             liff.init({
                 liffId: liffId
             })
@@ -67,38 +67,122 @@
             .catch((err) => {
                 updateStatus("初始化失敗: " + err.message);
                 console.error("LIFF初始化錯誤", err);
+                
+                // 尝试从URL获取用户ID作为备选方案
+                tryGetUserIdFromUrl();
             });
         });
         
+        // 尝试从URL获取用户ID
+        function tryGetUserIdFromUrl() {
+            const pathParts = window.location.pathname.split('/');
+            if (pathParts.length > 2) {
+                userId = pathParts[pathParts.length - 1];
+                console.log("從URL獲取用戶ID: " + userId);
+                
+                if (userId) {
+                    // 使用从URL获取的用户ID初始化广告
+                    initUnityAds();
+                    return true;
+                }
+            }
+            
+            // 如果URL中没有用户ID，显示手动输入表单
+            showManualIdInput();
+            return false;
+        }
+        
+        // 显示手动输入用户ID的表单
+        function showManualIdInput() {
+            updateStatus("無法獲取您的LINE用戶ID");
+            
+            const container = document.querySelector('.container');
+            if (container) {
+                const inputForm = document.createElement('div');
+                inputForm.className = 'manual-input';
+                inputForm.innerHTML = `
+                    <h2>需要您的協助</h2>
+                    <p>系統無法自動獲取您的LINE用戶ID，請手動輸入：</p>
+                    <input type="text" id="manual-user-id" placeholder="請輸入您的LINE用戶ID" />
+                    <button id="submit-user-id" class="alt-button">提交</button>
+                `;
+                
+                container.appendChild(inputForm);
+                
+                const submitButton = document.getElementById('submit-user-id');
+                if (submitButton) {
+                    submitButton.onclick = function() {
+                        const inputField = document.getElementById('manual-user-id');
+                        if (inputField && inputField.value) {
+                            userId = inputField.value.trim();
+                            console.log("手動輸入用戶ID: " + userId);
+                            inputForm.style.display = 'none';
+                            initUnityAds();
+                        } else {
+                            alert("請輸入有效的用戶ID");
+                        }
+                    };
+                }
+            }
+        }
+        
         // 獲取用戶資料
         function getUserProfile() {
-            liff.getProfile()
-            .then((profile) => {
-                userId = profile.userId;
-                
-                // 從URL參數獲取傳入的user_id，並確認與LIFF用戶相符
-                const urlParams = new URLSearchParams(window.location.search);
-                let urlUserId = '';
-                
-                // 检查路径中是否有user_id
-                const pathParts = window.location.pathname.split('/');
-                if (pathParts.length > 2) {
-                    urlUserId = pathParts[pathParts.length - 1];
+            try {
+                if (!liff.isLoggedIn()) {
+                    console.log("用戶未登入LINE，嘗試登入");
+                    updateStatus("請先登入LINE");
+                    liff.login();
+                    return;
                 }
                 
-                if (urlUserId && urlUserId !== userId) {
-                    console.warn("URL中的user_id與LINE用戶ID不符，以LINE用戶ID為準");
+                console.log("正在通過LIFF SDK獲取用戶資料...");
+                
+                // 使用LIFF SDK的内置方法获取用户信息，不会有CORS问题
+                liff.getProfile()
+                .then((profile) => {
+                    userId = profile.userId;
+                    console.log("成功獲取用戶ID: " + userId);
+                    
+                    // 检查路径中是否有user_id
+                    const pathParts = window.location.pathname.split('/');
+                    let urlUserId = '';
+                    if (pathParts.length > 2) {
+                        urlUserId = pathParts[pathParts.length - 1];
+                    }
+                    
+                    if (urlUserId && urlUserId !== userId) {
+                        console.warn("URL中的user_id與LINE用戶ID不符，以LINE用戶ID為準");
+                    }
+                    
+                    // 用户ID获取成功后初始化广告
+                    initUnityAds();
+                })
+                .catch((err) => {
+                    console.error("獲取用戶資料錯誤", err);
+                    
+                    // 尝试从页面URL获取用户ID
+                    if (!tryGetUserIdFromUrl()) {
+                        updateStatus("無法獲取您的用戶資料，請重新嘗試");
+                    }
+                });
+            } catch (error) {
+                console.error("獲取用戶資料時發生異常:", error);
+                updateStatus("獲取用戶資料失敗，請重新載入頁面");
+                
+                // 尝试从URL获取用户ID
+                if (!tryGetUserIdFromUrl()) {
+                    // 显示重试按钮
+                    const watchButton = document.getElementById("watch-button");
+                    if (watchButton) {
+                        watchButton.textContent = "重新嘗試";
+                        watchButton.disabled = false;
+                        watchButton.onclick = function() {
+                            location.reload();
+                        };
+                    }
                 }
-                
-                console.log("已获取用户ID: " + userId);
-                
-                // 初始化Unity Ads
-                initUnityAds();
-            })
-            .catch((err) => {
-                updateStatus("無法獲取用戶資料: " + err.message);
-                console.error("獲取用戶資料錯誤", err);
-            });
+            }
         }
         
         // 初始化Unity Ads
@@ -356,6 +440,13 @@
         
         // 將完成狀態發送到伺服器
         function sendCompletionToServer() {
+            // 確保有用戶ID
+            if (!userId) {
+                console.error("無法發送完成狀態：用戶ID為空");
+                updateStatus("無法處理獎勵：用戶ID未知");
+                return;
+            }
+            
             fetch('/ad-completed', {
                 method: 'POST',
                 headers: {
@@ -501,30 +592,39 @@
             font-weight: bold;
             margin-top: 10px;
         }
-        .alternative-method {
+        .manual-input {
             margin-top: 20px;
-            padding: 15px;
-            background-color: #f1f1f1;
+            padding: 16px;
+            background-color: #f5f5f5;
             border-radius: 8px;
-            border: 1px dashed #ccc;
+        }
+        .manual-input h2 {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        .manual-input input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-size: 16px;
         }
         .alt-button {
-            background-color: #ff9800;
+            background-color: #007bff;
             color: white;
             border: none;
-            padding: 12px 24px;
-            border-radius: 100px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.2s;
         }
         .alt-button:hover {
-            background-color: #f57c00;
+            background-color: #0069d9;
         }
-        .alt-button:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
+        .alternative-method {
+            margin-top: 20px;
+            padding: 16px;
+            background-color: #fff8e1;
+            border-radius: 8px;
+            border: 1px solid #ffecb3;
         }
     </style>
 </head>
