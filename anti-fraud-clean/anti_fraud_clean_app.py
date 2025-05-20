@@ -330,95 +330,172 @@ def parse_fraud_analysis(analysis_result):
             "is_emerging": False
         }
     
-    # 嘗試解析JSON格式的回應
+    # 初始結果字典，包含預設值
+    result = {
+        "risk_level": "不確定",
+        "fraud_type": "未知",
+        "explanation": "無法解析分析結果。",
+        "suggestions": "請保持警惕，如有疑問可諮詢165反詐騙專線。",
+        "is_emerging": False
+    }
+    
     try:
-        # 檢查是否為JSON格式
+        # 先處理最常見的情況：JSON格式
         if analysis_result.strip().startswith('{') and analysis_result.strip().endswith('}'):
             import json
             try:
-                # 嘗試直接解析JSON
+                # 嘗試解析JSON
                 parsed_data = json.loads(analysis_result)
                 
-                # 確保返回的鍵名一致
-                result = {}
+                # 風險等級 - 處理各種可能的鍵名和格式
+                for key in ['risk_level', 'risk level', 'riskLevel', '風險等級', '風險']:
+                    if key in parsed_data and parsed_data[key]:
+                        result["risk_level"] = parsed_data[key]
+                        break
                 
-                # 風險等級
-                if "risk_level" in parsed_data:
-                    result["risk_level"] = parsed_data["risk_level"]
+                # 詐騙類型 - 處理各種可能的鍵名和格式
+                for key in ['fraud_type', 'type', 'fraudType', '詐騙類型', '可能詐騙類型', '類型']:
+                    if key in parsed_data and parsed_data[key]:
+                        result["fraud_type"] = parsed_data[key]
+                        break
                 
-                # 詐騙類型
-                if "fraud_type" in parsed_data:
-                    result["fraud_type"] = parsed_data["fraud_type"]
-                elif "type" in parsed_data:
-                    result["fraud_type"] = parsed_data["type"]
-                else:
-                    result["fraud_type"] = "未知"
-                
-                # 解釋說明
-                if "explanation" in parsed_data:
-                    result["explanation"] = parsed_data["explanation"]
-                
-                # 建議
-                if "suggestions" in parsed_data:
-                    result["suggestions"] = parsed_data["suggestions"]
-                elif "suggestion" in parsed_data:
-                    result["suggestions"] = parsed_data["suggestion"]
-                
-                # 新興手法
-                if "is_emerging" in parsed_data:
-                    result["is_emerging"] = parsed_data["is_emerging"]
-                
-                return result
-            except json.JSONDecodeError:
-                # JSON解析失敗，回退到文本解析
-                logger.warning("JSON解析失敗，改用文本解析")
-        
-        # 如果不是JSON或JSON解析失敗，使用文本解析方式
-        lines = analysis_result.strip().split('\n')
-        result = {
-            "risk_level": "不確定",
-            "fraud_type": "未知",
-            "explanation": "無法解析分析結果。",
-            "suggestions": "請保持警惕，如有疑問可諮詢165反詐騙專線。",
-            "is_emerging": False
-        }
-
-        for line in lines:
-            if "風險等級" in line or "risk_level" in line.lower():
-                if ":" in line:
-                    result["risk_level"] = line.split(":", 1)[1].strip()
-                elif "：" in line:
-                    result["risk_level"] = line.split("：", 1)[1].strip()
-            
-            elif "詐騙類型" in line or "fraud_type" in line.lower() or "可能詐騙類型" in line:
-                if ":" in line:
-                    result["fraud_type"] = line.split(":", 1)[1].strip()
-                elif "：" in line:
-                    result["fraud_type"] = line.split("：", 1)[1].strip()
-                    
+                # 處理"無"或"不適用"的詐騙類型
                 if result["fraud_type"].lower() in ["不適用", "無", "none", "n/a"]:
                     result["fraud_type"] = "非詐騙相關"
-            
-            elif "說明" in line or "explanation" in line.lower():
-                if ":" in line:
-                    result["explanation"] = line.split(":", 1)[1].strip()
-                elif "：" in line:
-                    result["explanation"] = line.split("：", 1)[1].strip()
-            
-            elif "建議" in line or "suggestions" in line.lower():
-                if ":" in line:
-                    result["suggestions"] = line.split(":", 1)[1].strip()
-                elif "：" in line:
-                    result["suggestions"] = line.split("：", 1)[1].strip()
-            
-            elif "新興手法" in line or "is_emerging" in line.lower():
-                emerging_text = ""
-                if ":" in line:
-                    emerging_text = line.split(":", 1)[1].strip().lower()
-                elif "：" in line:
-                    emerging_text = line.split("：", 1)[1].strip().lower()
                 
-                result["is_emerging"] = emerging_text in ["是", "true", "yes"]
+                # 解釋說明 - 處理各種可能的鍵名和格式
+                for key in ['explanation', 'explain', '說明', '分析理由', '理由', '分析']:
+                    if key in parsed_data and parsed_data[key]:
+                        # 如果是列表，就用換行符合併
+                        if isinstance(parsed_data[key], list):
+                            result["explanation"] = '\n'.join(parsed_data[key])
+                        else:
+                            result["explanation"] = parsed_data[key]
+                        break
+                
+                # 建議 - 處理各種可能的鍵名和格式
+                for key in ['suggestions', 'suggestion', 'advice', '建議', '防範建議']:
+                    if key in parsed_data and parsed_data[key]:
+                        # 如果是列表，就用換行符合併
+                        if isinstance(parsed_data[key], list):
+                            result["suggestions"] = '\n'.join(parsed_data[key])
+                        else:
+                            result["suggestions"] = parsed_data[key]
+                        break
+                
+                # 新興手法 - 處理各種可能的鍵名和格式
+                for key in ['is_emerging', 'isEmerging', '新興手法', '是否新興']:
+                    if key in parsed_data:
+                        # 處理不同的布爾值格式
+                        val = parsed_data[key]
+                        if isinstance(val, bool):
+                            result["is_emerging"] = val
+                        elif isinstance(val, str):
+                            result["is_emerging"] = val.lower() in ['true', 'yes', '是', '1', 't', 'y']
+                        elif isinstance(val, int):
+                            result["is_emerging"] = val == 1
+                        break
+                
+                # 如果任何必要字段仍然缺少，我們可以通過原始文本進行進一步解析
+                if result["risk_level"] == "不確定" or result["fraud_type"] == "未知" or result["explanation"] == "無法解析分析結果。":
+                    # 繼續使用文本解析方法
+                    logger.info("JSON解析結果不完整，使用額外的文本解析")
+                else:
+                    return result
+                    
+            except json.JSONDecodeError as e:
+                # JSON解析失敗，使用文本解析
+                logger.warning(f"JSON解析失敗: {e}，改用文本解析")
+        
+        # 文本解析 - 增強的版本，可以處理各種格式
+        # 使用多種分隔符號和模式匹配
+        
+        # 1. 分析風險等級
+        risk_patterns = [
+            r'風險等級[：:]\s*(.+?)(?:\n|$)',
+            r'risk_level[：:]\s*(.+?)(?:\n|$)',
+            r'風險[：:]\s*(.+?)(?:\n|$)',
+            r'1\.\s*(?:風險等級)?[：:]\s*(.+?)(?:\n|$)'
+        ]
+        for pattern in risk_patterns:
+            import re
+            match = re.search(pattern, analysis_result, re.IGNORECASE)
+            if match:
+                result["risk_level"] = match.group(1).strip()
+                break
+        
+        # 2. 分析詐騙類型
+        fraud_patterns = [
+            r'詐騙類型[：:]\s*(.+?)(?:\n|$)',
+            r'fraud_type[：:]\s*(.+?)(?:\n|$)',
+            r'可能詐騙類型[：:]\s*(.+?)(?:\n|$)',
+            r'類型[：:]\s*(.+?)(?:\n|$)',
+            r'2\.\s*(?:詐騙類型)?[：:]\s*(.+?)(?:\n|$)'
+        ]
+        for pattern in fraud_patterns:
+            match = re.search(pattern, analysis_result, re.IGNORECASE)
+            if match:
+                fraud_type = match.group(1).strip()
+                if fraud_type.lower() in ["不適用", "無", "none", "n/a"]:
+                    fraud_type = "非詐騙相關"
+                result["fraud_type"] = fraud_type
+                break
+        
+        # 3. 分析理由/說明
+        explanation_patterns = [
+            r'說明[：:]\s*(.+?)(?=(?:建議|suggestions|suggestion|防範建議|新興手法|is_emerging|$))',
+            r'explanation[：:]\s*(.+?)(?=(?:建議|suggestions|suggestion|防範建議|新興手法|is_emerging|$))',
+            r'分析理由[：:]\s*(.+?)(?=(?:建議|suggestions|suggestion|防範建議|新興手法|is_emerging|$))',
+            r'理由[：:]\s*(.+?)(?=(?:建議|suggestions|suggestion|防範建議|新興手法|is_emerging|$))',
+            r'3\.\s*(?:分析理由)?[：:]\s*(.+?)(?=(?:4\.|建議|suggestions|suggestion|防範建議|新興手法|is_emerging|$))'
+        ]
+        for pattern in explanation_patterns:
+            match = re.search(pattern, analysis_result, re.IGNORECASE | re.DOTALL)
+            if match:
+                explanation = match.group(1).strip()
+                if explanation:
+                    result["explanation"] = explanation
+                break
+        
+        # 4. 防範建議
+        suggestion_patterns = [
+            r'建議[：:]\s*(.+?)(?=(?:新興手法|is_emerging|$))',
+            r'suggestions[：:]\s*(.+?)(?=(?:新興手法|is_emerging|$))',
+            r'suggestion[：:]\s*(.+?)(?=(?:新興手法|is_emerging|$))',
+            r'防範建議[：:]\s*(.+?)(?=(?:新興手法|is_emerging|$))',
+            r'4\.\s*(?:防範建議)?[：:]\s*(.+?)(?=$)'
+        ]
+        for pattern in suggestion_patterns:
+            match = re.search(pattern, analysis_result, re.IGNORECASE | re.DOTALL)
+            if match:
+                suggestions = match.group(1).strip()
+                if suggestions:
+                    result["suggestions"] = suggestions
+                break
+        
+        # 5. 新興手法
+        emerging_patterns = [
+            r'新興手法[：:]\s*(.+?)(?:\n|$)',
+            r'is_emerging[：:]\s*(.+?)(?:\n|$)'
+        ]
+        for pattern in emerging_patterns:
+            match = re.search(pattern, analysis_result, re.IGNORECASE)
+            if match:
+                emerging_text = match.group(1).strip().lower()
+                result["is_emerging"] = emerging_text in ["是", "true", "yes", "1", "t", "y"]
+                break
+        
+        # 確保結果中所有的文本字段不為空
+        for key in ["risk_level", "fraud_type", "explanation", "suggestions"]:
+            if not result[key] or result[key].strip() == "":
+                if key == "risk_level":
+                    result[key] = "不確定"
+                elif key == "fraud_type":
+                    result[key] = "未知"
+                elif key == "explanation":
+                    result[key] = "無法提取分析理由。"
+                elif key == "suggestions":
+                    result[key] = "請保持警惕，如有疑問可諮詢165反詐騙專線。"
         
         return result
     
@@ -427,8 +504,8 @@ def parse_fraud_analysis(analysis_result):
         return {
             "risk_level": "不確定",
             "fraud_type": "未知",
-            "explanation": "無法解析分析結果。",
-            "suggestions": "請稍後再試或聯繫客服。",
+            "explanation": "無法解析分析結果。系統錯誤，請稍後再試。",
+            "suggestions": "請保持警惕，如有疑問可諮詢165反詐騙專線。",
             "is_emerging": False
         }
 
@@ -478,17 +555,18 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         你是一個詐騙風險評估專家，具有豐富的詐騙手法分析經驗。
         請分析以下信息是否包含詐騙相關內容，並按照以下格式輸出結果：
         
-        1. 風險等級：（低風險、中風險、高風險）
-        2. 詐騙類型：（如果有詐騙風險，請指出具體類型，例如：假網購、假交友、假投資、假貸款、假求職等；如果無風險，填"無"）
-        3. 分析理由：（請具體說明判斷依據，至少3點）
-        4. 防範建議：（針對潛在風險，提供3-5條具體可行的建議）
+        風險等級：（低風險、中風險、高風險）
+        詐騙類型：（如果有詐騙風險，請指出具體類型，例如：假網購、假交友、假投資、假貸款、假求職等；如果無風險，填"無"）
+        說明：（請具體說明判斷依據）
+        建議：（針對潛在風險，提供具體可行的建議）
+        新興手法：是/否
         
         以下是需要分析的信息：
         ---
         {user_message}
         ---
         
-        請用繁體中文回答，避免直接使用"您好"、"感謝您的提問"等問候語。直接開始分析。回答應簡潔有力，每點內容控制在50字以內。
+        請用繁體中文回答，避免直接使用"您好"、"感謝您的提問"等問候語。直接開始分析。回答應簡潔有力，重點突出。
         """
         
         # 調用OpenAI API (修正為新版API格式)
@@ -516,6 +594,16 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
             
             # 添加一個使用者可識別的標識
             parsed_result["display_name"] = display_name
+            
+            # 檢查解析結果，確保所有必要欄位都有值
+            if not parsed_result.get("explanation") or parsed_result["explanation"] == "無法解析分析結果。":
+                # 如果無法正確解析理由，直接使用原始回應
+                logger.warning("無法正確解析分析理由，使用原始回應替代")
+                parsed_result["explanation"] = analysis_result.replace("風險等級：", "").replace("詐騙類型：", "").replace("說明：", "").replace("建議：", "").replace("新興手法：", "").strip()
+                
+                # 確保理由不為空
+                if not parsed_result["explanation"] or parsed_result["explanation"].strip() == "":
+                    parsed_result["explanation"] = "系統無法提供詳細分析，但請謹慎處理此內容。"
             
             return {
                 "success": True,
@@ -911,6 +999,7 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
         for domain in SAFE_DOMAINS:
             if domain in message_to_analyze:
                 is_donation_link = True
+                
                 # 提取完整URL，確保包含https://
                 if "http://" in message_to_analyze or "https://" in message_to_analyze:
                     # 嘗試提取完整URL
@@ -922,6 +1011,15 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
                         donation_url = f"https://{domain}"
                 else:
                     donation_url = f"https://{domain}"
+                
+                # 確保URL開頭是https://
+                if not donation_url.startswith("https://"):
+                    if donation_url.startswith("http://"):
+                        donation_url = "https://" + donation_url[7:]
+                    else:
+                        donation_url = "https://" + donation_url
+                
+                logger.info(f"找到贊助鏈接: {donation_url}")
                 break
         
         # 截斷過長的分析消息
@@ -947,7 +1045,7 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
                 },
                 {
                     "type": "text",
-                    "text": risk_level,
+                    "text": risk_level or "未知",  # 確保不為空
                     "size": "md",
                     "color": risk_color,
                     "weight": "bold",
@@ -1029,18 +1127,19 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
             })
             
             # 確保URL格式正確
-            logger.info(f"贊助按鈕使用URL: {donation_url}")
-            contents.append({
-                "type": "button",
-                "style": "primary",
-                "action": {
-                    "type": "uri",
-                    "label": "立即贊助",
-                    "uri": donation_url
-                },
-                "margin": "md",
-                "color": "#FF8C00"
-            })
+            if donation_url:
+                logger.info(f"贊助按鈕使用URL: {donation_url}")
+                contents.append({
+                    "type": "button",
+                    "style": "primary",
+                    "action": {
+                        "type": "uri",
+                        "label": "立即贊助",
+                        "uri": donation_url
+                    },
+                    "margin": "md",
+                    "color": "#FF8C00"
+                })
             
             contents.append({
                 "type": "separator",
@@ -1142,6 +1241,18 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
                     if sub_content.get("type") == "text" and (not sub_content.get("text") or sub_content.get("text").strip() == ""):
                         logger.warning(f"檢測到第{i}個box的第{j}個元素的text字段為空，設置為預設值")
                         sub_content["text"] = "無相關內容"  # 設置預設值
+            # 檢查其他可能有URI的部分
+            elif content.get("type") == "button" and "action" in content:
+                action = content["action"]
+                if action.get("type") == "uri" and "uri" in action:
+                    uri = action["uri"]
+                    # 確保URI包含https://
+                    if not uri.startswith("https://"):
+                        logger.warning(f"檢測到URI不符合規範: {uri}，修正為https://")
+                        if uri.startswith("http://"):
+                            action["uri"] = "https://" + uri[7:]
+                        else:
+                            action["uri"] = "https://" + uri
         
         # 创建FlexSendMessage
         flex_message = FlexSendMessage(
@@ -1183,7 +1294,7 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
     except Exception as e:
         logger.error(f"Error creating analysis flex message: {e}")
         # 返回一個簡單的文本消息作為備用
-        return TextSendMessage(text=f"分析結果：{risk_level}\n\n詐騙類型：{fraud_type}\n\n請注意風險，如有疑慮請撥打165反詐騙專線。")
+        return TextSendMessage(text=f"分析結果：{risk_level}\n\n詐騙類型：{fraud_type}\n\n{explanation}\n\n請注意風險，如有疑慮請撥打165反詐騙專線。")
 
 @app.route("/callback", methods=['POST'])
 def callback():
