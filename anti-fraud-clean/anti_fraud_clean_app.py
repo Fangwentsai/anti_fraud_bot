@@ -846,21 +846,24 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
         
         # 解析分析理由和建議（如果是字符串，按行分割；如果已經是列表，直接使用）
         reasons = []
-        if isinstance(explanation, str):
+        if isinstance(explanation, str) and explanation.strip():
             reasons = [explanation.strip()]
         elif isinstance(explanation, list):
-            reasons = explanation
+            reasons = [r for r in explanation if r and r.strip()]
+        
+        # 確保至少有一個預設的理由
+        if not reasons:
+            reasons = ["系統無法提供詳細分析理由，請謹慎判斷此內容。"]
             
         suggestion_list = []
-        if isinstance(suggestions, str):
+        if isinstance(suggestions, str) and suggestions.strip():
             suggestion_list = [suggestions.strip()]
         elif isinstance(suggestions, list):
-            suggestion_list = suggestions
-        
-        # 獲取用戶剩餘的分析次數 (暫時移除)
-        # remaining_credits = 0
-        # if user_id:
-        #     remaining_credits = firebase_manager.get_user_analysis_credits(user_id)
+            suggestion_list = [s for s in suggestions if s and s.strip()]
+            
+        # 確保至少有一個預設的建議
+        if not suggestion_list:
+            suggestion_list = ["保持警惕，不要點擊可疑連結或提供個人敏感資訊。"]
         
         # 定義一個無限次數的指示值
         remaining_credits = "∞"  # 使用無限符號表示無限次數
@@ -922,7 +925,7 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
                 },
                 {
                     "type": "text",
-                    "text": fraud_type,
+                    "text": fraud_type or "未分類",  # 確保不為空
                     "size": "md",
                     "color": "#555555",
                     "align": "end"
@@ -970,16 +973,17 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
             "color": "#1DB446"
         })
         
-        # 添加分析理由
+        # 添加分析理由 (確保每個項目都不為空)
         for reason in reasons:
-            contents.append({
-                "type": "text",
-                "text": reason,
-                "size": "sm",
-                "margin": "md",
-                "color": "#333333",
-                "wrap": True
-            })
+            if reason and reason.strip():  # 確保理由不為空
+                contents.append({
+                    "type": "text",
+                    "text": reason,
+                    "size": "sm",
+                    "margin": "md",
+                    "color": "#333333",
+                    "wrap": True
+                })
         
         # 添加防範建議標題
         contents.append({
@@ -991,16 +995,17 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
             "color": "#1DB446"
         })
         
-        # 添加防範建議
+        # 添加防範建議 (確保每個項目都不為空)
         for suggestion in suggestion_list:
-            contents.append({
-                "type": "text",
-                "text": suggestion,
-                "size": "sm",
-                "margin": "md",
-                "color": "#666666",
-                "wrap": True
-            })
+            if suggestion and suggestion.strip():  # 確保建議不為空
+                contents.append({
+                    "type": "text",
+                    "text": suggestion,
+                    "size": "sm",
+                    "margin": "md",
+                    "color": "#666666",
+                    "wrap": True
+                })
         
         # 添加固定的提示文字
         contents.append({
@@ -1042,6 +1047,17 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
                 "color": "#ffffff",
                 "background": "#FF0000"
             })
+        
+        # 驗證所有text字段是否有內容
+        for i, content in enumerate(contents):
+            if content.get("type") == "text" and (not content.get("text") or content.get("text").strip() == ""):
+                logger.warning(f"檢測到第{i}個元素的text字段為空，設置為預設值")
+                content["text"] = "無相關內容"  # 設置預設值
+            elif content.get("type") == "box" and "contents" in content:
+                for j, sub_content in enumerate(content["contents"]):
+                    if sub_content.get("type") == "text" and (not sub_content.get("text") or sub_content.get("text").strip() == ""):
+                        logger.warning(f"檢測到第{i}個box的第{j}個元素的text字段為空，設置為預設值")
+                        sub_content["text"] = "無相關內容"  # 設置預設值
         
         # 创建FlexSendMessage
         flex_message = FlexSendMessage(
