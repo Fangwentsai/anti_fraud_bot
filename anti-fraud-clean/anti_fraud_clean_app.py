@@ -868,7 +868,7 @@ def get_fraud_features(fraud_type, fraud_message):
 # --- End: Add these new functions ---
 
 # 添加URL分析結果的Flex Message格式函數
-def create_analysis_flex_message(analysis_data, display_name, message_to_analyze):
+def create_analysis_flex_message(analysis_data, display_name, message_to_analyze, user_id=None):
     """
     创建分析结果的Flex消息
     
@@ -876,6 +876,7 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
         analysis_data: 解析后的分析数据
         display_name: 用户显示名称
         message_to_analyze: 被分析的消息
+        user_id: 用户ID，用于获取剩余次数
         
     Returns:
         FlexSendMessage对象
@@ -886,6 +887,14 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
     explanation = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
     suggestions = analysis_data.get("suggestions", "請隨時保持警惕。")
     is_emerging = analysis_data.get("is_emerging", False)
+    
+    # 获取用户分析次数
+    remaining_credits = 0
+    if user_id and firebase_manager.db:
+        try:
+            remaining_credits = firebase_manager.get_user_analysis_credits(user_id)
+        except Exception as e:
+            logger.error(f"获取用户分析次数失败: {e}")
     
     # 根据风险等级确定颜色
     if risk_level == "高":
@@ -1029,6 +1038,43 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
                             "margin": "md",
                             "size": "sm",
                             "color": "#333333"
+                        }
+                    ]
+                },
+                # 添加固定的三行提示文字和剩余次数
+                {
+                    "type": "box",
+                    "layout": "vertical",
+                    "margin": "lg",
+                    "contents": [
+                        {
+                            "type": "separator",
+                            "color": "#DDDDDD",
+                            "margin": "md"
+                        },
+                        {
+                            "type": "text",
+                            "text": "⚠️如有任何疑慮，請直接撥打165反詐騙專線",
+                            "wrap": True,
+                            "size": "xs",
+                            "margin": "md",
+                            "color": "#999999"
+                        },
+                        {
+                            "type": "text",
+                            "text": "本系統僅針對網址做初步分析，請自行評估結果",
+                            "wrap": True,
+                            "size": "xs",
+                            "margin": "sm",
+                            "color": "#999999"
+                        },
+                        {
+                            "type": "text",
+                            "text": f"您目前免費網頁分析次數剩餘{remaining_credits}次",
+                            "wrap": True,
+                            "size": "xs",
+                            "margin": "sm",
+                            "color": "#999999"
                         }
                     ]
                 }
@@ -1271,7 +1317,7 @@ def handle_message(event):
         analysis_data = parse_fraud_analysis(analysis_result_text)
 
         # 創建並發送Flex Message分析結果
-        flex_message = create_analysis_flex_message(analysis_data, display_name, combined_message)
+        flex_message = create_analysis_flex_message(analysis_data, display_name, combined_message, user_id)
         line_bot_api.reply_message(reply_token, flex_message)
 
         # 保存互動記錄
@@ -1513,7 +1559,7 @@ def handle_message(event):
         is_emerging = analysis_data.get("is_emerging", False)
 
         # 創建並發送Flex Message分析結果
-        flex_message = create_analysis_flex_message(analysis_data, display_name, text_message)
+        flex_message = create_analysis_flex_message(analysis_data, display_name, text_message, user_id)
         line_bot_api.reply_message(reply_token, flex_message)
 
         if is_emerging and fraud_type != "非詐騙相關":
