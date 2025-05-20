@@ -7,7 +7,7 @@
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script>
         // LIFF ID - 請替換為您的LIFF ID
-        const liffId = "$2007443743-46lWkm5J";
+        const liffId = "2007443743-46lWkm5J";
         
         // Unity Ads 參數 - 根據設備類型選擇正確的Game ID
         let unityGameId;
@@ -108,7 +108,10 @@
                 UnityAds.load(adPlacementId, {
                     onComplete: function() {
                         // 廣告載入完成，啟用按鈕
-                        document.getElementById("watch-button").disabled = false;
+                        const watchButton = document.getElementById("watch-button");
+                        if (watchButton) {
+                            watchButton.disabled = false;
+                        }
                         updateStatus("廣告已準備好，請點擊按鈕觀看");
                     },
                     onFailed: function(error, message) {
@@ -127,7 +130,10 @@
         // 顯示廣告
         function showAd() {
             updateStatus("廣告載入中...");
-            document.getElementById("watch-button").disabled = true;
+            const watchButton = document.getElementById("watch-button");
+            if (watchButton) {
+                watchButton.disabled = true;
+            }
             
             UnityAds.show(adPlacementId, {
                 onStart: function() {
@@ -143,12 +149,18 @@
                 onSkip: function() {
                     console.log("廣告被跳過");
                     updateStatus("需要觀看完整廣告才能獲得獎勵");
-                    document.getElementById("watch-button").disabled = false;
+                    const watchButton = document.getElementById("watch-button");
+                    if (watchButton) {
+                        watchButton.disabled = false;
+                    }
                 },
                 onError: function(err) {
                     console.error("廣告播放錯誤", err);
                     updateStatus("廣告播放出錯，請稍後再試");
-                    document.getElementById("watch-button").disabled = false;
+                    const watchButton = document.getElementById("watch-button");
+                    if (watchButton) {
+                        watchButton.disabled = false;
+                    }
                 }
             });
         }
@@ -169,9 +181,13 @@
             .then(data => {
                 if (data.success) {
                     updateStatus(data.message);
-                    document.getElementById("credits").textContent = data.credits;
-                    document.getElementById("result-container").style.display = "block";
-                    document.getElementById("close-button").style.display = "block";
+                    const creditsElement = document.getElementById("credits");
+                    const resultContainer = document.getElementById("result-container");
+                    const closeButton = document.getElementById("close-button");
+                    
+                    if (creditsElement) creditsElement.textContent = data.credits;
+                    if (resultContainer) resultContainer.style.display = "block";
+                    if (closeButton) closeButton.style.display = "block";
                 } else {
                     updateStatus("獎勵處理失敗: " + data.message);
                 }
@@ -184,7 +200,12 @@
         
         // 更新狀態訊息
         function updateStatus(message) {
-            document.getElementById("status").textContent = message;
+            const statusElement = document.getElementById("status");
+            if (statusElement) {
+                statusElement.textContent = message;
+            } else {
+                console.warn("Status element not found");
+            }
         }
         
         // 關閉頁面並返回LINE
