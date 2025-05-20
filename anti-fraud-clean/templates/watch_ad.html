@@ -105,40 +105,30 @@
         function initUnityAds() {
             updateStatus("正在載入廣告...");
             
-            // 添加备用CDN链接
-            const primarySdkUrl = "https://static.unityads.unity3d.com/ads/web/UnityAdsWebSDK.js";
-            const backupSdkUrl = "https://cdnjs.cloudflare.com/ajax/libs/unity-webview/3.0.0/UnityAdsWebSDK.js";
+            // 只使用官方SDK URL
+            const unityAdsSDKUrl = "https://static.unityads.unity3d.com/ads/web/UnityAdsWebSDK.js";
             
             // 動態載入Unity Ads SDK
-            loadScript(primarySdkUrl, function(success) {
+            loadScript(unityAdsSDKUrl, function(success) {
                 if (!success) {
-                    // 主要URL加载失败，尝试备用URL
-                    updateStatus("主要廣告SDK載入失敗，嘗試備用來源...");
-                    loadScript(backupSdkUrl, function(backupSuccess) {
-                        if (!backupSuccess) {
-                            // 备用URL也加载失败
-                            updateStatus("無法載入廣告SDK，請檢查網路連接或稍後再試");
-                            console.error("Unity Ads SDK載入失敗 - 所有來源都失敗");
-                            
-                            // 显示重试按钮
-                            const watchButton = document.getElementById("watch-button");
-                            if (watchButton) {
-                                watchButton.disabled = false;
-                                watchButton.textContent = "重新嘗試";
-                                watchButton.onclick = function() {
-                                    location.reload();
-                                };
-                            }
-                            return;
-                        }
-                        
-                        // 备用URL加载成功，初始化Unity Ads
-                        initializeUnityAdsSDK();
-                    });
-                } else {
-                    // 主要URL加载成功，初始化Unity Ads
-                    initializeUnityAdsSDK();
+                    // SDK加载失败
+                    updateStatus("廣告SDK載入失敗，請檢查網路連接或稍後再試");
+                    console.error("Unity Ads SDK載入失敗");
+                    
+                    // 显示重试按钮
+                    const watchButton = document.getElementById("watch-button");
+                    if (watchButton) {
+                        watchButton.disabled = false;
+                        watchButton.textContent = "重新嘗試";
+                        watchButton.onclick = function() {
+                            location.reload();
+                        };
+                    }
+                    return;
                 }
+                
+                // SDK加载成功，初始化Unity Ads
+                initializeUnityAdsSDK();
             });
         }
         
@@ -168,10 +158,15 @@
                     throw new Error("Unity Ads SDK未正確載入");
                 }
                 
-                // SDK載入完成，初始化Unity Ads
-                UnityAds.initialize(unityGameId, false);
+                // 设置调试模式（开发时使用true，生产环境使用false）
+                const testMode = false;
                 
-                // 載入廣告
+                // SDK載入完成，初始化Unity Ads
+                console.log(`正在初始化Unity Ads，Game ID: ${unityGameId}，測試模式: ${testMode}`);
+                UnityAds.initialize(unityGameId, testMode);
+                
+                // 载入激励广告（Rewarded Ad）
+                console.log(`正在加載激勵廣告，廣告位ID: ${adPlacementId}`);
                 UnityAds.load(adPlacementId, {
                     onComplete: function() {
                         // 廣告載入完成，啟用按鈕
@@ -181,6 +176,7 @@
                             watchButton.textContent = "觀看廣告";
                         }
                         updateStatus("廣告已準備好，請點擊按鈕觀看");
+                        console.log("廣告載入完成");
                     },
                     onFailed: function(error, message) {
                         updateStatus("廣告載入失敗: " + message);
@@ -228,6 +224,8 @@
             }
             
             try {
+                // 显示激励广告（Rewarded Ad）
+                console.log(`正在顯示激勵廣告，廣告位ID: ${adPlacementId}`);
                 UnityAds.show(adPlacementId, {
                     onStart: function() {
                         console.log("廣告開始播放");
