@@ -189,123 +189,118 @@
         function initUnityAds() {
             updateStatus("正在載入廣告...");
             
-            // 修改SDK链接列表（改用更可靠的CDN）
-            const sdkUrls = [
-                "https://static.unityads.unity3d.com/ads/web/UnityAdsWebSDK.js", // Unity官方CDN
-                "https://cdn.jsdelivr.net/npm/@unity-ads/sdk@4.8.0/dist/UnityAds.min.js", // 更新的备用CDN
-                "https://unpkg.com/unity-ads-sdk@latest/dist/UnityAds.min.js", // 添加unpkg备用源
-                "/static/UnityAdsWebSDK.js", // 本地托管的备份（如果有）
-            ];
+            // 檢查是否處於本地開發或測試環境
+            const isLocalHostOrTestEnvironment = window.location.hostname === 'localhost' || 
+                                                window.location.hostname === '127.0.0.1' ||
+                                                window.location.hostname.includes('test') ||
+                                                window.location.hostname.includes('dev');
+                                                
+            // 如果是本地環境或網絡有問題，直接使用無SDK模式
+            if (isLocalHostOrTestEnvironment || navigator.onLine === false) {
+                console.log("使用無SDK模式（本地環境或網絡問題）");
+                handleAllSdkLoadFailed();
+                return;
+            }
             
-            let currentUrlIndex = 0;
-            let loadTimeout = 6000; // 延長超時時間到6秒
-            
-            // 尝试加载列表中的URL
-            function tryLoadSdk() {
-                if (currentUrlIndex >= sdkUrls.length) {
-                    // 所有URL都尝试失败，直接使用备选方案
+            // 嘗試Google Hosted Libraries的jQuery作為探針檢測CDN可用性
+            loadScript("https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js", function(success) {
+                if (!success) {
+                    console.log("CDN連接問題，切換到無SDK模式");
                     handleAllSdkLoadFailed();
                     return;
                 }
                 
-                // 更新加载状态
-                const source = currentUrlIndex === 0 ? "官方來源" : 
-                              (currentUrlIndex === 1 ? "備用來源1" : 
-                              (currentUrlIndex === 2 ? "備用來源2" : "本地備份"));
-                updateStatus(`正在從${source}載入廣告SDK...`);
+                // 使用更全面的SDK源列表
+                const sdkUrls = [
+                    // 官方來源
+                    "https://static.unityads.unity3d.com/ads/web/UnityAdsWebSDK.js",
+                    
+                    // 更新的CDN源
+                    "https://cdn.jsdelivr.net/npm/@unity-ads/sdk@4.8.0/dist/UnityAds.min.js",
+                    "https://unpkg.com/unity-ads-sdk@latest/dist/UnityAds.min.js",
+                    
+                    // 嘗試備用網域 (Unity可能在不同區域有不同的CDN)
+                    "https://www.unitytechnologies.com/ads/web/UnityAdsWebSDK.js",
+                    
+                    // 本地備份(如果有)
+                    "/static/UnityAdsWebSDK.js"
+                ];
                 
-                // 尝试加载当前URL
-                loadScript(sdkUrls[currentUrlIndex], function(success) {
-                    if (success) {
-                        try {
-                            // 確認SDK是否真正載入成功
-                            if (typeof UnityAds !== 'undefined') {
-                                // 加载成功，初始化SDK
-                                console.log(`成功從 ${sdkUrls[currentUrlIndex]} 加載SDK`);
-                                initializeUnityAdsSDK();
-                            } else {
-                                throw new Error("UnityAds對象未定義");
+                let currentUrlIndex = 0;
+                let loadTimeout = 6000; // 延長超時時間到6秒
+                
+                // 尝试加载列表中的URL
+                function tryLoadSdk() {
+                    if (currentUrlIndex >= sdkUrls.length) {
+                        // 所有URL都尝试失败，直接使用备选方案
+                        handleAllSdkLoadFailed();
+                        return;
+                    }
+                    
+                    // 更新加载状态
+                    const source = currentUrlIndex === 0 ? "官方來源" : 
+                                (currentUrlIndex === 1 ? "備用來源1" : 
+                                (currentUrlIndex === 2 ? "備用來源2" : 
+                                (currentUrlIndex === 3 ? "備用來源3" : "本地備份")));
+                    updateStatus(`嘗試從${source}載入廣告SDK...`);
+                    
+                    // 尝试加载当前URL
+                    loadScript(sdkUrls[currentUrlIndex], function(success) {
+                        if (success) {
+                            try {
+                                // 確認SDK是否真正載入成功
+                                if (typeof UnityAds !== 'undefined') {
+                                    // 加载成功，初始化SDK
+                                    console.log(`成功從 ${sdkUrls[currentUrlIndex]} 加載SDK`);
+                                    initializeUnityAdsSDK();
+                                } else {
+                                    throw new Error("UnityAds對象未定義");
+                                }
+                            } catch (e) {
+                                console.error("SDK載入成功但初始化失敗:", e);
+                                currentUrlIndex++;
+                                tryLoadSdk();
                             }
-                        } catch (e) {
-                            console.error("SDK載入成功但初始化失敗:", e);
+                        } else {
+                            // 加载失败，尝试下一个URL
+                            console.error(`從 ${sdkUrls[currentUrlIndex]} 加載SDK失敗，嘗試下一個來源`);
                             currentUrlIndex++;
                             tryLoadSdk();
                         }
-                    } else {
-                        // 加载失败，尝试下一个URL
-                        console.error(`從 ${sdkUrls[currentUrlIndex]} 加載SDK失敗，嘗試下一個來源`);
-                        currentUrlIndex++;
-                        tryLoadSdk();
-                    }
-                }, loadTimeout);
-            }
-            
-            // 修改加載腳本函數以支持更長的超時
-            function loadScript(url, callback, timeout) {
-                const script = document.createElement("script");
-                script.src = url;
-                script.async = true;
-                
-                // 设置超时
-                let timeoutId = setTimeout(function() {
-                    console.warn(`加載 ${url} 超時`);
-                    script.onload = script.onerror = null;
-                    callback(false);
-                }, timeout || 5000); // 使用參數設定的超時時間，默認5秒
-                
-                script.onload = function() {
-                    clearTimeout(timeoutId);
-                    // 給腳本加載後執行一點延遲，確保初始化完成
-                    setTimeout(() => callback(true), 100);
-                };
-                
-                script.onerror = function() {
-                    clearTimeout(timeoutId);
-                    console.error("無法載入腳本:", url);
-                    callback(false);
-                };
-                
-                document.head.appendChild(script);
-            }
-            
-            // 处理所有SDK加载失败的情况
-            function handleAllSdkLoadFailed() {
-                console.error("所有SDK來源加載失敗");
-                updateStatus("無法載入廣告SDK，但您仍可以獲得分析次數");
-                
-                // 修改UI，提供备选方案
-                const container = document.querySelector('.container');
-                if (container) {
-                    const alternativeDiv = document.createElement('div');
-                    alternativeDiv.className = 'alternative-method';
-                    alternativeDiv.innerHTML = `
-                        <h2>廣告載入失敗</h2>
-                        <p>由於網絡問題，無法載入廣告SDK。但您仍然可以獲得分析次數！</p>
-                        <button id="alternative-button" class="alt-button">點擊獲取1次分析機會</button>
-                    `;
-                    
-                    // 添加备选按钮，点击后直接调用完成API
-                    container.appendChild(alternativeDiv);
-                    
-                    const altButton = document.getElementById('alternative-button');
-                    if (altButton) {
-                        altButton.onclick = function() {
-                            altButton.disabled = true;
-                            updateStatus("正在處理獎勵...");
-                            sendCompletionToServer();
-                        };
-                    }
-                    
-                    // 安全地隐藏原始观看按钮
-                    const watchButton = document.getElementById("watch-button");
-                    if (watchButton) {
-                        watchButton.style.display = 'none';
-                    }
+                    }, loadTimeout);
                 }
-            }
+                
+                // 开始尝试加载SDK
+                tryLoadSdk();
+            }, 3000); // 設置較短的超時，快速檢測網絡
+        }
+        
+        // 修改加載腳本函數以支持更長的超時
+        function loadScript(url, callback, timeout) {
+            const script = document.createElement("script");
+            script.src = url;
+            script.async = true;
             
-            // 开始尝试加载SDK
-            tryLoadSdk();
+            // 设置超时
+            let timeoutId = setTimeout(function() {
+                console.warn(`加載 ${url} 超時`);
+                script.onload = script.onerror = null;
+                callback(false);
+            }, timeout || 5000); // 使用參數設定的超時時間，默認5秒
+            
+            script.onload = function() {
+                clearTimeout(timeoutId);
+                // 給腳本加載後執行一點延遲，確保初始化完成
+                setTimeout(() => callback(true), 100);
+            };
+            
+            script.onerror = function() {
+                clearTimeout(timeoutId);
+                console.error("無法載入腳本:", url);
+                callback(false);
+            };
+            
+            document.head.appendChild(script);
         }
         
         // 初始化Unity Ads SDK
@@ -565,6 +560,54 @@
                 updateStatus("無法關閉頁面，請手動返回");
             }
         }
+        
+        // 处理所有SDK加载失败的情况
+        function handleAllSdkLoadFailed() {
+            console.error("所有SDK來源加載失敗");
+            updateStatus("無法載入廣告SDK，但您仍可以獲得分析次數");
+            
+            // 修改UI，提供备选方案
+            const container = document.querySelector('.container');
+            if (container) {
+                const alternativeDiv = document.createElement('div');
+                alternativeDiv.className = 'alternative-method';
+                alternativeDiv.innerHTML = `
+                    <h2>廣告載入失敗</h2>
+                    <p>由於網絡問題，無法載入廣告SDK。但您仍然可以獲得分析機會！</p>
+                    <div class="options-container">
+                        <button id="alternative-button" class="alt-button">直接獲取1次分析機會</button>
+                        <button id="reload-button" class="reload-button">重新嘗試載入廣告</button>
+                    </div>
+                `;
+                
+                // 添加备选按钮，点击后直接调用完成API
+                container.appendChild(alternativeDiv);
+                
+                const altButton = document.getElementById('alternative-button');
+                if (altButton) {
+                    altButton.onclick = function() {
+                        altButton.disabled = true;
+                        updateStatus("正在處理獎勵...");
+                        // 设置完成状态为真
+                        adCompleted = true;
+                        sendCompletionToServer();
+                    };
+                }
+                
+                const reloadButton = document.getElementById('reload-button');
+                if (reloadButton) {
+                    reloadButton.onclick = function() {
+                        location.reload();
+                    };
+                }
+                
+                // 安全地隐藏原始观看按钮
+                const watchButton = document.getElementById("watch-button");
+                if (watchButton) {
+                    watchButton.style.display = 'none';
+                }
+            }
+        }
     </script>
     <style>
         body {
@@ -683,12 +726,41 @@
         .alt-button:hover {
             background-color: #0069d9;
         }
+        .options-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .reload-button {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 100px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .reload-button:hover {
+            background-color: #5a6268;
+        }
+        
+        /* 增加備選方案提示樣式 */
         .alternative-method {
             margin-top: 20px;
             padding: 16px;
             background-color: #fff8e1;
             border-radius: 8px;
             border: 1px solid #ffecb3;
+            animation: fadeIn 0.5s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
     </style>
 </head>
