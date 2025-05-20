@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>觀看廣告獲取分析次數</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script>
+        // LIFF ID - 請替換為您的LIFF ID
+        const liffId = "$2007443743-46lWkm5J";
+        
+        // Unity Ads 參數 - 根據設備類型選擇正確的Game ID
+        let unityGameId;
+        const iOS_GAME_ID = "5858225";
+        const ANDROID_GAME_ID = "5858224";
+        const adPlacementId = "c3ml0zo3wtrefyqt";
+        let userId = "";
+        let adCompleted = false;
+        
+        // 檢測設備類型
+        function detectOS() {
+            const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+            
+            // iOS檢測
+            if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
+                return "iOS";
+            }
+            
+            // Android檢測
+            if (/android/i.test(userAgent)) {
+                return "Android";
+            }
+            
+            // 默認返回iOS (作為後備選項)
+            return "iOS";
+        }
+        
+        // 根據設備類型設置Game ID
+        const deviceOS = detectOS();
+        if (deviceOS === "iOS") {
+            unityGameId = iOS_GAME_ID;
+        } else {
+            unityGameId = ANDROID_GAME_ID;
+        }
+        
+        console.log(`檢測到的設備: ${deviceOS}, 使用Game ID: ${unityGameId}`);
+        
+        // 頁面載入完成時初始化LIFF
+        document.addEventListener("DOMContentLoaded", function() {
+            // 更新狀態
+            updateStatus("正在初始化...");
+            
+            // 初始化LIFF
+            liff.init({
+                liffId: liffId
+            })
+            .then(() => {
+                // LIFF初始化成功
+                if (liff.isLoggedIn()) {
+                    // 獲取用戶ID
+                    getUserProfile();
+                } else {
+                    // 用戶未登入，要求登入
+                    liff.login();
+                }
+            })
+            .catch((err) => {
+                updateStatus("初始化失敗: " + err.message);
+                console.error("LIFF初始化錯誤", err);
+            });
+        });
+        
+        // 獲取用戶資料
+        function getUserProfile() {
+            liff.getProfile()
+            .then((profile) => {
+                userId = profile.userId;
+                
+                // 從URL參數獲取傳入的user_id，並確認與LIFF用戶相符
+                const urlParams = new URLSearchParams(window.location.search);
+                const urlUserId = window.location.pathname.split('/').pop();
+                
+                if (urlUserId && urlUserId !== userId) {
+                    console.warn("URL中的user_id與LINE用戶ID不符，以LINE用戶ID為準");
+                }
+                
+                // 初始化Unity Ads
+                initUnityAds();
+            })
+            .catch((err) => {
+                updateStatus("無法獲取用戶資料: " + err.message);
+                console.error("獲取用戶資料錯誤", err);
+            });
+        }
+        
+        // 初始化Unity Ads
+        function initUnityAds() {
+            updateStatus("正在載入廣告...");
+            
+            // 動態載入Unity Ads SDK
+            const script = document.createElement("script");
+            script.src = "https://static.unityads.unity3d.com/ads/web/UnityAdsWebSDK.js";
+            script.onload = function() {
+                // SDK載入完成，初始化Unity Ads
+                UnityAds.initialize(unityGameId, false);
+                
+                // 載入廣告
+                UnityAds.load(adPlacementId, {
+                    onComplete: function() {
+                        // 廣告載入完成，啟用按鈕
+                        document.getElementById("watch-button").disabled = false;
+                        updateStatus("廣告已準備好，請點擊按鈕觀看");
+                    },
+                    onFailed: function(error, message) {
+                        updateStatus("廣告載入失敗: " + message);
+                        console.error("廣告載入失敗", error, message);
+                    }
+                });
+            };
+            script.onerror = function() {
+                updateStatus("無法載入廣告SDK，請檢查網路連接");
+                console.error("Unity Ads SDK載入失敗");
+            };
+            document.head.appendChild(script);
+        }
+        
+        // 顯示廣告
+        function showAd() {
+            updateStatus("廣告載入中...");
+            document.getElementById("watch-button").disabled = true;
+            
+            UnityAds.show(adPlacementId, {
+                onStart: function() {
+                    console.log("廣告開始播放");
+                    updateStatus("廣告播放中...");
+                },
+                onComplete: function() {
+                    console.log("廣告觀看完成");
+                    adCompleted = true;
+                    updateStatus("廣告觀看完成！正在處理獎勵...");
+                    sendCompletionToServer();
+                },
+                onSkip: function() {
+                    console.log("廣告被跳過");
+                    updateStatus("需要觀看完整廣告才能獲得獎勵");
+                    document.getElementById("watch-button").disabled = false;
+                },
+                onError: function(err) {
+                    console.error("廣告播放錯誤", err);
+                    updateStatus("廣告播放出錯，請稍後再試");
+                    document.getElementById("watch-button").disabled = false;
+                }
+            });
+        }
+        
+        // 將完成狀態發送到伺服器
+        function sendCompletionToServer() {
+            fetch('/ad-completed', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    user_id: userId,
+                    ad_type: 'unity'
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateStatus(data.message);
+                    document.getElementById("credits").textContent = data.credits;
+                    document.getElementById("result-container").style.display = "block";
+                    document.getElementById("close-button").style.display = "block";
+                } else {
+                    updateStatus("獎勵處理失敗: " + data.message);
+                }
+            })
+            .catch(error => {
+                console.error("發送完成狀態錯誤", error);
+                updateStatus("獎勵處理失敗，請聯繫客服");
+            });
+        }
+        
+        // 更新狀態訊息
+        function updateStatus(message) {
+            document.getElementById("status").textContent = message;
+        }
+        
+        // 關閉頁面並返回LINE
+        function closePage() {
+            if (liff.isInClient()) {
+                liff.closeWindow();
+            } else {
+                window.close();
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            background-color: #f8f8f8;
+            color: #333;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #00B900;
+            font-size: 24px;
+            margin-bottom: 16px;
+        }
+        p {
+            margin-bottom: 16px;
+            color: #666;
+        }
+        button {
+            padding: 12px 24px;
+            margin: 10px;
+            border-radius: 100px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        #watch-button {
+            background-color: #00B900;
+            color: white;
+            border: none;
+        }
+        #watch-button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        #watch-button:hover:not(:disabled) {
+            background-color: #009900;
+        }
+        #close-button {
+            display: none;
+            background-color: transparent;
+            color: #666;
+            border: 1px solid #ccc;
+        }
+        #close-button:hover {
+            background-color: #f1f1f1;
+        }
+        #status {
+            margin: 20px 0;
+            font-weight: bold;
+            color: #555;
+            min-height: 24px;
+        }
+        #result-container {
+            display: none;
+            background-color: #E7FFE7;
+            padding: 16px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #00B900;
+        }
+        #credits {
+            font-weight: bold;
+            color: #00B900;
+            font-size: 20px;
+        }
+        .logo {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#00B900"><path d="M12 2C6.5 2 2 5.5 2 10c0 3.5 2.2 6.5 5.5 8.2L7 21.5c.1.3.5.5.8.3l4.6-2.7c-.1 0-.3 0-.4 0-5.5 0-10-3.5-10-8 0-4.4 4.5-8 10-8s10 3.6 10 8c0 1.4-.5 2.8-1.3 4 .7.3 1.3.7 1.8 1.2.9-1.5 1.5-3.2 1.5-5.2C24 5.5 19.5 2 12 2z"/><path d="M8.5 9h-2C6.2 9 6 9.2 6 9.5v5c0 .3.2.5.5.5s.5-.2.5-.5v-2h1.5c.8 0 1.5-.7 1.5-1.5S9.3 9 8.5 9zm0 2H7v-1h1.5c.3 0 .5.2.5.5s-.2.5-.5.5zM13.5 9H12c-.3 0-.5.2-.5.5v5c0 .3.2.5.5.5h1.5c1.4 0 2.5-1.1 2.5-2.5v-1c0-1.4-1.1-2.5-2.5-2.5zm0 5H12v-4h1.5c.8 0 1.5.7 1.5 1.5v1c0 .8-.7 1.5-1.5 1.5zM16.5 9c-.3 0-.5.2-.5.5v5c0 .3.2.5.5.5s.5-.2.5-.5v-5c0-.3-.2-.5-.5-.5z"/></svg>
+        </div>
+        <h1>觀看廣告獲取分析次數</h1>
+        <p>觀看一則完整廣告後，您將獲得1次免費分析機會。</p>
+        <div id="status">正在初始化...</div>
+        <div id="result-container">
+            <p>恭喜！您已獲得獎勵，現在有 <span id="credits">0</span> 次分析機會</p>
+        </div>
+        <button id="watch-button" onclick="showAd()" disabled>觀看廣告</button>
+        <button id="close-button" onclick="closePage()">返回LINE對話</button>
+    </div>
+</body>
+</html>
