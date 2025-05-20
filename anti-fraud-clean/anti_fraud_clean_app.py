@@ -907,9 +907,21 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
         
         # 檢查是否是贊助鏈接
         is_donation_link = False
+        donation_url = ""
         for domain in SAFE_DOMAINS:
             if domain in message_to_analyze:
                 is_donation_link = True
+                # 提取完整URL，確保包含https://
+                if "http://" in message_to_analyze or "https://" in message_to_analyze:
+                    # 嘗試提取完整URL
+                    import re
+                    url_match = re.search(r'(https?://[^\s]+)', message_to_analyze)
+                    if url_match:
+                        donation_url = url_match.group(0)
+                    else:
+                        donation_url = f"https://{domain}"
+                else:
+                    donation_url = f"https://{domain}"
                 break
         
         # 截斷過長的分析消息
@@ -1016,7 +1028,8 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
                 "wrap": True
             })
             
-            donation_url = message_to_analyze.strip() if "http" in message_to_analyze else f"https://{message_to_analyze.strip()}"
+            # 確保URL格式正確
+            logger.info(f"贊助按鈕使用URL: {donation_url}")
             contents.append({
                 "type": "button",
                 "style": "primary",
@@ -2038,7 +2051,9 @@ def ad_completed():
 def create_donation_flex_message():
     """創建贊助訊息的Flex Message"""
     try:
+        # 確保URL格式正確包含https://
         donation_url = "https://buymeacoffee.com/todao_antifruad"
+        logger.info(f"創建贊助Flex Message，使用URL: {donation_url}")
         
         flex_message = FlexSendMessage(
             alt_text="幫助我們維持服務品質",
@@ -2117,4 +2132,5 @@ def create_donation_flex_message():
         return flex_message
     except Exception as e:
         logger.error(f"創建贊助Flex Message時發生錯誤: {e}")
+        # 返回一個簡單的文本消息作為備用
         return TextSendMessage(text="感謝您的使用！如果覺得服務有幫助，歡迎贊助支持我們：https://buymeacoffee.com/todao_antifruad")
