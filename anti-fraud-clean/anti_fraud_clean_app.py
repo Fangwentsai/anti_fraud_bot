@@ -431,7 +431,14 @@ def parse_fraud_analysis(analysis_result):
             "is_emerging": False
         }
 
-# ChatGPT檢測詐騙訊息函數
+# 添加安全白名單
+SAFE_DOMAINS = [
+    "buymeacoffee.com/todao_antifruad",
+    "buymeacoffee.com/todao",
+    "ko-fi.com/todao",
+    "patreon.com/todao"
+]
+
 def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None):
     """使用OpenAI的API檢測詐騙信息"""
     try:
@@ -447,6 +454,24 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         #             "success": False,
         #             "message": f"抱歉，您的免費分析次數已用完。請觀看廣告或贊助我們獲取更多分析機會。"
         #         }
+        
+        # 檢查訊息是否包含白名單中的網址
+        for safe_domain in SAFE_DOMAINS:
+            if safe_domain in user_message:
+                logger.info(f"檢測到白名單中的域名: {safe_domain}")
+                return {
+                    "success": True,
+                    "message": "分析完成",
+                    "result": {
+                        "risk_level": "低風險",
+                        "fraud_type": "非詐騙相關",
+                        "explanation": "這是我們的官方贊助鏈接，完全安全可靠。",
+                        "suggestions": "感謝您的支持！您的贊助將幫助我們提供更好的服務。",
+                        "is_emerging": False,
+                        "display_name": display_name
+                    },
+                    "raw_result": "經過分析，這是官方認可的合法贊助鏈接，完全可信。"
+                }
             
         openai_prompt = f"""
         你是一個詐騙風險評估專家，具有豐富的詐騙手法分析經驗。
@@ -879,6 +904,13 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
             risk_color = "#E74C3C"  # 紅色
             risk_emoji = "🔴"
         
+        # 檢查是否是贊助鏈接
+        is_donation_link = False
+        for domain in SAFE_DOMAINS:
+            if domain in message_to_analyze:
+                is_donation_link = True
+                break
+        
         # 截斷過長的分析消息
         if len(message_to_analyze) > 50:
             short_message = message_to_analyze[:47] + "..."
@@ -963,6 +995,44 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
             "margin": "md"
         })
         
+        # 如果是贊助鏈接，添加特殊感謝信息
+        if is_donation_link:
+            contents.append({
+                "type": "text",
+                "text": "🙏 感謝您的支持",
+                "weight": "bold",
+                "margin": "md",
+                "size": "md",
+                "color": "#1DB446"
+            })
+            
+            contents.append({
+                "type": "text",
+                "text": "您的贊助將幫助我們提供更優質的防詐騙服務，持續改進AI分析能力！",
+                "size": "sm",
+                "margin": "md",
+                "color": "#333333",
+                "wrap": True
+            })
+            
+            donation_url = message_to_analyze.strip() if "http" in message_to_analyze else f"https://{message_to_analyze.strip()}"
+            contents.append({
+                "type": "button",
+                "style": "primary",
+                "action": {
+                    "type": "uri",
+                    "label": "立即贊助",
+                    "uri": donation_url
+                },
+                "margin": "md",
+                "color": "#FF8C00"
+            })
+            
+            contents.append({
+                "type": "separator",
+                "margin": "md"
+            })
+            
         # 添加分析理由標題
         contents.append({
             "type": "text",
