@@ -433,115 +433,83 @@ def parse_fraud_analysis(analysis_result):
 
 # ChatGPT檢測詐騙訊息函數
 def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None):
-    """使用ChatGPT API分析訊息是否為詐騙
-    
-    Args:
-        user_message: 用戶訊息
-        display_name: 用戶顯示名稱
-        user_id: 用戶ID，用於獲取歷史對話
-        
-    Returns:
-        分析結果的文本
-    """
-    # 检查用户是否有足够的分析次数
-    if user_id:
-        try:
-            # 获取用户分析次数
-            remaining_credits = firebase_manager.get_user_analysis_credits(user_id)
-            logger.info(f"用户 {user_id} 剩余分析次数: {remaining_credits}")
-            
-            if remaining_credits <= 0:
-                # 用户没有足够的分析次数，返回提示信息
-                logger.info(f"用户 {user_id} 分析次数不足，提示观看广告")
-                return json.dumps({
-                    "risk_level": "分析受限",
-                    "fraud_type": "無法評估",
-                    "explanation": "您的免費分析次數已用完。您需要觀看廣告或進行小額贊助以獲取更多分析次數。",
-                    "suggestions": "請點擊下方的「觀看廣告」按鈕獲取免費分析次數，或選擇小額贊助支持我們的服務。每次觀看廣告可獲得1次分析機會，或者每NT$50的贊助可獲得10次分析機會。",
-                    "is_emerging": False
-                }, ensure_ascii=False)
-            
-            # 减少用户的分析次数
-            firebase_manager.decrease_user_analysis_credits(user_id)
-            logger.info(f"用户 {user_id} 分析次数减少，剩余 {remaining_credits-1} 次")
-        except Exception as e:
-            # 如果检查次数过程中出错，记录错误但仍然继续分析
-            logger.error(f"检查用户 {user_id} 分析次数时出错: {e}")
-    
+    """使用OpenAI的API檢測詐騙信息"""
     try:
-        # 構建基本系統提示
-        system_prompt = """你是一個專業的詐騙分析專家，請分析以下訊息是否可能是詐騙：
-
-請以純JSON格式回答，不要有其他文字。JSON格式如下：
-{
-"risk_level": "高/中/低/無風險",
-"fraud_type": "詐騙類型或'非詐騙相關'",
-"explanation": "簡短解釋分析結果（50-80字）。請使用非常口語化、對話式的語言，就像跟60歲長輩說話一樣。避免專業術語和複雜句構，用日常生活的比喻。像是在LINE上聊天的語氣，簡短有力。",
-"suggestions": "簡短具體的建議（30-50字），用點列式更好",
-"is_emerging": true/false（是否可能是新型詐騙手法）
-}
-
-分析時請特別注意：
-1. 是否要求轉帳、提供個人資料或點擊可疑連結
-2. 是否製造緊急感或威脅
-3. 是否有不合理的誘惑（高報酬、中獎等）
-4. 是否偽裝成官方機構或熟人
-5. 是否有拼寫或語法錯誤
-
-請客觀分析內容，不要過度敏感，也不要放過可疑跡象。
-重要：只回傳JSON格式，不要有任何額外說明或前導文字。回答風格要像在跟長輩聊天，非常直白簡單。
-"""
-
-        # 如果提供了user_id，嘗試獲取歷史對話作為上下文
-        messages = [{"role": "system", "content": system_prompt}]
+        #TODO: 隨機產生一個用於儲存防詐評估結果的圖檔名稱
         
-        if user_id:
-            recent_history = firebase_manager.get_recent_interactions(user_id, limit=3)
+        # 先檢查是否有足夠的分析次數 (暫時移除限制，讓用戶免費無限使用)
+        # if user_id:
+        #     remaining_credits = firebase_manager.get_user_analysis_credits(user_id)
+        #     logger.info(f"用户 {user_id} 剩余分析次数: {remaining_credits}")
+        #
+        #     if remaining_credits <= 0:
+        #         return {
+        #             "success": False,
+        #             "message": f"抱歉，您的免費分析次數已用完。請觀看廣告或贊助我們獲取更多分析機會。"
+        #         }
             
-            if recent_history and len(recent_history) > 0:
-                # 添加歷史上下文信息
-                context_prompt = "以下是用戶最近的對話歷史，可能有助於你的分析："
-                
-                for interaction in recent_history:
-                    if 'message' in interaction and interaction['message']:
-                        context_prompt += f"\n用戶: {interaction['message']}"
-                    if 'response' in interaction and interaction['response']:
-                        context_prompt += f"\n機器人: {interaction['response']}"
-                
-                context_prompt += "\n\n請根據這些歷史對話和當前訊息進行分析。"
-                
-                messages.append({"role": "user", "content": context_prompt})
-                logger.info(f"詐騙分析使用了 {len(recent_history)} 條歷史對話記錄")
-            else:
-                logger.info("詐騙分析無法獲取歷史對話，使用單一訊息分析")
-        else:
-            logger.info("未提供user_id，詐騙分析將不使用歷史記錄")
+        openai_prompt = f"""
+        你是一個詐騙風險評估專家，具有豐富的詐騙手法分析經驗。
+        請分析以下信息是否包含詐騙相關內容，並按照以下格式輸出結果：
         
-        # 添加要分析的當前訊息
-        analysis_prompt = f"""請分析這則訊息：
-
-{user_message}
-
-這是來自「{display_name}」的訊息。請提供JSON格式的分析結果。記得只回傳純JSON，不要有任何額外說明。請讓explanation字段非常口語化，就像在LINE上跟朋友聊天那樣直白簡短。"""
-
-        messages.append({"role": "user", "content": analysis_prompt})
+        1. 風險等級：（低風險、中風險、高風險）
+        2. 詐騙類型：（如果有詐騙風險，請指出具體類型，例如：假網購、假交友、假投資、假貸款、假求職等；如果無風險，填"無"）
+        3. 分析理由：（請具體說明判斷依據，至少3點）
+        4. 防範建議：（針對潛在風險，提供3-5條具體可行的建議）
         
-        # 調用ChatGPT API
-        logger.info(f"發送詐騙分析請求給ChatGPT，共{len(messages)}條消息")
-        response = openai.chat.completions.create(
-            model=os.environ.get('OPENAI_MODEL', 'gpt-3.5-turbo'),
-            messages=messages,
-            temperature=0.3,  # 略微提高溫度使語言更自然
-            max_tokens=800,
-            response_format={"type": "json_object"}  # 強制返回JSON格式
+        以下是需要分析的信息：
+        ---
+        {user_message}
+        ---
+        
+        請用繁體中文回答，避免直接使用"您好"、"感謝您的提問"等問候語。直接開始分析。回答應簡潔有力，每點內容控制在50字以內。
+        """
+        
+        # 調用OpenAI API
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "你是一個詐騙風險評估專家，請分析信息中的詐騙風險並提供具體建議。"},
+                {"role": "user", "content": openai_prompt}
+            ],
+            temperature=0.2,
+            max_tokens=1000
         )
         
-        result = response.choices[0].message.content.strip()
-        
-        return result
+        if response and response.choices:
+            analysis_result = response.choices[0].message['content'].strip()
+            logger.info(f"風險分析結果: {analysis_result[:100]}...")  # 僅記錄部分結果
+            
+            # 減少用戶的分析次數 (暫時移除限制)
+            # if user_id:
+            #     firebase_manager.decrease_user_analysis_credits(user_id)
+            #     logger.info(f"用户 {user_id} 分析次数减少，剩余 {remaining_credits-1} 次")
+            
+            # 將結果解析成結構化格式
+            parsed_result = parse_fraud_analysis(analysis_result)
+            
+            # 添加一個使用者可識別的標識
+            parsed_result["display_name"] = display_name
+            
+            return {
+                "success": True,
+                "message": "分析完成",
+                "result": parsed_result,
+                "raw_result": analysis_result
+            }
+        else:
+            logger.error("OpenAI API 返回空結果")
+            return {
+                "success": False,
+                "message": "分析失敗，請稍後再試"
+            }
+            
     except Exception as e:
-        logger.error(f"ChatGPT 詐騙分析錯誤: {e}")
-        return "抱歉，我現在無法分析您的訊息。請稍後再試。"
+        logger.exception(f"使用OpenAI分析詐騙信息時發生錯誤: {e}")
+        return {
+            "success": False,
+            "message": f"分析過程中發生錯誤: {str(e)}"
+        }
 
 # --- Begin: Add these new functions for the game ---
 def send_potato_game_question(user_id, reply_token):
@@ -869,291 +837,231 @@ def get_fraud_features(fraud_type, fraud_message):
 
 # 添加URL分析結果的Flex Message格式函數
 def create_analysis_flex_message(analysis_data, display_name, message_to_analyze, user_id=None):
-    """
-    创建分析结果的Flex消息
-    
-    Args:
-        analysis_data: 解析后的分析数据
-        display_name: 用户显示名称
-        message_to_analyze: 被分析的消息
-        user_id: 用户ID，用于获取剩余次数
+    """创建分析结果的Flex消息"""
+    try:
+        risk_level = analysis_data.get("risk_level", "未知風險")
+        fraud_type = analysis_data.get("fraud_type", "未知類型")
+        reasons = analysis_data.get("reasons", [])
+        suggestions = analysis_data.get("suggestions", [])
         
-    Returns:
-        FlexSendMessage对象
-    """
-    # 获取分析数据
-    risk_level = analysis_data.get("risk_level", "不確定")
-    fraud_type = analysis_data.get("fraud_type", "未知")
-    explanation = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
-    suggestions = analysis_data.get("suggestions", "請隨時保持警惕。")
-    is_emerging = analysis_data.get("is_emerging", False)
-    
-    # 获取用户分析次数
-    remaining_credits = 0
-    if user_id and firebase_manager.db:
-        try:
-            remaining_credits = firebase_manager.get_user_analysis_credits(user_id)
-        except Exception as e:
-            logger.error(f"获取用户分析次数失败: {e}")
-    
-    # 根据风险等级确定颜色
-    if risk_level == "高":
-        risk_color = "#FF3B30"
-        risk_icon = "🔴"
-        action_required = True
-    elif risk_level == "中":
-        risk_color = "#FF9500"
-        risk_icon = "🟠"
-        action_required = True
-    elif risk_level == "低":
-        risk_color = "#FFCC00"
-        risk_icon = "🟡"
-        action_required = False
-    elif risk_level == "無風險":
-        risk_color = "#34C759"
-        risk_icon = "🟢"
-        action_required = False
-    elif risk_level == "分析受限":
-        risk_color = "#999999"
-        risk_icon = "⚠️"
-        action_required = False
-    else:
-        risk_color = "#8E8E93"
-        risk_icon = "❓"
-        action_required = False
-    
-    # 处理显示名称中的特殊字符
-    if display_name:
-        display_name = display_name.replace('"', '\\"')
-    
-    # 构建Bubble容器
-    bubble = {
-        "type": "bubble",
-        "size": "mega",
-        "header": {
+        # 獲取用戶剩餘的分析次數 (暫時移除)
+        # remaining_credits = 0
+        # if user_id:
+        #     remaining_credits = firebase_manager.get_user_analysis_credits(user_id)
+        
+        # 計算風險等級顏色和圖示
+        if "低風險" in risk_level:
+            risk_color = "#27AE60"  # 綠色
+            risk_emoji = "✅"
+        elif "中風險" in risk_level:
+            risk_color = "#F39C12"  # 橙色
+            risk_emoji = "⚠️"
+        else:  # 高風險
+            risk_color = "#E74C3C"  # 紅色
+            risk_emoji = "🔴"
+        
+        # 截斷過長的分析消息
+        if len(message_to_analyze) > 50:
+            short_message = message_to_analyze[:47] + "..."
+        else:
+            short_message = message_to_analyze
+            
+        # 構建內容區域
+        contents = []
+        
+        # 添加風險等級
+        contents.append({
             "type": "box",
-            "layout": "vertical",
+            "layout": "horizontal",
             "contents": [
-                {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": f"{risk_icon} 詐騙風險：{risk_level}",
-                            "color": "#ffffff",
-                            "weight": "bold",
-                            "size": "xl"
-                        }
-                    ]
-                }
-            ],
-            "backgroundColor": risk_color,
-            "paddingAll": "20px"
-        },
-        "body": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-                # 显示分析的訊息 (缩短后)
                 {
                     "type": "text",
-                    "text": "分析訊息",
-                    "weight": "bold",
+                    "text": f"{risk_emoji} 風險等級",
                     "size": "md",
-                    "wrap": True,
-                    "color": "#666666"
+                    "color": "#555555",
+                    "flex": 0
                 },
                 {
                     "type": "text",
-                    "text": message_to_analyze[:60] + "..." if len(message_to_analyze) > 60 else message_to_analyze,
-                    "wrap": True,
-                    "size": "sm",
-                    "margin": "md",
-                    "color": "#333333"
-                },
-                # 显示詐騙類型
-                {
-                    "type": "box",
-                    "layout": "vertical",
-                    "margin": "lg",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "詐騙類型",
-                            "weight": "bold",
-                            "color": "#666666",
-                            "size": "md"
-                        },
-                        {
-                            "type": "text",
-                            "text": fraud_type,
-                            "wrap": True,
-                            "color": "#333333",
-                            "size": "sm",
-                            "margin": "md"
-                        }
-                    ]
-                },
-                # 显示解释
-                {
-                    "type": "box",
-                    "layout": "vertical",
-                    "margin": "lg",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "分析結果",
-                            "weight": "bold",
-                            "color": "#666666",
-                            "size": "md"
-                        },
-                        {
-                            "type": "text",
-                            "text": explanation,
-                            "wrap": True,
-                            "margin": "md",
-                            "size": "sm",
-                            "color": "#333333"
-                        }
-                    ]
-                },
-                # 显示建议 (如果有的话)
-                {
-                    "type": "box",
-                    "layout": "vertical",
-                    "margin": "lg",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "應對建議",
-                            "weight": "bold",
-                            "color": "#666666",
-                            "size": "md"
-                        },
-                        {
-                            "type": "text",
-                            "text": suggestions,
-                            "wrap": True,
-                            "margin": "md",
-                            "size": "sm",
-                            "color": "#333333"
-                        }
-                    ]
-                },
-                # 添加固定的三行提示文字和剩余次数
-                {
-                    "type": "box",
-                    "layout": "vertical",
-                    "margin": "lg",
-                    "contents": [
-                        {
-                            "type": "separator",
-                            "color": "#DDDDDD",
-                            "margin": "md"
-                        },
-                        {
-                            "type": "text",
-                            "text": "⚠️如有任何疑慮，請直接撥打165反詐騙專線",
-                            "wrap": True,
-                            "size": "xs",
-                            "margin": "md",
-                            "color": "#999999"
-                        },
-                        {
-                            "type": "text",
-                            "text": "本系統僅針對網址做初步分析，請自行評估結果",
-                            "wrap": True,
-                            "size": "xs",
-                            "margin": "sm",
-                            "color": "#999999"
-                        },
-                        {
-                            "type": "text",
-                            "text": f"您目前免費網頁分析次數剩餘{remaining_credits}次",
-                            "wrap": True,
-                            "size": "xs",
-                            "margin": "sm",
-                            "color": "#999999"
-                        }
-                    ]
+                    "text": risk_level,
+                    "size": "md",
+                    "color": risk_color,
+                    "weight": "bold",
+                    "align": "end"
                 }
-            ],
-            "paddingAll": "20px"
-        }
-    }
-    
-    # 按钮区域 - 根据不同情况显示不同的按钮
-    footer_contents = []
-    
-    # 检查是否是分析受限状态（次数不足）
-    if risk_level == "分析受限":
-        # 添加广告观看按钮
-        footer_contents.append({
-            "type": "button",
-            "style": "primary",
-            "height": "sm",
-            "action": {
-                "type": "postback",
-                "label": "觀看廣告獲取次數",
-                "data": "action=view_ad&type=unity"
-            },
-            "color": "#007AFF"
+            ]
         })
         
-        # 添加赞助按钮
-        footer_contents.append({
-            "type": "button",
-            "style": "secondary",
-            "height": "sm",
-            "action": {
-                "type": "postback",
-                "label": "NT$50贊助(10次)",
-                "data": "action=donate&amount=small"
-            },
+        # 添加詐騙類型
+        contents.append({
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": "🔍 詐騙類型",
+                    "size": "md",
+                    "color": "#555555",
+                    "flex": 0
+                },
+                {
+                    "type": "text",
+                    "text": fraud_type,
+                    "size": "md",
+                    "color": "#555555",
+                    "align": "end"
+                }
+            ],
             "margin": "md"
         })
-    elif action_required:
-        # 高/中风险时，添加查看詐騙类型详情的按钮
-        if fraud_type != "未知" and fraud_type != "無法評估" and fraud_type != "非詐騙相關":
-            footer_contents.append({
-                "type": "button",
-                "style": "primary",
-                "height": "sm",
-                "action": {
-                    "type": "message",
-                    "label": "查看此類詐騙詳情",
-                    "text": f"什麼是{fraud_type}"
-                },
-                "color": "#007AFF"
+        
+        # 添加剩餘次數提示 (已移除)
+        # contents.append({
+        #     "type": "box",
+        #     "layout": "horizontal",
+        #     "contents": [
+        #         {
+        #             "type": "text",
+        #             "text": "🎁 剩餘次數",
+        #             "size": "md",
+        #             "color": "#555555",
+        #             "flex": 0
+        #         },
+        #         {
+        #             "type": "text",
+        #             "text": f"{remaining_credits}次",
+        #             "size": "md",
+        #             "color": "#555555",
+        #             "align": "end"
+        #         }
+        #     ],
+        #     "margin": "md"
+        # })
+        
+        # 添加分隔線
+        contents.append({
+            "type": "separator",
+            "margin": "md"
+        })
+        
+        # 添加分析理由標題
+        contents.append({
+            "type": "text",
+            "text": "📋 分析理由",
+            "weight": "bold",
+            "margin": "md",
+            "size": "md",
+            "color": "#1DB446"
+        })
+        
+        # 添加分析理由
+        for reason in reasons:
+            contents.append({
+                "type": "text",
+                "text": reason,
+                "size": "sm",
+                "margin": "md",
+                "color": "#333333"
             })
-    
-    # 如果有脚注内容，添加到Bubble中
-    if footer_contents:
-        bubble["footer"] = {
+        
+        # 添加防範建議
+        for suggestion in suggestions:
+            contents.append({
+                "type": "text",
+                "text": suggestion,
+                "size": "sm",
+                "margin": "md",
+                "color": "#666666"
+            })
+        
+        # 添加固定的三行提示文字和剩余次数
+        contents.append({
             "type": "box",
             "layout": "vertical",
-            "contents": footer_contents,
-            "paddingAll": "20px"
-        }
-    
-    # 如果有新型詐騙特征，添加标记
-    if is_emerging:
-        bubble["header"]["contents"][0]["contents"].append({
-            "type": "text",
-            "text": "🆕 可能是新型詐騙手法",
-            "color": "#ffffff",
-            "size": "sm",
-            "margin": "md"
+            "margin": "lg",
+            "contents": [
+                {
+                    "type": "separator",
+                    "color": "#DDDDDD",
+                    "margin": "md"
+                },
+                {
+                    "type": "text",
+                    "text": "⚠️如有任何疑慮，請直接撥打165反詐騙專線",
+                    "wrap": True,
+                    "size": "xs",
+                    "margin": "md",
+                    "color": "#999999"
+                },
+                {
+                    "type": "text",
+                    "text": "本系統僅針對網址做初步分析，請自行評估結果",
+                    "wrap": True,
+                    "size": "xs",
+                    "margin": "sm",
+                    "color": "#999999"
+                },
+                {
+                    "type": "text",
+                    "text": f"您目前免費網頁分析次數剩餘{remaining_credits}次",
+                    "wrap": True,
+                    "size": "xs",
+                    "margin": "sm",
+                    "color": "#999999"
+                }
+            ]
         })
-    
-    # 创建FlexSendMessage
-    flex_message = FlexSendMessage(
-        alt_text=f"詐騙風險分析：{risk_level}",
-        contents=bubble
-    )
-    
-    return flex_message
+        
+        # 如果有新型詐騙特征，添加标记
+        if "is_emerging" in analysis_data and analysis_data["is_emerging"]:
+            contents.append({
+                "type": "text",
+                "text": "🆕 可能是新型詐騙手法",
+                "size": "sm",
+                "margin": "md",
+                "color": "#ffffff"
+            })
+        
+        # 创建FlexSendMessage
+        flex_message = FlexSendMessage(
+            alt_text=f"詐騙風險分析：{risk_level}",
+            contents={
+                "type": "bubble",
+                "size": "mega",
+                "header": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "box",
+                            "layout": "vertical",
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": f"{risk_emoji} 詐騙風險：{risk_level}",
+                                    "color": "#ffffff",
+                                    "weight": "bold",
+                                    "size": "xl"
+                                }
+                            ]
+                        }
+                    ],
+                    "backgroundColor": risk_color,
+                    "paddingAll": "20px"
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": contents,
+                    "paddingAll": "20px"
+                }
+            }
+        )
+        
+        return flex_message
+    except Exception as e:
+        logger.error(f"Error creating analysis flex message: {e}")
+        return None
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -1688,152 +1596,185 @@ def handle_message(event):
 
 @handler.add(PostbackEvent)
 def handle_postback(event):
-    user_id = event.source.user_id
-    reply_token = event.reply_token
-    postback_data_str = event.postback.data
-    
-    logger.info(f"接收到來自 {user_id} 的 Postback: {postback_data_str}")
-    
-    # 解析 postback_data (e.g., "action=value&key=value")
-    # Ensure robust parsing for various possible postback data formats
+    """处理PostbackEvent（按钮点击等）"""
     try:
-        data_params = dict(item.split("=", 1) for item in postback_data_str.split("&") if "=" in item)
-    except ValueError:
-        logger.error(f"無法解析 Postback data: {postback_data_str}")
-        data_params = {} # Avoid crashing if data is malformed
+        data = event.postback.data
+        reply_token = event.reply_token
+        user_id = event.source.user_id
+        
+        # 获取用户显示名称
+        user_profile = get_user_profile(user_id)
+        display_name = user_profile.get('displayName', '朋友')
+        
+        logger.info(f"接收到來自用戶 {user_id} 的 Postback: {data}")
+        
+        # 解析 data 参数
+        data_parts = data.split('&')
+        data_params = {}
+        
+        for part in data_parts:
+            if '=' in part:
+                key, value = part.split('=', 1)
+                data_params[key] = value
+        
+        # 获取 action 参数
+        action = data_params.get('action', '')
+        
+        # 根据 action 参数处理不同的按钮点击
+        
+        # 处理土豆游戏答案
+        if action == 'potato_answer':
+            handle_potato_game_answer(user_id, reply_token, data_params)
+            return
+        
+        # 处理新游戏请求
+        elif action == 'new_game':
+            send_potato_game_question(user_id, reply_token)
+            return
+        
+        # 处理观看广告（暫時停用）
+        elif action == 'view_ad':
+            # 已暫停廣告功能，直接給用戶次數
+            firebase_manager.increase_user_analysis_credits(user_id, amount=5)
+            current_credits = firebase_manager.get_user_analysis_credits(user_id)
+            
+            line_bot_api.reply_message(
+                reply_token,
+                TextSendMessage(text=f"感謝您的支持！系統已為您增加5次分析機會，目前全面開放免費無限使用。")
+            )
+            
+            # 記錄互動
+            firebase_manager.save_user_interaction(
+                user_id, display_name, "請求免費分析次數", 
+                "已給予5次分析次數，現已開放免費無限使用", 
+                is_fraud_related=False
+            )
+            return
+            
+            # 以下代碼暫時停用
+            # ad_type = data_params.get('type', 'standard')
+            # 
+            # # 生成LIFF URL (观看广告页面)
+            # liff_url = f"https://liff.line.me/2007443743-46lWkm5J/watch-ad/{user_id}"
+            # 
+            # # 创建广告Flex消息
+            # flex_message = FlexSendMessage(
+            #     alt_text="觀看廣告獲取分析次數",
+            #     contents={
+            #         "type": "bubble",
+            #         "hero": {
+            #             "type": "image",
+            #             "url": "https://i.imgur.com/wGYADSG.png",
+            #             "size": "full",
+            #             "aspectRatio": "20:13",
+            #             "aspectMode": "cover"
+            #         },
+            #         "body": {
+            #             "type": "box",
+            #             "layout": "vertical",
+            #             "contents": [
+            #                 {
+            #                     "type": "text",
+            #                     "text": "觀看廣告獲取分析次數",
+            #                     "weight": "bold",
+            #                     "size": "xl"
+            #                 },
+            #                 {
+            #                     "type": "box",
+            #                     "layout": "vertical",
+            #                     "margin": "lg",
+            #                     "spacing": "sm",
+            #                     "contents": [
+            #                         {
+            #                             "type": "text",
+            #                             "text": "觀看完整廣告後，您將獲得1次免費分析機會",
+            #                             "wrap": True,
+            #                             "color": "#666666",
+            #                             "size": "sm"
+            #                         },
+            #                         {
+            #                             "type": "text",
+            #                             "text": "點擊下方按鈕開始觀看",
+            #                             "color": "#666666",
+            #                             "size": "sm",
+            #                             "margin": "md"
+            #                         }
+            #                     ]
+            #                 }
+            #             ]
+            #         },
+            #         "footer": {
+            #             "type": "box",
+            #             "layout": "vertical",
+            #             "spacing": "sm",
+            #             "contents": [
+            #                 {
+            #                     "type": "button",
+            #                     "style": "primary",
+            #                     "action": {
+            #                         "type": "uri",
+            #                         "label": "觀看廣告",
+            #                         "uri": liff_url
+            #                     }
+            #                 }
+            #             ]
+            #         }
+            #     }
+            # )
+            # 
+            # line_bot_api.reply_message(reply_token, flex_message)
+            # 
+            # # 记录互动
+            # firebase_manager.save_user_interaction(
+            #     user_id, display_name, f"請求觀看廣告:{ad_type}", 
+            #     "發送廣告觀看頁面連結", 
+            #     is_fraud_related=False
+            # )
+            # return
+        
+        # 处理赞助
+        elif action == 'donate':
+            amount = data_params.get('amount', 'small')
+            
+            # 根据赞助金额增加用户分析次数
+            credits_to_add = 0
+            donation_amount = "未知"
+            
+            if amount == 'small':
+                credits_to_add = 10
+                donation_amount = "NT$50"
+            elif amount == 'medium':
+                credits_to_add = 30
+                donation_amount = "NT$100"
+            elif amount == 'large':
+                credits_to_add = 100
+                donation_amount = "NT$250"
+            
+            firebase_manager.increase_user_analysis_credits(user_id, amount=credits_to_add)
+            
+            # 获取用户当前分析次数
+            current_credits = firebase_manager.get_user_analysis_credits(user_id)
+            
+            # 发送确认消息 (修改為感謝支持的消息)
+            line_bot_api.reply_message(
+                reply_token,
+                TextSendMessage(text=f"感謝您的{donation_amount}贊助！您已獲得{credits_to_add}次分析機會。感謝支持，目前系統已開放免費無限使用。")
+            )
+            
+            # 记录互动
+            firebase_manager.save_user_interaction(
+                user_id, display_name, f"贊助:{amount}", 
+                f"用戶贊助{donation_amount}獲得{credits_to_add}次分析次數", 
+                is_fraud_related=False
+            )
+            return
+        
+        # 你可以在這裡添加更多的 postback 處理邏輯
+        # 例如處理其他 Flex Message 按鈕的點擊事件
 
-    action = data_params.get('action')
-    uid_from_data = data_params.get('uid')
-
-    if uid_from_data and uid_from_data != user_id:
-       logger.warning(f"User ID mismatch in postback: event.source.user_id={user_id}, data_params.uid={uid_from_data}. Using event.source.user_id.")
-       # Prefer user_id from event source for security and consistency.
-
-    profile = get_user_profile(user_id) # Get profile for display name if needed
-    display_name = profile.display_name if profile and profile.display_name else "使用者"
-
-    if action == 'potato_game_answer':
-        logger.info(f"User {display_name}({user_id}) answered potato game.")
-        # Log game interaction before handling answer
-        chosen_option = data_params.get('chosen_option_id', 'N/A')
-        firebase_manager.save_user_interaction(
-            user_id, display_name, f"PotatoGame_Answer:{chosen_option}", 
-            "處理「選哪顆土豆」遊戲答案", is_fraud_related=False 
-        )
-        handle_potato_game_answer(user_id, reply_token, data_params)
-        return
-    elif action == 'start_potato_game':
-        logger.info(f"User {display_name}({user_id}) wants to play potato game again.")
-        firebase_manager.save_user_interaction(
-            user_id, display_name, "PotatoGame_Restart", 
-            "重新開始「選哪顆土豆」遊戲", is_fraud_related=False
-        )
-        send_potato_game_question(user_id, reply_token)
-        return
-    
-    elif action == 'view_ad':
-        ad_type = data_params.get('type', 'standard')
-        
-        # 创建LIFF URL (LINE Frontend Framework)
-        liff_url = f"{request.host_url}watch-ad/{user_id}"
-        
-        # 发送确认消息，包含打开网页观看广告的按钮
-        flex_message = FlexSendMessage(
-            alt_text='觀看廣告獲得分析機會',
-            contents={
-                "type": "bubble",
-                "body": {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "觀看廣告獲得分析機會",
-                            "weight": "bold",
-                            "size": "xl"
-                        },
-                        {
-                            "type": "text",
-                            "text": "完整觀看一則廣告即可獲得1次免費分析機會",
-                            "wrap": True,
-                            "margin": "md"
-                        }
-                    ]
-                },
-                "footer": {
-                    "type": "box",
-                    "layout": "vertical",
-                    "spacing": "sm",
-                    "contents": [
-                        {
-                            "type": "button",
-                            "style": "primary",
-                            "action": {
-                                "type": "uri",
-                                "label": "觀看廣告",
-                                "uri": liff_url
-                            }
-                        }
-                    ]
-                }
-            }
-        )
-        
-        line_bot_api.reply_message(reply_token, flex_message)
-        
-        # 记录互动
-        firebase_manager.save_user_interaction(
-            user_id, display_name, f"請求觀看廣告:{ad_type}", 
-            "發送廣告觀看頁面連結", 
-            is_fraud_related=False
-        )
-        return
-    
-    # 处理赞助
-    elif action == 'donate':
-        amount = data_params.get('amount', 'small')
-        
-        # 根据赞助金额增加用户分析次数
-        credits_to_add = 0
-        donation_amount = "未知"
-        
-        if amount == 'small':
-            credits_to_add = 10
-            donation_amount = "NT$50"
-        elif amount == 'medium':
-            credits_to_add = 30
-            donation_amount = "NT$100"
-        elif amount == 'large':
-            credits_to_add = 100
-            donation_amount = "NT$250"
-        
-        firebase_manager.increase_user_analysis_credits(user_id, amount=credits_to_add)
-        
-        # 获取用户当前分析次数
-        current_credits = firebase_manager.get_user_analysis_credits(user_id)
-        
-        # 发送确认消息
-        line_bot_api.reply_message(
-            reply_token,
-            TextSendMessage(text=f"感謝您的{donation_amount}贊助！您已獲得{credits_to_add}次分析機會，目前剩餘{current_credits}次分析機會。")
-        )
-        
-        # 记录互动
-        firebase_manager.save_user_interaction(
-            user_id, display_name, f"贊助:{amount}", 
-            f"用戶贊助{donation_amount}獲得{credits_to_add}次分析次數，當前剩餘{current_credits}次", 
-            is_fraud_related=False
-        )
-        return
-    
-    # 你可以在這裡添加更多的 postback 處理邏輯
-    # 例如處理其他 Flex Message 按鈕的點擊事件
-
-    else:
-        logger.warning(f"未知的 Postback action: {action} from user {user_id}")
-        # line_bot_api.reply_message(reply_token, TextSendMessage(text="收到一個我無法處理的指令，請再試一次。"))
-        # Decided not to reply for unknown postbacks to avoid interrupting other flows or causing confusion.
-        # If specific unhandled postbacks need a reply, add explicit conditions.
+    except Exception as e:
+        logger.error(f"處理 Postback 事件時發生錯誤: {e}")
+        line_bot_api.reply_message(reply_token, TextSendMessage(text="抱歉，處理 Postback 事件時出現錯誤。請稍後再試一次。"))
 
 # 載入詐騙題庫
 POTATO_GAME_QUESTIONS_DB = "potato_game_questions.json"
@@ -1936,23 +1877,23 @@ def ad_completed():
     # 记录广告观看
     firebase_manager.record_ad_view(user_id, ad_type)
     
-    # 增加用户分析次数
-    firebase_manager.increase_user_analysis_credits(user_id, amount=1)
+    # 增加用户分析次数 (根據需求修改為固定值)
+    firebase_manager.increase_user_analysis_credits(user_id, amount=5)  # 直接給5次
     
     # 获取用户当前分析次数
     current_credits = firebase_manager.get_user_analysis_credits(user_id)
     
-    # 尝试发送LINE消息通知用户
+    # 尝试发送LINE消息通知用户 (修改消息，現在是免費使用)
     try:
         line_bot_api.push_message(
             user_id,
-            TextSendMessage(text=f"恭喜您觀看廣告獲得1次分析機會！目前剩餘{current_credits}次分析機會。")
+            TextSendMessage(text=f"恭喜您獲得5次分析機會！感謝您的支持，目前已開放免費無限使用。")
         )
     except Exception as e:
         logger.error(f"無法發送LINE通知: {e}")
     
     return jsonify({
         'success': True, 
-        'message': f'恭喜！您已獲得1次分析機會，目前剩餘{current_credits}次',
-        'credits': current_credits
+        'message': f'恭喜！您已獲得5次分析機會，目前免費無限使用',
+        'credits': "無限"
     })
