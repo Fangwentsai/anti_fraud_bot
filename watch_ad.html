@@ -50,7 +50,7 @@
             // 更新狀態
             updateStatus("正在初始化...");
             
-            // 初始化LIFF
+            // 初始化LIFF - 確保沒有使用$符號
             liff.init({
                 liffId: liffId
             })
@@ -101,24 +101,29 @@
             const script = document.createElement("script");
             script.src = "https://static.unityads.unity3d.com/ads/web/UnityAdsWebSDK.js";
             script.onload = function() {
-                // SDK載入完成，初始化Unity Ads
-                UnityAds.initialize(unityGameId, false);
-                
-                // 載入廣告
-                UnityAds.load(adPlacementId, {
-                    onComplete: function() {
-                        // 廣告載入完成，啟用按鈕
-                        const watchButton = document.getElementById("watch-button");
-                        if (watchButton) {
-                            watchButton.disabled = false;
+                try {
+                    // SDK載入完成，初始化Unity Ads
+                    UnityAds.initialize(unityGameId, false);
+                    
+                    // 載入廣告
+                    UnityAds.load(adPlacementId, {
+                        onComplete: function() {
+                            // 廣告載入完成，啟用按鈕
+                            const watchButton = document.getElementById("watch-button");
+                            if (watchButton) {
+                                watchButton.disabled = false;
+                            }
+                            updateStatus("廣告已準備好，請點擊按鈕觀看");
+                        },
+                        onFailed: function(error, message) {
+                            updateStatus("廣告載入失敗: " + message);
+                            console.error("廣告載入失敗", error, message);
                         }
-                        updateStatus("廣告已準備好，請點擊按鈕觀看");
-                    },
-                    onFailed: function(error, message) {
-                        updateStatus("廣告載入失敗: " + message);
-                        console.error("廣告載入失敗", error, message);
-                    }
-                });
+                    });
+                } catch (error) {
+                    updateStatus("初始化Unity Ads失敗: " + error.message);
+                    console.error("Unity Ads初始化錯誤", error);
+                }
             };
             script.onerror = function() {
                 updateStatus("無法載入廣告SDK，請檢查網路連接");
@@ -135,34 +140,42 @@
                 watchButton.disabled = true;
             }
             
-            UnityAds.show(adPlacementId, {
-                onStart: function() {
-                    console.log("廣告開始播放");
-                    updateStatus("廣告播放中...");
-                },
-                onComplete: function() {
-                    console.log("廣告觀看完成");
-                    adCompleted = true;
-                    updateStatus("廣告觀看完成！正在處理獎勵...");
-                    sendCompletionToServer();
-                },
-                onSkip: function() {
-                    console.log("廣告被跳過");
-                    updateStatus("需要觀看完整廣告才能獲得獎勵");
-                    const watchButton = document.getElementById("watch-button");
-                    if (watchButton) {
-                        watchButton.disabled = false;
+            try {
+                UnityAds.show(adPlacementId, {
+                    onStart: function() {
+                        console.log("廣告開始播放");
+                        updateStatus("廣告播放中...");
+                    },
+                    onComplete: function() {
+                        console.log("廣告觀看完成");
+                        adCompleted = true;
+                        updateStatus("廣告觀看完成！正在處理獎勵...");
+                        sendCompletionToServer();
+                    },
+                    onSkip: function() {
+                        console.log("廣告被跳過");
+                        updateStatus("需要觀看完整廣告才能獲得獎勵");
+                        const watchButton = document.getElementById("watch-button");
+                        if (watchButton) {
+                            watchButton.disabled = false;
+                        }
+                    },
+                    onError: function(err) {
+                        console.error("廣告播放錯誤", err);
+                        updateStatus("廣告播放出錯，請稍後再試");
+                        const watchButton = document.getElementById("watch-button");
+                        if (watchButton) {
+                            watchButton.disabled = false;
+                        }
                     }
-                },
-                onError: function(err) {
-                    console.error("廣告播放錯誤", err);
-                    updateStatus("廣告播放出錯，請稍後再試");
-                    const watchButton = document.getElementById("watch-button");
-                    if (watchButton) {
-                        watchButton.disabled = false;
-                    }
+                });
+            } catch (error) {
+                console.error("顯示廣告時發生錯誤", error);
+                updateStatus("廣告顯示失敗，請重新載入頁面");
+                if (watchButton) {
+                    watchButton.disabled = false;
                 }
-            });
+            }
         }
         
         // 將完成狀態發送到伺服器
@@ -210,10 +223,15 @@
         
         // 關閉頁面並返回LINE
         function closePage() {
-            if (liff.isInClient()) {
-                liff.closeWindow();
-            } else {
-                window.close();
+            try {
+                if (liff.isInClient()) {
+                    liff.closeWindow();
+                } else {
+                    window.close();
+                }
+            } catch (error) {
+                console.error("關閉頁面時發生錯誤", error);
+                updateStatus("無法關閉頁面，請手動返回");
             }
         }
     </script>
@@ -296,6 +314,11 @@
             width: 80px;
             height: 80px;
             margin: 0 auto 20px;
+        }
+        .error-message {
+            color: #e74c3c;
+            font-weight: bold;
+            margin-top: 10px;
         }
     </style>
 </head>
