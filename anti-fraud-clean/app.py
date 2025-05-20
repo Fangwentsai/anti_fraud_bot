@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import json
-from flask import Flask, request, abort, render_template
+from flask import Flask, request, abort, render_template, jsonify
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
@@ -380,6 +380,24 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
     Returns:
         分析結果的文本
     """
+    # 檢查用戶是否有足夠的分析次數
+    if user_id:
+        firebase_manager = FirebaseManager.get_instance()
+        analysis_credits = firebase_manager.get_user_analysis_credits(user_id)
+        
+        if analysis_credits <= 0:
+            # 用戶沒有足夠的分析次數，返回提示信息
+            return f"""
+風險等級：不確定
+詐騙類型：無法分析
+說明：您的免費分析次數已用完。請觀看廣告或進行小額贊助以獲取更多分析次數。
+建議：請點擊下方按鈕觀看廣告或進行贊助，以繼續使用分析功能。
+"""
+        
+        # 減少用戶的分析次數
+        firebase_manager.decrease_user_analysis_credits(user_id)
+        logger.info(f"用戶 {user_id} 使用了一次分析次數，剩餘 {analysis_credits-1} 次")
+    
     try:
         # 構建基本系統提示
         system_prompt = """你是一個專業的詐騙分析專家，請分析以下訊息是否可能是詐騙：
@@ -794,6 +812,88 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
     explanation = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
     suggestions = analysis_data.get("suggestions", "請隨時保持警惕。")
     
+    # 檢查是否為用戶次數不足的情況
+    if "您的免費分析次數已用完" in explanation:
+        bubble = BubbleContainer(
+            header=BoxComponent(
+                layout='vertical',
+                contents=[
+                    TextComponent(
+                        text="分析次數不足",
+                        weight='bold',
+                        size='xl',
+                        color='#ffffff'
+                    )
+                ],
+                background_color='#ff5551'
+            ),
+            body=BoxComponent(
+                layout='vertical',
+                contents=[
+                    TextComponent(
+                        text="您的免費分析次數已用完",
+                        wrap=True,
+                        weight='bold',
+                        size='md',
+                        margin='md'
+                    ),
+                    TextComponent(
+                        text="請觀看廣告或進行小額贊助以獲取更多分析次數",
+                        wrap=True,
+                        size='sm',
+                        margin='md'
+                    ),
+                    TextComponent(
+                        text="每位用戶初始有5次免費分析機會",
+                        wrap=True,
+                        size='xs',
+                        margin='md',
+                        color='#aaaaaa'
+                    )
+                ]
+            ),
+            footer=BoxComponent(
+                layout='vertical',
+                spacing='sm',
+                contents=[
+                    ButtonComponent(
+                        style='primary',
+                        action=PostbackAction(
+                            label="觀看廣告獲取1次機會",
+                            data="action=view_ad&type=standard",
+                            display_text="我想觀看廣告獲取分析機會"
+                        )
+                    ),
+                    ButtonComponent(
+                        style='secondary',
+                        action=PostbackAction(
+                            label="小額贊助(NT$50/10次)",
+                            data="action=donate&amount=small",
+                            display_text="我想小額贊助支持此服務"
+                        )
+                    ),
+                    ButtonComponent(
+                        style='secondary',
+                        action=PostbackAction(
+                            label="中額贊助(NT$100/30次)",
+                            data="action=donate&amount=medium",
+                            display_text="我想中額贊助支持此服務"
+                        )
+                    ),
+                    ButtonComponent(
+                        style='secondary',
+                        action=PostbackAction(
+                            label="大額贊助(NT$250/100次)",
+                            data="action=donate&amount=large",
+                            display_text="我想大額贊助支持此服務"
+                        )
+                    )
+                ]
+            )
+        )
+        
+        return FlexSendMessage(alt_text='分析次數不足', contents=bubble)
+    
     # 根據風險等級設置顏色
     if risk_level in ["高", "高風險"]:
         risk_color = "#FF0000"  # 紅色
@@ -972,14 +1072,40 @@ def fraud_statistics():
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_id = event.source.user_id
-    profile = get_user_profile(user_id)
-    display_name = profile.display_name if profile else "未知用戶"
-    text_message = event.message.text
+    user_message = event.message.text
     reply_token = event.reply_token
-    current_time = datetime.datetime.now()
+    
+    # 記錄接收的消息
+    logger.info(f"接收到來自 {user_id} 的消息: {user_message}")
+    
+    # 獲取用戶資料
+    profile = get_user_profile(user_id)
+    
+    # 如果無法獲取用戶資料，使用默認值
+    display_name = profile.display_name if profile else "使用者"
 
-    logger.info(f"Received message from {display_name} ({user_id}): {text_message}")
-
+    # 將文本標準化（去除空格、轉為小寫）方便匹配命令
+    text_message = user_message.strip()
+    
+    # 查詢剩餘分析次數
+    if text_message in ["剩餘次數", "查詢次數", "我還有幾次", "剩餘分析次數"]:
+        user_id = event.source.user_id
+        firebase_manager = FirebaseManager.get_instance()
+        analysis_credits = firebase_manager.get_user_analysis_credits(user_id)
+        
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=f"您目前剩餘{analysis_credits}次網頁/訊息分析機會。\n每位使用者初始有5次免費分析機會，您可以通過觀看廣告或小額贊助獲取更多分析次數。")
+        )
+        
+        # 記錄互動
+        firebase_manager.save_user_interaction(
+            user_id, display_name, text_message, 
+            f"查詢剩餘分析次數，當前剩餘{analysis_credits}次", 
+            is_fraud_related=False
+        )
+        return
+    
     # 檢查是否為首次對話的用戶
     is_first_time = user_id not in first_time_chatters
     if is_first_time:
@@ -987,7 +1113,7 @@ def handle_message(event):
         logger.info(f"User {user_id} is chatting for the first time")
 
     # 更新用戶最後聊天時間
-    user_last_chat_time[user_id] = current_time
+    user_last_chat_time[user_id] = datetime.datetime.now()
 
     # 0. 檢查是否正在等待用戶對某訊息提供澄清
     pending_state = user_pending_analysis.get(user_id)
@@ -1021,7 +1147,7 @@ def handle_message(event):
         
         if user_id in user_pending_analysis:
             del user_pending_analysis[user_id]
-        user_last_chat_time[user_id] = current_time
+        user_last_chat_time[user_id] = datetime.datetime.now()
         return
 
     # 檢查用戶是否在遊戲中
@@ -1037,7 +1163,7 @@ def handle_message(event):
         # firebase_manager.save_user_interaction(user_id, display_name, "Auto-reply reset", greeting_message, is_fraud_related=False)
 
         # 更新用戶最後聊天時間 (即便只是用戶發訊息，尚未回覆，也更新)
-        user_last_chat_time[user_id] = current_time
+        user_last_chat_time[user_id] = datetime.datetime.now()
         
         # 處理功能詢問
         if any(keyword in text_message.lower() for keyword in function_inquiry_keywords):
@@ -1339,7 +1465,8 @@ def handle_message(event):
     quick_reply = QuickReply(items=[
         QuickReplyButton(action=MessageAction(label="分析可疑訊息", text="請幫我分析這則訊息：")),
         QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text="選哪顆土豆")),
-        QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text="詐騙類型列表"))
+        QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text="詐騙類型列表")),
+        QuickReplyButton(action=MessageAction(label="查詢剩餘次數", text="剩餘次數"))
     ])
     
     line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
@@ -1377,6 +1504,104 @@ def handle_postback(event):
 
     profile = get_user_profile(user_id) # Get profile for display name if needed
     display_name = profile.display_name if profile and profile.display_name else "使用者"
+
+    # 處理廣告觀看
+    if action == 'view_ad':
+        ad_type = data_params.get('type', 'standard')
+        
+        # 創建LIFF URL (LINE Frontend Framework)
+        liff_url = f"{request.host_url}watch-ad/{user_id}"
+        
+        # 發送確認消息，包含打開網頁觀看廣告的按鈕
+        flex_message = FlexSendMessage(
+            alt_text='觀看廣告獲得分析機會',
+            contents={
+                "type": "bubble",
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "觀看廣告獲得分析機會",
+                            "weight": "bold",
+                            "size": "xl"
+                        },
+                        {
+                            "type": "text",
+                            "text": "完整觀看一則廣告即可獲得1次免費分析機會",
+                            "wrap": True,
+                            "margin": "md"
+                        }
+                    ]
+                },
+                "footer": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "spacing": "sm",
+                    "contents": [
+                        {
+                            "type": "button",
+                            "style": "primary",
+                            "action": {
+                                "type": "uri",
+                                "label": "觀看廣告",
+                                "uri": liff_url
+                            }
+                        }
+                    ]
+                }
+            }
+        )
+        
+        line_bot_api.reply_message(event.reply_token, flex_message)
+        
+        # 記錄互動
+        firebase_manager.save_user_interaction(
+            user_id, display_name, f"請求觀看廣告:{ad_type}", 
+            "發送廣告觀看頁面連結", 
+            is_fraud_related=False
+        )
+        return
+    
+    # 處理贊助
+    if action == 'donate':
+        amount = data_params.get('amount', 'small')
+        
+        firebase_manager = FirebaseManager.get_instance()
+        
+        # 根據贊助金額增加用戶分析次數
+        credits_to_add = 0
+        donation_amount = "未知"
+        
+        if amount == 'small':
+            credits_to_add = 10
+            donation_amount = "NT$50"
+        elif amount == 'medium':
+            credits_to_add = 30
+            donation_amount = "NT$100"
+        elif amount == 'large':
+            credits_to_add = 100
+            donation_amount = "NT$250"
+        
+        firebase_manager.increase_user_analysis_credits(user_id, amount=credits_to_add)
+        
+        # 獲取用戶當前分析次數
+        current_credits = firebase_manager.get_user_analysis_credits(user_id)
+        
+        # 發送確認消息
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=f"感謝您的{donation_amount}贊助！您已獲得{credits_to_add}次分析機會，目前剩餘{current_credits}次分析機會。")
+        )
+        
+        # 記錄互動
+        firebase_manager.save_user_interaction(
+            user_id, display_name, f"贊助:{amount}", 
+            f"用戶贊助{donation_amount}獲得{credits_to_add}次分析次數，當前剩餘{current_credits}次", 
+            is_fraud_related=False
+        )
+        return
 
     if action == 'potato_game_answer':
         logger.info(f"User {display_name}({user_id}) answered potato game.")
@@ -1467,6 +1692,47 @@ def load_potato_game_questions():
 
 load_fraud_tactics()
 load_potato_game_questions()  # 加載題庫
+
+@app.route("/watch-ad/<user_id>", methods=['GET'])
+def watch_ad(user_id):
+    """顯示Unity廣告的頁面"""
+    return render_template('watch_ad.html', user_id=user_id)
+
+@app.route("/ad-completed", methods=['POST'])
+def ad_completed():
+    """處理廣告觀看完成的回調"""
+    data = request.json
+    user_id = data.get('user_id')
+    ad_type = data.get('ad_type', 'unity')
+    
+    if not user_id:
+        return jsonify({'success': False, 'message': '缺少用戶ID'}), 400
+    
+    firebase_manager = FirebaseManager.get_instance()
+    
+    # 記錄廣告觀看
+    firebase_manager.record_ad_view(user_id, ad_type)
+    
+    # 增加用戶分析次數
+    firebase_manager.increase_user_analysis_credits(user_id, amount=1)
+    
+    # 獲取用戶當前分析次數
+    current_credits = firebase_manager.get_user_analysis_credits(user_id)
+    
+    # 嘗試發送LINE訊息通知用戶
+    try:
+        line_bot_api.push_message(
+            user_id,
+            TextSendMessage(text=f"恭喜您觀看廣告獲得1次分析機會！目前剩餘{current_credits}次分析機會。")
+        )
+    except Exception as e:
+        logger.error(f"無法發送LINE通知: {e}")
+    
+    return jsonify({
+        'success': True, 
+        'message': f'恭喜！您已獲得1次分析機會，目前剩餘{current_credits}次',
+        'credits': current_credits
+    })
 
 if __name__ == "__main__":
     # 確保在服務啟動時重新加載題庫
