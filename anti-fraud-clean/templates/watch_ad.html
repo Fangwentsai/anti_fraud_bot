@@ -219,26 +219,19 @@
                 // 设置调试模式（开发时使用true，生产环境使用false）
                 const testMode = false;
                 
-                // SDK載入完成，初始化Unity Ads
+                // 记录初始化开始
                 console.log(`正在初始化Unity Ads，Game ID: ${unityGameId}，測試模式: ${testMode}`);
-                UnityAds.initialize(unityGameId, testMode);
                 
-                // 载入激励广告（Rewarded Ad）
-                console.log(`正在加載激勵廣告，廣告位ID: ${adPlacementId}`);
-                UnityAds.load(adPlacementId, {
+                // 根据Unity文档，应先初始化SDK，然后再加载广告
+                UnityAds.initialize(unityGameId, testMode, {
                     onComplete: function() {
-                        // 廣告載入完成，啟用按鈕
-                        const watchButton = document.getElementById("watch-button");
-                        if (watchButton) {
-                            watchButton.disabled = false;
-                            watchButton.textContent = "觀看廣告";
-                        }
-                        updateStatus("廣告已準備好，請點擊按鈕觀看");
-                        console.log("廣告載入完成");
+                        console.log("Unity Ads 初始化完成");
+                        // 初始化完成后加载奖励广告
+                        loadRewardedAd();
                     },
-                    onFailed: function(error, message) {
-                        updateStatus("廣告載入失敗: " + message);
-                        console.error("廣告載入失敗", error, message);
+                    onError: function(error, message) {
+                        console.error(`Unity Ads 初始化失敗: ${error} - ${message}`);
+                        updateStatus(`廣告初始化失敗: ${message}`);
                         
                         // 显示重试按钮
                         const watchButton = document.getElementById("watch-button");
@@ -267,6 +260,40 @@
             }
         }
         
+        // 加载奖励广告
+        function loadRewardedAd() {
+            console.log(`正在加載奬勵廣告，廣告位ID: ${adPlacementId}`);
+            
+            // 根据Unity文档，加载广告时应提供加载监听器
+            UnityAds.load(adPlacementId, {
+                onComplete: function() {
+                    // 广告加载完成，启用按钮
+                    console.log("奬勵廣告加載完成");
+                    const watchButton = document.getElementById("watch-button");
+                    if (watchButton) {
+                        watchButton.disabled = false;
+                        watchButton.textContent = "觀看廣告";
+                    }
+                    updateStatus("廣告已準備好，請點擊按鈕觀看");
+                },
+                onFailed: function(error, message) {
+                    console.error(`廣告加載失敗: ${error} - ${message}`);
+                    updateStatus("廣告載入失敗: " + message);
+                    
+                    // 显示重试按钮
+                    const watchButton = document.getElementById("watch-button");
+                    if (watchButton) {
+                        watchButton.disabled = false;
+                        watchButton.textContent = "重新嘗試";
+                        watchButton.onclick = function() {
+                            // 尝试重新加载广告
+                            loadRewardedAd();
+                        };
+                    }
+                }
+            });
+        }
+        
         // 顯示廣告
         function showAd() {
             // 检查Unity Ads是否已初始化
@@ -275,15 +302,15 @@
                 return;
             }
             
-            updateStatus("廣告載入中...");
+            updateStatus("正在顯示廣告...");
             const watchButton = document.getElementById("watch-button");
             if (watchButton) {
                 watchButton.disabled = true;
             }
             
             try {
-                // 显示激励广告（Rewarded Ad）
-                console.log(`正在顯示激勵廣告，廣告位ID: ${adPlacementId}`);
+                // 显示奖励广告，提供完整的显示监听器
+                console.log(`正在顯示奬勵廣告，廣告位ID: ${adPlacementId}`);
                 UnityAds.show(adPlacementId, {
                     onStart: function() {
                         console.log("廣告開始播放");
@@ -293,6 +320,7 @@
                         console.log("廣告觀看完成");
                         adCompleted = true;
                         updateStatus("廣告觀看完成！正在處理獎勵...");
+                        // 广告完成后给予奖励
                         sendCompletionToServer();
                     },
                     onSkip: function() {
@@ -303,13 +331,18 @@
                             watchButton.disabled = false;
                         }
                     },
-                    onError: function(err) {
-                        console.error("廣告播放錯誤", err);
-                        updateStatus("廣告播放出錯，請稍後再試");
+                    onError: function(error, message) {
+                        console.error(`廣告顯示錯誤: ${error} - ${message}`);
+                        updateStatus("廣告播放出錯: " + message);
                         const watchButton = document.getElementById("watch-button");
                         if (watchButton) {
                             watchButton.disabled = false;
                         }
+                        
+                        // 如果显示失败，可以尝试重新加载
+                        setTimeout(function() {
+                            loadRewardedAd();
+                        }, 3000);
                     }
                 });
             } catch (error) {
