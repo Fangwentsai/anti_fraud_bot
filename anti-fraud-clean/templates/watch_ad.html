@@ -105,43 +105,122 @@
         function initUnityAds() {
             updateStatus("正在載入廣告...");
             
+            // 添加备用CDN链接
+            const primarySdkUrl = "https://static.unityads.unity3d.com/ads/web/UnityAdsWebSDK.js";
+            const backupSdkUrl = "https://cdnjs.cloudflare.com/ajax/libs/unity-webview/3.0.0/UnityAdsWebSDK.js";
+            
             // 動態載入Unity Ads SDK
-            const script = document.createElement("script");
-            script.src = "https://static.unityads.unity3d.com/ads/web/UnityAdsWebSDK.js";
-            script.onload = function() {
-                try {
-                    // SDK載入完成，初始化Unity Ads
-                    UnityAds.initialize(unityGameId, false);
-                    
-                    // 載入廣告
-                    UnityAds.load(adPlacementId, {
-                        onComplete: function() {
-                            // 廣告載入完成，啟用按鈕
+            loadScript(primarySdkUrl, function(success) {
+                if (!success) {
+                    // 主要URL加载失败，尝试备用URL
+                    updateStatus("主要廣告SDK載入失敗，嘗試備用來源...");
+                    loadScript(backupSdkUrl, function(backupSuccess) {
+                        if (!backupSuccess) {
+                            // 备用URL也加载失败
+                            updateStatus("無法載入廣告SDK，請檢查網路連接或稍後再試");
+                            console.error("Unity Ads SDK載入失敗 - 所有來源都失敗");
+                            
+                            // 显示重试按钮
                             const watchButton = document.getElementById("watch-button");
                             if (watchButton) {
                                 watchButton.disabled = false;
+                                watchButton.textContent = "重新嘗試";
+                                watchButton.onclick = function() {
+                                    location.reload();
+                                };
                             }
-                            updateStatus("廣告已準備好，請點擊按鈕觀看");
-                        },
-                        onFailed: function(error, message) {
-                            updateStatus("廣告載入失敗: " + message);
-                            console.error("廣告載入失敗", error, message);
+                            return;
                         }
+                        
+                        // 备用URL加载成功，初始化Unity Ads
+                        initializeUnityAdsSDK();
                     });
-                } catch (error) {
-                    updateStatus("初始化Unity Ads失敗: " + error.message);
-                    console.error("Unity Ads初始化錯誤", error);
+                } else {
+                    // 主要URL加载成功，初始化Unity Ads
+                    initializeUnityAdsSDK();
                 }
+            });
+        }
+        
+        // 辅助函数：加载脚本
+        function loadScript(url, callback) {
+            const script = document.createElement("script");
+            script.src = url;
+            script.async = true;
+            
+            script.onload = function() {
+                callback(true);
             };
+            
             script.onerror = function() {
-                updateStatus("無法載入廣告SDK，請檢查網路連接");
-                console.error("Unity Ads SDK載入失敗");
+                console.error("無法載入腳本:", url);
+                callback(false);
             };
+            
             document.head.appendChild(script);
+        }
+        
+        // 初始化Unity Ads SDK
+        function initializeUnityAdsSDK() {
+            try {
+                // 检查SDK是否可用
+                if (typeof UnityAds === 'undefined') {
+                    throw new Error("Unity Ads SDK未正確載入");
+                }
+                
+                // SDK載入完成，初始化Unity Ads
+                UnityAds.initialize(unityGameId, false);
+                
+                // 載入廣告
+                UnityAds.load(adPlacementId, {
+                    onComplete: function() {
+                        // 廣告載入完成，啟用按鈕
+                        const watchButton = document.getElementById("watch-button");
+                        if (watchButton) {
+                            watchButton.disabled = false;
+                            watchButton.textContent = "觀看廣告";
+                        }
+                        updateStatus("廣告已準備好，請點擊按鈕觀看");
+                    },
+                    onFailed: function(error, message) {
+                        updateStatus("廣告載入失敗: " + message);
+                        console.error("廣告載入失敗", error, message);
+                        
+                        // 显示重试按钮
+                        const watchButton = document.getElementById("watch-button");
+                        if (watchButton) {
+                            watchButton.disabled = false;
+                            watchButton.textContent = "重新嘗試";
+                            watchButton.onclick = function() {
+                                location.reload();
+                            };
+                        }
+                    }
+                });
+            } catch (error) {
+                updateStatus("初始化Unity Ads失敗: " + error.message);
+                console.error("Unity Ads初始化錯誤", error);
+                
+                // 显示重试按钮
+                const watchButton = document.getElementById("watch-button");
+                if (watchButton) {
+                    watchButton.disabled = false;
+                    watchButton.textContent = "重新嘗試";
+                    watchButton.onclick = function() {
+                        location.reload();
+                    };
+                }
+            }
         }
         
         // 顯示廣告
         function showAd() {
+            // 检查Unity Ads是否已初始化
+            if (typeof UnityAds === 'undefined') {
+                updateStatus("廣告服务尚未准备好，请稍后再试");
+                return;
+            }
+            
             updateStatus("廣告載入中...");
             const watchButton = document.getElementById("watch-button");
             if (watchButton) {
