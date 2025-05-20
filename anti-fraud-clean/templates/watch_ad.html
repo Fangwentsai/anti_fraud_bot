@@ -360,15 +360,18 @@
             }
         }
         
-        // 加载奖励广告
+        // 加载奖励广告 - 按照Unity文档推荐的方式
         function loadRewardedAd() {
-            console.log(`正在加載奬勵廣告，廣告位ID: ${adPlacementId}`);
+            console.log(`正在加載獎勵廣告，廣告位ID: ${adPlacementId}`);
+            
+            // 更新状态
+            updateStatus("正在准备廣告...");
             
             // 根据Unity文档，加载广告时应提供加载监听器
             UnityAds.load(adPlacementId, {
                 onComplete: function() {
                     // 广告加载完成，启用按钮
-                    console.log("奬勵廣告加載完成");
+                    console.log("奬勵廣告加載完成，可供顯示");
                     const watchButton = document.getElementById("watch-button");
                     if (watchButton) {
                         watchButton.disabled = false;
@@ -394,7 +397,7 @@
             });
         }
         
-        // 顯示廣告
+        // 顯示廣告 - 按照Unity文档推荐的方式
         function showAd() {
             // 检查Unity Ads是否已初始化
             if (typeof UnityAds === 'undefined') {
@@ -410,21 +413,21 @@
             
             try {
                 // 显示奖励广告，提供完整的显示监听器
-                console.log(`正在顯示奬勵廣告，廣告位ID: ${adPlacementId}`);
+                console.log(`正在顯示獎勵廣告，廣告位ID: ${adPlacementId}`);
                 UnityAds.show(adPlacementId, {
                     onStart: function() {
                         console.log("廣告開始播放");
                         updateStatus("廣告播放中...");
                     },
                     onComplete: function() {
-                        console.log("廣告觀看完成");
+                        console.log("廣告觀看完成 - 給予獎勵");
                         adCompleted = true;
                         updateStatus("廣告觀看完成！正在處理獎勵...");
                         // 广告完成后给予奖励
                         sendCompletionToServer();
                     },
                     onSkip: function() {
-                        console.log("廣告被跳過");
+                        console.log("廣告被跳過 - 不給予獎勵");
                         updateStatus("需要觀看完整廣告才能獲得獎勵");
                         const watchButton = document.getElementById("watch-button");
                         if (watchButton) {
@@ -434,6 +437,8 @@
                     onError: function(error, message) {
                         console.error(`廣告顯示錯誤: ${error} - ${message}`);
                         updateStatus("廣告播放出錯: " + message);
+                        
+                        // 恢复按钮状态
                         const watchButton = document.getElementById("watch-button");
                         if (watchButton) {
                             watchButton.disabled = false;
@@ -441,6 +446,7 @@
                         
                         // 如果显示失败，可以尝试重新加载
                         setTimeout(function() {
+                            updateStatus("正在重新加載廣告...");
                             loadRewardedAd();
                         }, 3000);
                     }
