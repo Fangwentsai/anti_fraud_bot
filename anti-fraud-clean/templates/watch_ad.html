@@ -105,31 +105,80 @@
         function initUnityAds() {
             updateStatus("正在載入廣告...");
             
-            // 只使用官方SDK URL
-            const unityAdsSDKUrl = "https://static.unityads.unity3d.com/ads/web/UnityAdsWebSDK.js";
+            // 定义SDK链接列表（按优先级排序）
+            const sdkUrls = [
+                "https://static.unityads.unity3d.com/ads/web/UnityAdsWebSDK.js", // Unity官方CDN
+                "https://cdn.jsdelivr.net/npm/unity-ads-webview@3.0.0/dist/UnityAdsWebSDK.min.js", // jsDelivr CDN
+                "/static/UnityAdsWebSDK.js", // 本地托管的备份（如果有）
+            ];
             
-            // 動態載入Unity Ads SDK
-            loadScript(unityAdsSDKUrl, function(success) {
-                if (!success) {
-                    // SDK加载失败
-                    updateStatus("廣告SDK載入失敗，請檢查網路連接或稍後再試");
-                    console.error("Unity Ads SDK載入失敗");
-                    
-                    // 显示重试按钮
-                    const watchButton = document.getElementById("watch-button");
-                    if (watchButton) {
-                        watchButton.disabled = false;
-                        watchButton.textContent = "重新嘗試";
-                        watchButton.onclick = function() {
-                            location.reload();
-                        };
-                    }
+            let currentUrlIndex = 0;
+            
+            // 尝试加载列表中的URL
+            function tryLoadSdk() {
+                if (currentUrlIndex >= sdkUrls.length) {
+                    // 所有URL都尝试失败，显示备选方案
+                    handleAllSdkLoadFailed();
                     return;
                 }
                 
-                // SDK加载成功，初始化Unity Ads
-                initializeUnityAdsSDK();
-            });
+                // 更新加载状态
+                const source = currentUrlIndex === 0 ? "官方來源" : (currentUrlIndex === 1 ? "備用來源" : "本地備份");
+                updateStatus(`正在從${source}載入廣告SDK...`);
+                
+                // 尝试加载当前URL
+                loadScript(sdkUrls[currentUrlIndex], function(success) {
+                    if (success) {
+                        // 加载成功，初始化SDK
+                        console.log(`成功從 ${sdkUrls[currentUrlIndex]} 加載SDK`);
+                        initializeUnityAdsSDK();
+                    } else {
+                        // 加载失败，尝试下一个URL
+                        console.error(`從 ${sdkUrls[currentUrlIndex]} 加載SDK失敗，嘗試下一個來源`);
+                        currentUrlIndex++;
+                        tryLoadSdk();
+                    }
+                });
+            }
+            
+            // 处理所有SDK加载失败的情况
+            function handleAllSdkLoadFailed() {
+                console.error("所有SDK來源加載失敗");
+                updateStatus("無法載入廣告SDK，但您仍可以獲得分析次數");
+                
+                // 修改UI，提供备选方案
+                const container = document.querySelector('.container');
+                if (container) {
+                    const alternativeDiv = document.createElement('div');
+                    alternativeDiv.className = 'alternative-method';
+                    alternativeDiv.innerHTML = `
+                        <h2>廣告載入失敗</h2>
+                        <p>由於網絡問題，無法載入廣告SDK。但您仍然可以獲得分析次數！</p>
+                        <button id="alternative-button" class="alt-button">點擊獲取1次分析機會</button>
+                    `;
+                    
+                    // 添加备选按钮，点击后直接调用完成API
+                    container.appendChild(alternativeDiv);
+                    
+                    const altButton = document.getElementById('alternative-button');
+                    if (altButton) {
+                        altButton.onclick = function() {
+                            altButton.disabled = true;
+                            updateStatus("正在處理獎勵...");
+                            sendCompletionToServer();
+                        };
+                    }
+                    
+                    // 隐藏原始观看按钮
+                    const watchButton = document.getElementById("watch-button");
+                    if (watchButton) {
+                        watchButton.style.display = 'none';
+                    }
+                }
+            }
+            
+            // 开始尝试加载SDK
+            tryLoadSdk();
         }
         
         // 辅助函数：加载脚本
@@ -138,11 +187,20 @@
             script.src = url;
             script.async = true;
             
+            // 设置超时
+            let timeoutId = setTimeout(function() {
+                console.warn(`加載 ${url} 超時`);
+                script.onload = script.onerror = null;
+                callback(false);
+            }, 5000); // 5秒超时
+            
             script.onload = function() {
+                clearTimeout(timeoutId);
                 callback(true);
             };
             
             script.onerror = function() {
+                clearTimeout(timeoutId);
                 console.error("無法載入腳本:", url);
                 callback(false);
             };
@@ -342,6 +400,11 @@
             font-size: 24px;
             margin-bottom: 16px;
         }
+        h2 {
+            color: #555;
+            font-size: 20px;
+            margin-bottom: 12px;
+        }
         p {
             margin-bottom: 16px;
             color: #666;
@@ -404,6 +467,31 @@
             color: #e74c3c;
             font-weight: bold;
             margin-top: 10px;
+        }
+        .alternative-method {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f1f1f1;
+            border-radius: 8px;
+            border: 1px dashed #ccc;
+        }
+        .alt-button {
+            background-color: #ff9800;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 100px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .alt-button:hover {
+            background-color: #f57c00;
+        }
+        .alt-button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
         }
     </style>
 </head>
