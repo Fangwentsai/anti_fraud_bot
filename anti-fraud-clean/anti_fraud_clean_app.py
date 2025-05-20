@@ -17,6 +17,7 @@ from firebase_manager import FirebaseManager
 import random
 import datetime  # 導入datetime用於時間比較
 import re
+import time
 
 # 指定 .env 文件的路徑
 # 假設 anti-fraud-clean 和 linebot-anti-fraud 是同級目錄
@@ -1565,11 +1566,11 @@ def handle_message(event):
     if should_perform_fraud_analysis(text_message):
         logger.info(f"Performing fraud analysis for message from {user_id}: {text_message}")
         # 使用現有的詐騙分析邏輯，傳入user_id
-        analysis_result_text = detect_fraud_with_chatgpt(text_message, display_name, user_id)
+        analysis_result = detect_fraud_with_chatgpt(text_message, display_name, user_id)
         
-        if analysis_result_text and analysis_result_text.get("success", False):
-            analysis_data = analysis_result_text.get("result", {})
-            raw_result = analysis_result_text.get("raw_result", "")
+        if analysis_result and analysis_result.get("success", False):
+            analysis_data = analysis_result.get("result", {})
+            raw_result = analysis_result.get("raw_result", "")
             
             risk_level = analysis_data.get("risk_level", "不確定")
             fraud_type = analysis_data.get("fraud_type", "未知")
@@ -1606,9 +1607,21 @@ def handle_message(event):
                 fraud_type=fraud_type if is_fraud_related else None,
                 risk_level=risk_level if is_fraud_related else None
             )
+            
+            # 以15%的機率顯示贊助信息
+            if random.random() < 0.15:
+                logger.info(f"隨機觸發贊助信息顯示給用戶 {user_id}")
+                try:
+                    # 延遲1秒發送，避免訊息堆疊
+                    time.sleep(1)
+                    donation_message = create_donation_flex_message()
+                    # 使用push_message而不是reply_message
+                    line_bot_api.push_message(user_id, donation_message)
+                except Exception as e:
+                    logger.error(f"發送贊助訊息時發生錯誤: {e}")
         else:
             # 分析失敗的情況，發送錯誤消息
-            error_message = analysis_result_text.get("message", "分析失敗，請稍後再試") if analysis_result_text else "分析失敗，請稍後再試"
+            error_message = analysis_result.get("message", "分析失敗，請稍後再試") if analysis_result else "分析失敗，請稍後再試"
             line_bot_api.reply_message(reply_token, TextSendMessage(text=error_message))
             
         return
@@ -2020,3 +2033,88 @@ def ad_completed():
         'message': f'恭喜！您已獲得5次分析機會，目前免費無限使用',
         'credits': "無限"
     })
+
+# 添加贊助訊息Flex Message函數
+def create_donation_flex_message():
+    """創建贊助訊息的Flex Message"""
+    try:
+        donation_url = "https://buymeacoffee.com/todao_antifruad"
+        
+        flex_message = FlexSendMessage(
+            alt_text="幫助我們維持服務品質",
+            contents={
+                "type": "bubble",
+                "hero": {
+                    "type": "image",
+                    "url": "https://i.imgur.com/zKDjsPG.png",  # 一個溫馨的圖片，您可以替換成您喜歡的
+                    "size": "full",
+                    "aspectRatio": "20:13",
+                    "aspectMode": "cover"
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "感謝您使用防詐騙小幫手",
+                            "weight": "bold",
+                            "size": "xl",
+                            "color": "#FF8C00"
+                        },
+                        {
+                            "type": "text",
+                            "text": "叔叔阿姨，最近詐騙真的好多喔！幸好有這個小幫手可以幫忙檢查。它就像我們派在您身邊的小保鑣一樣！👮‍♂️",
+                            "margin": "md",
+                            "wrap": True,
+                            "size": "md"
+                        },
+                        {
+                            "type": "text",
+                            "text": "不過這個小保鑣也需要補充體力（系統維護費啦～）。如果叔叔阿姨覺得它做得不錯，願意請它吃個『乖乖』（讓系統乖乖運作），我們會超級感動的！一點點心意，就能讓它更有力氣保護大家喔！💪",
+                            "margin": "md",
+                            "wrap": True,
+                            "size": "md"
+                        }
+                    ]
+                },
+                "footer": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "spacing": "sm",
+                    "contents": [
+                        {
+                            "type": "button",
+                            "style": "primary",
+                            "height": "sm",
+                            "action": {
+                                "type": "uri",
+                                "label": "我要贊助",
+                                "uri": donation_url
+                            },
+                            "color": "#FF8C00"
+                        },
+                        {
+                            "type": "box",
+                            "layout": "vertical",
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": "您的支持是我們持續改進的動力",
+                                    "color": "#aaaaaa",
+                                    "size": "sm",
+                                    "align": "center"
+                                }
+                            ],
+                            "margin": "md"
+                        }
+                    ],
+                    "flex": 0
+                }
+            }
+        )
+        
+        return flex_message
+    except Exception as e:
+        logger.error(f"創建贊助Flex Message時發生錯誤: {e}")
+        return TextSendMessage(text="感謝您的使用！如果覺得服務有幫助，歡迎贊助支持我們：https://buymeacoffee.com/todao_antifruad")
