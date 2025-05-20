@@ -465,8 +465,8 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         請用繁體中文回答，避免直接使用"您好"、"感謝您的提問"等問候語。直接開始分析。回答應簡潔有力，每點內容控制在50字以內。
         """
         
-        # 調用OpenAI API
-        response = openai.ChatCompletion.create(
+        # 調用OpenAI API (修正為新版API格式)
+        response = openai.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "你是一個詐騙風險評估專家，請分析信息中的詐騙風險並提供具體建議。"},
@@ -477,7 +477,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         )
         
         if response and response.choices:
-            analysis_result = response.choices[0].message['content'].strip()
+            analysis_result = response.choices[0].message.content.strip()
             logger.info(f"風險分析結果: {analysis_result[:100]}...")  # 僅記錄部分結果
             
             # 減少用戶的分析次數 (暫時移除限制)
@@ -841,13 +841,29 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
     try:
         risk_level = analysis_data.get("risk_level", "未知風險")
         fraud_type = analysis_data.get("fraud_type", "未知類型")
-        reasons = analysis_data.get("reasons", [])
-        suggestions = analysis_data.get("suggestions", [])
+        explanation = analysis_data.get("explanation", "")
+        suggestions = analysis_data.get("suggestions", "")
+        
+        # 解析分析理由和建議（如果是字符串，按行分割；如果已經是列表，直接使用）
+        reasons = []
+        if isinstance(explanation, str):
+            reasons = [explanation.strip()]
+        elif isinstance(explanation, list):
+            reasons = explanation
+            
+        suggestion_list = []
+        if isinstance(suggestions, str):
+            suggestion_list = [suggestions.strip()]
+        elif isinstance(suggestions, list):
+            suggestion_list = suggestions
         
         # 獲取用戶剩餘的分析次數 (暫時移除)
         # remaining_credits = 0
         # if user_id:
         #     remaining_credits = firebase_manager.get_user_analysis_credits(user_id)
+        
+        # 定義一個無限次數的指示值
+        remaining_credits = "∞"  # 使用無限符號表示無限次數
         
         # 計算風險等級顏色和圖示
         if "低風險" in risk_level:
@@ -915,28 +931,28 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
             "margin": "md"
         })
         
-        # 添加剩餘次數提示 (已移除)
-        # contents.append({
-        #     "type": "box",
-        #     "layout": "horizontal",
-        #     "contents": [
-        #         {
-        #             "type": "text",
-        #             "text": "🎁 剩餘次數",
-        #             "size": "md",
-        #             "color": "#555555",
-        #             "flex": 0
-        #         },
-        #         {
-        #             "type": "text",
-        #             "text": f"{remaining_credits}次",
-        #             "size": "md",
-        #             "color": "#555555",
-        #             "align": "end"
-        #         }
-        #     ],
-        #     "margin": "md"
-        # })
+        # 添加剩餘次數提示 (已修改為顯示無限)
+        contents.append({
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": "🎁 剩餘次數",
+                    "size": "md",
+                    "color": "#555555",
+                    "flex": 0
+                },
+                {
+                    "type": "text",
+                    "text": f"{remaining_credits}",
+                    "size": "md",
+                    "color": "#555555",
+                    "align": "end"
+                }
+            ],
+            "margin": "md"
+        })
         
         # 添加分隔線
         contents.append({
@@ -961,20 +977,32 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
                 "text": reason,
                 "size": "sm",
                 "margin": "md",
-                "color": "#333333"
+                "color": "#333333",
+                "wrap": True
             })
         
+        # 添加防範建議標題
+        contents.append({
+            "type": "text",
+            "text": "🛡️ 防範建議",
+            "weight": "bold",
+            "margin": "md",
+            "size": "md",
+            "color": "#1DB446"
+        })
+        
         # 添加防範建議
-        for suggestion in suggestions:
+        for suggestion in suggestion_list:
             contents.append({
                 "type": "text",
                 "text": suggestion,
                 "size": "sm",
                 "margin": "md",
-                "color": "#666666"
+                "color": "#666666",
+                "wrap": True
             })
         
-        # 添加固定的三行提示文字和剩余次数
+        # 添加固定的提示文字
         contents.append({
             "type": "box",
             "layout": "vertical",
@@ -995,15 +1023,7 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
                 },
                 {
                     "type": "text",
-                    "text": "本系統僅針對網址做初步分析，請自行評估結果",
-                    "wrap": True,
-                    "size": "xs",
-                    "margin": "sm",
-                    "color": "#999999"
-                },
-                {
-                    "type": "text",
-                    "text": f"您目前免費網頁分析次數剩餘{remaining_credits}次",
+                    "text": "本系統僅針對內容做初步分析，請自行評估結果",
                     "wrap": True,
                     "size": "xs",
                     "margin": "sm",
@@ -1019,7 +1039,8 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
                 "text": "🆕 可能是新型詐騙手法",
                 "size": "sm",
                 "margin": "md",
-                "color": "#ffffff"
+                "color": "#ffffff",
+                "background": "#FF0000"
             })
         
         # 创建FlexSendMessage
@@ -1061,7 +1082,8 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
         return flex_message
     except Exception as e:
         logger.error(f"Error creating analysis flex message: {e}")
-        return None
+        # 返回一個簡單的文本消息作為備用
+        return TextSendMessage(text=f"分析結果：{risk_level}\n\n詐騙類型：{fraud_type}\n\n請注意風險，如有疑慮請撥打165反詐騙專線。")
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -1458,36 +1480,51 @@ def handle_message(event):
         logger.info(f"Performing fraud analysis for message from {user_id}: {text_message}")
         # 使用現有的詐騙分析邏輯，傳入user_id
         analysis_result_text = detect_fraud_with_chatgpt(text_message, display_name, user_id)
-        analysis_data = parse_fraud_analysis(analysis_result_text)
-
-        risk_level = analysis_data.get("risk_level", "不確定")
-        fraud_type = analysis_data.get("fraud_type", "未知")
-        explanation = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
-        suggestions = analysis_data.get("suggestions", "請隨時保持警惕。")
-        is_emerging = analysis_data.get("is_emerging", False)
-
-        # 創建並發送Flex Message分析結果
-        flex_message = create_analysis_flex_message(analysis_data, display_name, text_message, user_id)
-        line_bot_api.reply_message(reply_token, flex_message)
-
-        if is_emerging and fraud_type != "非詐騙相關":
-            # 新增詐騙手法記錄通知改為單獨推送，避免混淆Flex Message
-            emerging_text = "⚠️ 這可能是一種新的詐騙手法，我已經記錄下來了，謝謝您的資訊！"
-            line_bot_api.push_message(user_id, TextSendMessage(text=emerging_text))
-            firebase_manager.save_emerging_fraud_report(user_id, display_name, text_message, analysis_result_text)
-            is_fraud_related = True
-        elif fraud_type != "非詐騙相關" and risk_level not in ["無風險", "低"]: 
-            is_fraud_related = True
-        else:
-            is_fraud_related = False
+        
+        if analysis_result_text and analysis_result_text.get("success", False):
+            analysis_data = analysis_result_text.get("result", {})
+            raw_result = analysis_result_text.get("raw_result", "")
             
-        # 保存互動記錄到Firebase
-        firebase_manager.save_user_interaction(
-            user_id, display_name, text_message, analysis_result_text,
-            is_fraud_related=is_fraud_related,
-            fraud_type=fraud_type if is_fraud_related else None,
-            risk_level=risk_level if is_fraud_related else None
-        )
+            risk_level = analysis_data.get("risk_level", "不確定")
+            fraud_type = analysis_data.get("fraud_type", "未知")
+            explanation = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
+            suggestions = analysis_data.get("suggestions", "請隨時保持警惕。")
+            is_emerging = analysis_data.get("is_emerging", False)
+    
+            # 創建並發送Flex Message分析結果
+            flex_message = create_analysis_flex_message(analysis_data, display_name, text_message, user_id)
+            if flex_message:
+                line_bot_api.reply_message(reply_token, flex_message)
+            else:
+                # 如果Flex消息創建失敗，發送基本文本消息
+                line_bot_api.reply_message(
+                    reply_token, 
+                    TextSendMessage(text=f"風險等級：{risk_level}\n詐騙類型：{fraud_type}\n\n分析：{explanation}\n\n建議：{suggestions}")
+                )
+    
+            if is_emerging and fraud_type != "非詐騙相關":
+                # 新增詐騙手法記錄通知改為單獨推送，避免混淆Flex Message
+                emerging_text = "⚠️ 這可能是一種新的詐騙手法，我已經記錄下來了，謝謝您的資訊！"
+                line_bot_api.push_message(user_id, TextSendMessage(text=emerging_text))
+                firebase_manager.save_emerging_fraud_report(user_id, display_name, text_message, raw_result)
+                is_fraud_related = True
+            elif fraud_type != "非詐騙相關" and risk_level not in ["無風險", "低"]: 
+                is_fraud_related = True
+            else:
+                is_fraud_related = False
+                
+            # 保存互動記錄到Firebase
+            firebase_manager.save_user_interaction(
+                user_id, display_name, text_message, raw_result,
+                is_fraud_related=is_fraud_related,
+                fraud_type=fraud_type if is_fraud_related else None,
+                risk_level=risk_level if is_fraud_related else None
+            )
+        else:
+            # 分析失敗的情況，發送錯誤消息
+            error_message = analysis_result_text.get("message", "分析失敗，請稍後再試") if analysis_result_text else "分析失敗，請稍後再試"
+            line_bot_api.reply_message(reply_token, TextSendMessage(text=error_message))
+            
         return
     else:
         # 使用ChatGPT進行閒聊回應
@@ -1545,7 +1582,7 @@ def handle_message(event):
             
             logger.info(f"使用記憶功能，總共提供 {len(messages)} 條消息給ChatGPT")
             
-            # 使用更友善的閒聊回應並帶有記憶功能
+            # 使用更新後的OpenAI API格式
             chat_response = openai.chat.completions.create(
                 model=os.environ.get('OPENAI_MODEL', 'gpt-3.5-turbo'),
                 messages=messages,
