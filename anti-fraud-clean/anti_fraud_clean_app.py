@@ -557,8 +557,8 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         
         風險等級：（低風險、中風險、高風險）
         詐騙類型：（如果有詐騙風險，請指出具體類型，例如：假網購、假交友、假投資、假貸款、假求職等；如果無風險，填"無"）
-        說明：（請具體說明判斷依據）
-        建議：（針對潛在風險，提供具體可行的建議）
+        說明：（請用客觀、直接的語氣說明判斷依據，不要使用「您」「我」等主觀表述，而是使用「這網址看起來有點怪」「點進去可能會被騙輸入資料或錢錢」等更口語化但專業的表述）
+        建議：（針對潛在風險，提供具體可行的建議，使用要點列表如「不要隨便點」「不要輸入個人資料或信用卡」）
         新興手法：是/否
         
         以下是需要分析的信息：
@@ -566,14 +566,14 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         {user_message}
         ---
         
-        請用繁體中文回答，避免直接使用"您好"、"感謝您的提問"等問候語。直接開始分析。回答應簡潔有力，重點突出。
+        請用繁體中文回答，避免直接使用問候語。直接開始分析。回答應簡潔直接，像是專家給出的風險提醒。
         """
         
         # 調用OpenAI API (修正為新版API格式)
         response = openai.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "你是一個詐騙風險評估專家，請分析信息中的詐騙風險並提供具體建議。"},
+                {"role": "system", "content": "你是一個詐騙風險評估專家，請以客觀專業的口吻分析詐騙風險。避免使用「您」「我」等主觀用詞，而是使用更直接的專業表述。提供的建議應該具體實用且直接。"},
                 {"role": "user", "content": openai_prompt}
             ],
             temperature=0.2,
@@ -2170,13 +2170,7 @@ def create_donation_flex_message():
             alt_text="幫助我們維持服務品質",
             contents={
                 "type": "bubble",
-                "hero": {
-                    "type": "image",
-                    "url": "https://i.imgur.com/zKDjsPG.png",  # 一個溫馨的圖片，您可以替換成您喜歡的
-                    "size": "full",
-                    "aspectRatio": "20:13",
-                    "aspectMode": "cover"
-                },
+                # 移除hero部分，不再顯示圖片
                 "body": {
                     "type": "box",
                     "layout": "vertical",
