@@ -383,20 +383,56 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
     # 檢查用戶是否有足夠的分析次數
     if user_id:
         firebase_manager = FirebaseManager.get_instance()
-        analysis_credits = firebase_manager.get_user_analysis_credits(user_id)
+        logger.info(f"檢查用戶 {user_id} 的分析次數")
         
-        if analysis_credits <= 0:
-            # 用戶沒有足夠的分析次數，返回提示信息
-            return f"""
-風險等級：不確定
-詐騙類型：無法分析
-說明：您的免費分析次數已用完。請觀看廣告或進行小額贊助以獲取更多分析次數。
-建議：請點擊下方按鈕觀看廣告或進行贊助，以繼續使用分析功能。
+        try:
+            # 嘗試獲取用戶資訊
+            user_doc = firebase_manager.db.collection('users').document(user_id).get() if firebase_manager.db else None
+            if user_doc and user_doc.exists:
+                user_data = user_doc.to_dict()
+                logger.info(f"用戶 {user_id} 資訊：{user_data}")
+            else:
+                logger.info(f"用戶 {user_id} 文檔不存在或無法獲取")
+                
+            analysis_credits = firebase_manager.get_user_analysis_credits(user_id)
+            logger.info(f"用戶 {user_id} 當前分析次數：{analysis_credits}")
+            
+            if analysis_credits <= 0:
+                # 用戶沒有足夠的分析次數，返回提示信息
+                logger.info(f"用戶 {user_id} 分析次數不足，提示觀看廣告")
+                return f"""
+風險等級：分析受限
+詐騙類型：無法評估
+說明：您的免費分析次數已用完。您需要觀看廣告或進行小額贊助以獲取更多分析次數。
+建議：請點擊下方的「觀看廣告」按鈕獲取免費分析次數，或選擇小額贊助支持我們的服務。
+
+每次觀看廣告可獲得1次分析機會，或者每NT$50的贊助可獲得10次分析機會。
 """
-        
-        # 減少用戶的分析次數
-        firebase_manager.decrease_user_analysis_credits(user_id)
-        logger.info(f"用戶 {user_id} 使用了一次分析次數，剩餘 {analysis_credits-1} 次")
+            
+            # 減少用戶的分析次數
+            decrease_result = firebase_manager.decrease_user_analysis_credits(user_id)
+            logger.info(f"用戶 {user_id} 減少分析次數操作結果：{decrease_result}，剩餘 {analysis_credits-1} 次")
+            
+            # 如果用戶次數減少後剩餘不多，額外發送提醒
+            if analysis_credits - 1 <= 1:
+                try:
+                    # 在分析結果後額外發送次數不足提醒
+                    reminder_message = f"提醒：您的分析次數剩餘不多（僅剩 {analysis_credits-1} 次）。請考慮觀看廣告或進行小額贊助以獲取更多分析次數。"
+                    logger.info(f"將在分析後額外發送次數提醒給用戶 {user_id}")
+                    
+                    # 使用非同步方式發送，避免阻塞主流程
+                    # 注意：這裡不要立即發送，而是在外部代碼中處理
+                    firebase_manager.set_user_state(user_id, {
+                        'needs_credits_reminder': True,
+                        'remaining_credits': analysis_credits-1
+                    })
+                except Exception as e:
+                    logger.error(f"設置次數提醒狀態失敗: {e}")
+        except Exception as e:
+            logger.error(f"檢查用戶 {user_id} 分析次數時出錯：{e}")
+            # 即使出錯，也繼續分析，避免影響用戶體驗
+    else:
+        logger.info("未提供user_id，跳過分析次數檢查")
     
     try:
         # 構建基本系統提示
@@ -1084,26 +1120,203 @@ def handle_message(event):
     # 如果無法獲取用戶資料，使用默認值
     display_name = profile.display_name if profile else "使用者"
 
+    # 檢查用戶是否需要發送次數提醒
+    firebase_manager = FirebaseManager.get_instance()
+    user_state = firebase_manager.get_user_state(user_id)
+    
+    if user_state.get('needs_credits_reminder', False):
+        try:
+            remaining_credits = user_state.get('remaining_credits', 0)
+            logger.info(f"用戶 {user_id} 需要發送次數提醒，剩餘 {remaining_credits} 次")
+            
+            # 發送次數提醒
+            if remaining_credits <= 1:
+                # 次數很少，發送帶按鈕的提醒
+                flex_message = FlexSendMessage(
+                    alt_text='分析次數提醒',
+                    contents={
+                        "type": "bubble",
+                        "body": {
+                            "type": "box",
+                            "layout": "vertical",
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": "⚠️ 分析次數提醒",
+                                    "weight": "bold",
+                                    "size": "xl"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": f"您的分析次數剩餘不多，僅剩 {remaining_credits} 次！",
+                                    "wrap": True,
+                                    "margin": "md",
+                                    "color": "#ff5551"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "建議您通過觀看廣告或小額贊助獲取更多分析次數，以確保服務持續可用。",
+                                    "wrap": True,
+                                    "margin": "md"
+                                }
+                            ]
+                        },
+                        "footer": {
+                            "type": "box",
+                            "layout": "vertical",
+                            "spacing": "sm",
+                            "contents": [
+                                {
+                                    "type": "button",
+                                    "style": "primary",
+                                    "action": {
+                                        "type": "postback",
+                                        "label": "觀看廣告獲取1次機會",
+                                        "data": "action=view_ad&type=standard",
+                                        "displayText": "我想觀看廣告獲取分析機會"
+                                    }
+                                },
+                                {
+                                    "type": "button",
+                                    "style": "secondary",
+                                    "action": {
+                                        "type": "postback",
+                                        "label": "小額贊助(NT$50/10次)",
+                                        "data": "action=donate&amount=small",
+                                        "displayText": "我想小額贊助支持此服務"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                )
+                
+                # 使用push_message而不是reply_message，避免干擾當前對話
+                line_bot_api.push_message(user_id, flex_message)
+            
+            # 清除提醒狀態
+            firebase_manager.set_user_state(user_id, {
+                'needs_credits_reminder': False
+            })
+        except Exception as e:
+            logger.error(f"發送次數提醒失敗: {e}")
+    
     # 將文本標準化（去除空格、轉為小寫）方便匹配命令
     text_message = user_message.strip()
     
-    # 查詢剩餘分析次數
-    if text_message in ["剩餘次數", "查詢次數", "我還有幾次", "剩餘分析次數"]:
+    # 查詢剩餘分析次數 - 擴大匹配範圍並添加詳細日誌
+    if any(keyword in text_message.lower() for keyword in ["剩餘次數", "查詢次數", "我還有幾次", "剩餘分析次數", "次數", "幾次", "分析次數", "分析機會"]):
+        logger.info(f"用戶 {user_id} 正在查詢剩餘分析次數，輸入文本: {text_message}")
         user_id = event.source.user_id
         firebase_manager = FirebaseManager.get_instance()
-        analysis_credits = firebase_manager.get_user_analysis_credits(user_id)
         
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=f"您目前剩餘{analysis_credits}次網頁/訊息分析機會。\n每位使用者初始有5次免費分析機會，您可以通過觀看廣告或小額贊助獲取更多分析次數。")
-        )
-        
-        # 記錄互動
-        firebase_manager.save_user_interaction(
-            user_id, display_name, text_message, 
-            f"查詢剩餘分析次數，當前剩餘{analysis_credits}次", 
-            is_fraud_related=False
-        )
+        try:
+            # 獲取用戶文檔
+            user_doc = firebase_manager.db.collection('users').document(user_id).get() if firebase_manager.db else None
+            if user_doc and user_doc.exists:
+                user_data = user_doc.to_dict()
+                logger.info(f"用戶 {user_id} 數據: {user_data}")
+                
+            # 獲取分析次數
+            analysis_credits = firebase_manager.get_user_analysis_credits(user_id)
+            logger.info(f"用戶 {user_id} 剩餘分析次數: {analysis_credits}")
+            
+            if not firebase_manager.db:
+                # Firebase連接失敗的情況，使用一般回覆
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text=f"您好，{display_name}！網頁/訊息分析功能目前完全免費，無使用次數限制。\n\n若您有發現可疑訊息，歡迎直接分享給我進行分析！")
+                )
+            else:
+                # Firebase連接成功，提供準確的次數信息
+                response_text = f"您好，{display_name}！\n\n您目前剩餘 {analysis_credits} 次網頁/訊息分析機會。\n\n"
+                
+                # 根據剩餘次數提供不同的建議
+                if analysis_credits <= 1:
+                    response_text += "您的分析次數即將用完！可以選擇以下方式獲取更多分析機會：\n\n1. 觀看廣告（+1次）\n2. 小額贊助（每NT$50可獲得10次）\n\n請使用下方按鈕增加您的分析次數。"
+                    
+                    # 添加按鈕
+                    flex_message = FlexSendMessage(
+                        alt_text='查詢分析次數結果',
+                        contents={
+                            "type": "bubble",
+                            "body": {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": f"剩餘分析次數：{analysis_credits}",
+                                        "weight": "bold",
+                                        "size": "xl"
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": "您的分析次數即將用完！",
+                                        "wrap": True,
+                                        "margin": "md",
+                                        "color": "#ff5551"
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": "可透過以下方式獲取更多分析機會：",
+                                        "wrap": True,
+                                        "margin": "md"
+                                    }
+                                ]
+                            },
+                            "footer": {
+                                "type": "box",
+                                "layout": "vertical",
+                                "spacing": "sm",
+                                "contents": [
+                                    {
+                                        "type": "button",
+                                        "style": "primary",
+                                        "action": {
+                                            "type": "postback",
+                                            "label": "觀看廣告獲取1次機會",
+                                            "data": "action=view_ad&type=standard",
+                                            "displayText": "我想觀看廣告獲取分析機會"
+                                        }
+                                    },
+                                    {
+                                        "type": "button",
+                                        "style": "secondary",
+                                        "action": {
+                                            "type": "postback",
+                                            "label": "小額贊助(NT$50/10次)",
+                                            "data": "action=donate&amount=small",
+                                            "displayText": "我想小額贊助支持此服務"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    )
+                    
+                    line_bot_api.reply_message(event.reply_token, flex_message)
+                else:
+                    # 次數充足的情況
+                    response_text += f"每位用戶初始有5次免費分析機會。如需更多次數，可以透過觀看廣告或小額贊助獲取。\n\n觀看一次廣告可獲得1次分析機會，或者每NT$50的贊助可獲得10次分析機會。"
+                    
+                    line_bot_api.reply_message(
+                        event.reply_token,
+                        TextSendMessage(text=response_text)
+                    )
+            
+            # 記錄互動
+            firebase_manager.save_user_interaction(
+                user_id, display_name, text_message, 
+                f"查詢剩餘分析次數，當前剩餘{analysis_credits}次", 
+                is_fraud_related=False
+            )
+        except Exception as e:
+            logger.error(f"處理次數查詢時出錯: {e}")
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=f"抱歉，查詢次數時出現錯誤。您可以繼續使用分析功能，我們會盡快修復問題。")
+            )
         return
     
     # 檢查是否為首次對話的用戶

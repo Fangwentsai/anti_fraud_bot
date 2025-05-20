@@ -94,13 +94,37 @@ class FirebaseManager:
             return False
         
         try:
-            # 更新或創建用戶記錄
+            # 檢查用戶是否存在，若不存在則創建並初始化次數
             user_ref = self.db.collection('users').document(user_id)
-            user_ref.set({
-                'display_name': display_name,
-                'last_interaction': datetime.datetime.now(),
-                'interaction_count': firestore.Increment(1)
-            }, merge=True)
+            user_doc = user_ref.get()
+            
+            if user_doc.exists:
+                user_data = user_doc.to_dict()
+                # 確保用戶有analysis_credits欄位
+                if 'analysis_credits' not in user_data:
+                    user_ref.set({
+                        'display_name': display_name,
+                        'last_interaction': datetime.datetime.now(),
+                        'interaction_count': firestore.Increment(1),
+                        'analysis_credits': 5  # 初始化分析次數
+                    }, merge=True)
+                    logger.info(f"用戶 {user_id} 初始化分析次數為5")
+                else:
+                    # 更新用戶記錄
+                    user_ref.set({
+                        'display_name': display_name,
+                        'last_interaction': datetime.datetime.now(),
+                        'interaction_count': firestore.Increment(1)
+                    }, merge=True)
+            else:
+                # 創建新用戶記錄，包括analysis_credits欄位
+                user_ref.set({
+                    'display_name': display_name,
+                    'last_interaction': datetime.datetime.now(),
+                    'interaction_count': 1,
+                    'analysis_credits': 5  # 初始化分析次數
+                })
+                logger.info(f"創建新用戶 {user_id} 並初始化分析次數為5")
             
             # 添加互動記錄
             interaction_data = {
@@ -520,4 +544,207 @@ class FirebaseManager:
         except Exception as e:
             logger.error(f"獲取用戶對話歷史失敗: {e}")
             logger.info("由於無法獲取對話歷史，機器人將在無記憶模式下運行")
-            return [] 
+            return []
+
+    def set_user_state(self, user_id: str, state_data: Dict[str, Any]) -> bool:
+        """
+        設置用戶狀態數據
+        
+        Args:
+            user_id: 用戶ID
+            state_data: 狀態數據字典
+            
+        Returns:
+            操作是否成功
+        """
+        if not self.db:
+            logger.error("Firebase未初始化，無法設置用戶狀態")
+            return False
+        
+        try:
+            user_ref = self.db.collection('users').document(user_id)
+            
+            # 添加用戶狀態
+            user_ref.set({
+                'state': state_data,
+                'state_updated_at': datetime.datetime.now()
+            }, merge=True)
+            
+            logger.info(f"成功設置用戶 {user_id} 狀態: {state_data}")
+            return True
+        except Exception as e:
+            logger.error(f"設置用戶狀態失敗: {e}")
+            return False
+    
+    def get_user_state(self, user_id: str) -> Dict[str, Any]:
+        """
+        獲取用戶狀態數據
+        
+        Args:
+            user_id: 用戶ID
+            
+        Returns:
+            用戶狀態數據，如果不存在或出錯則返回空字典
+        """
+        if not self.db:
+            logger.error("Firebase未初始化，無法獲取用戶狀態")
+            return {}
+        
+        try:
+            user_doc = self.db.collection('users').document(user_id).get()
+            
+            if user_doc.exists:
+                user_data = user_doc.to_dict()
+                if 'state' in user_data:
+                    return user_data['state']
+            
+            return {}
+        except Exception as e:
+            logger.error(f"獲取用戶狀態失敗: {e}")
+            return {}
+    
+    def get_user_analysis_credits(self, user_id: str) -> int:
+        """
+        获取用户剩余的分析次数
+        
+        Args:
+            user_id: 用户ID
+            
+        Returns:
+            剩余分析次数，如果用户不存在则返回初始值5
+        """
+        if not self.db:
+            logger.error("Firebase未初始化，无法获取用户分析次数")
+            return 5
+        
+        try:
+            logger.info(f"嘗試獲取用戶 {user_id} 的分析次數")
+            user_doc = self.db.collection('users').document(user_id).get()
+            
+            if user_doc.exists:
+                user_data = user_doc.to_dict()
+                logger.info(f"用戶文檔存在，數據：{user_data}")
+                
+                # 如果用户存在但没有分析次数字段，则添加初始值
+                if 'analysis_credits' not in user_data:
+                    logger.info(f"用戶 {user_id} 沒有 analysis_credits 字段，設置為初始值 5")
+                    try:
+                        update_result = self.db.collection('users').document(user_id).set({
+                            'analysis_credits': 5
+                        }, merge=True)
+                        logger.info(f"更新用戶 analysis_credits 結果：{update_result}")
+                    except Exception as update_error:
+                        logger.error(f"更新用戶 analysis_credits 失敗：{update_error}")
+                    return 5
+                
+                credits = user_data.get('analysis_credits', 0)
+                logger.info(f"用戶 {user_id} 的分析次數：{credits}")
+                return credits
+            else:
+                # 如果用户不存在，创建新用户并设置初始分析次数
+                logger.info(f"用戶 {user_id} 不存在，創建新用戶")
+                try:
+                    create_result = self.db.collection('users').document(user_id).set({
+                        'display_name': 'New User',
+                        'analysis_credits': 5,
+                        'last_interaction': datetime.datetime.now(),
+                        'interaction_count': 1
+                    })
+                    logger.info(f"創建新用戶結果：{create_result}")
+                except Exception as create_error:
+                    logger.error(f"創建新用戶失敗：{create_error}")
+                return 5
+        
+        except Exception as e:
+            logger.error(f"获取用户分析次数失败，詳細錯誤: {str(e)}")
+            import traceback
+            logger.error(f"錯誤堆棧: {traceback.format_exc()}")
+            return 0
+    
+    def decrease_user_analysis_credits(self, user_id: str) -> bool:
+        """
+        减少用户的分析次数
+        
+        Args:
+            user_id: 用户ID
+            
+        Returns:
+            操作是否成功
+        """
+        if not self.db:
+            logger.error("Firebase未初始化，无法更新用户分析次数")
+            return False
+        
+        try:
+            # 获取当前用户分析次数
+            current_credits = self.get_user_analysis_credits(user_id)
+            
+            if current_credits <= 0:
+                return False
+            
+            # 减少分析次数
+            self.db.collection('users').document(user_id).update({
+                'analysis_credits': firestore.Increment(-1)
+            })
+            
+            return True
+        
+        except Exception as e:
+            logger.error(f"减少用户分析次数失败: {e}")
+            return False
+    
+    def increase_user_analysis_credits(self, user_id: str, amount: int = 1) -> bool:
+        """
+        增加用户的分析次数
+        
+        Args:
+            user_id: 用户ID
+            amount: 增加的次数，默认为1
+            
+        Returns:
+            操作是否成功
+        """
+        if not self.db:
+            logger.error("Firebase未初始化，无法更新用户分析次数")
+            return False
+        
+        try:
+            # 增加分析次数
+            self.db.collection('users').document(user_id).update({
+                'analysis_credits': firestore.Increment(amount)
+            })
+            
+            return True
+        
+        except Exception as e:
+            logger.error(f"增加用户分析次数失败: {e}")
+            return False
+    
+    def record_ad_view(self, user_id: str, ad_type: str) -> bool:
+        """
+        记录用户观看广告的历史
+        
+        Args:
+            user_id: 用户ID
+            ad_type: 广告类型
+            
+        Returns:
+            操作是否成功
+        """
+        if not self.db:
+            logger.error("Firebase未初始化，无法记录广告观看")
+            return False
+        
+        try:
+            # 记录广告观看历史
+            self.db.collection('ad_views').add({
+                'user_id': user_id,
+                'ad_type': ad_type,
+                'timestamp': datetime.datetime.now()
+            })
+            
+            return True
+        
+        except Exception as e:
+            logger.error(f"记录广告观看失败: {e}")
+            return False 
