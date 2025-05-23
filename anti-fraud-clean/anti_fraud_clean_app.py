@@ -36,72 +36,189 @@ SHORT_URL_DOMAINS = [
 ]
 
 # 台灣常用的可靠網站域名白名單
-SAFE_DOMAINS = [
+SAFE_DOMAINS = {
     # 政府機關
-    "gov.tw", "president.gov.tw", "ey.gov.tw", "mof.gov.tw", "moi.gov.tw",
-    "moea.gov.tw", "most.gov.tw", "mohw.gov.tw", "moe.gov.tw", "mol.gov.tw",
-    "coa.gov.tw", "motc.gov.tw", "mnd.gov.tw", "mac.gov.tw", "ocac.gov.tw",
-    "ndc.gov.tw", "dgpa.gov.tw", "cec.gov.tw", "cy.gov.tw", "judicial.gov.tw",
-    
+    "gov.tw": "台灣政府機關通用網域",
+    "president.gov.tw": "總統府官方網站",
+    "ey.gov.tw": "行政院官方網站",
+    "mof.gov.tw": "財政部官方網站",
+    "moi.gov.tw": "內政部官方網站",
+    "moea.gov.tw": "經濟部官方網站",
+    "most.gov.tw": "科技部官方網站 (現為國家科學及技術委員會 nstc.gov.tw)",
+    "mohw.gov.tw": "衛生福利部官方網站",
+    "moe.gov.tw": "教育部官方網站",
+    "mol.gov.tw": "勞動部官方網站",
+    "coa.gov.tw": "農業委員會官方網站 (現為農業部 moa.gov.tw)",
+    "motc.gov.tw": "交通部官方網站",
+    "mnd.gov.tw": "國防部官方網站",
+    "mac.gov.tw": "大陸委員會官方網站",
+    "ocac.gov.tw": "僑務委員會官方網站",
+    "ndc.gov.tw": "國家發展委員會官方網站",
+    "dgpa.gov.tw": "行政院人事行政總處官方網站",
+    "cec.gov.tw": "中央選舉委員會官方網站",
+    "cy.gov.tw": "監察院官方網站",
+    "judicial.gov.tw": "司法院官方網站",
+
     # 銀行金融
-    "bot.com.tw", "landbank.com.tw", "tcb-bank.com.tw", "hncb.com.tw",
-    "firstbank.com.tw", "hua-nan.com.tw", "megabank.com.tw", "ctbcbank.com",
-    "fubon.com", "esunbank.com.tw", "taishinbank.com.tw", "sinopac.com",
-    "cathaybank.com.tw", "skbank.com.tw", "sunnybank.com.tw", "kgibank.com",
-    "yuantabank.com.tw", "jihsunbank.com.tw", "entiebank.com.tw",
-    
+    "bot.com.tw": "臺灣銀行",
+    "landbank.com.tw": "土地銀行",
+    "tcb-bank.com.tw": "合作金庫銀行",
+    "hncb.com.tw": "華南銀行",
+    "firstbank.com.tw": "第一銀行",
+    "hua-nan.com.tw": "華南銀行 (同hncb.com.tw)",  # 可能是舊網域或特定服務
+    "megabank.com.tw": "兆豐國際商業銀行",
+    "ctbcbank.com": "中國信託銀行",
+    "fubon.com": "富邦金控/富邦銀行",
+    "esunbank.com.tw": "玉山銀行",
+    "taishinbank.com.tw": "台新銀行",
+    "sinopac.com": "永豐銀行/永豐金控",
+    "cathaybk.com.tw": "國泰世華銀行",  # 修正: cathaybank -> cathaybk (更常見)
+    "skbank.com.tw": "新光銀行",
+    "sunnybank.com.tw": "陽信銀行",
+    "kgibank.com": "凱基銀行",
+    "yuantabank.com.tw": "元大銀行",
+    "jihsunbank.com.tw": "日盛銀行 (已併入富邦)",
+    "entiebank.com.tw": "安泰銀行",
+
     # 電商購物
-    "pchome.com.tw", "24h.pchome.com.tw", "shopping.pchome.com.tw",
-    "ruten.com.tw", "momoshop.com.tw", "books.com.tw", "eslite.com",
-    "shopee.tw", "yahoo.com.tw", "bid.yahoo.com.tw", "buy.yahoo.com.tw",
-    "carrefour.com.tw", "costco.com.tw", "ikea.com.tw", "hola.com.tw",
-    "friday.tw", "etmall.com.tw", "rakuten.com.tw", "gohappy.com.tw",
-    
+    "pchome.com.tw": "PChome 線上購物入口",
+    "24h.pchome.com.tw": "PChome 24h 購物",
+    "shopping.pchome.com.tw": "PChome 商店街",
+    "ruten.com.tw": "露天拍賣 (C2C拍賣平台)",
+    "momoshop.com.tw": "momo 購物網",
+    "books.com.tw": "博客來 (網路書店、百貨)",
+    "eslite.com": "誠品線上 (書店、文創、生活)",
+    "shopee.tw": "蝦皮購物",
+    "yahoo.com.tw": "Yahoo奇摩入口網站",
+    "bid.yahoo.com.tw": "Yahoo奇摩拍賣",
+    "buy.yahoo.com.tw": "Yahoo奇摩購物中心",
+    "carrefour.com.tw": "家樂福線上購物/門市資訊",
+    "costco.com.tw": "好市多線上購物/會員資訊",
+    "ikea.com.tw": "IKEA 宜家家居線上購物/產品資訊",
+    "hola.com.tw": "HOLA 特力和樂 (家居用品)",
+    "friday.tw": "friDay購物 (遠傳旗下電商)",
+    "etmall.com.tw": "東森購物網",
+    "rakuten.com.tw": "樂天市場 (日本電商台灣站)",
+    "gohappy.com.tw": "GoHappy 快樂購物網 (遠東集團旗下, 現多整合至SOGO百貨等)",
+
     # 新聞媒體
-    "udn.com", "chinatimes.com", "ltn.com.tw", "appledaily.com.tw",
-    "tvbs.com.tw", "cts.com.tw", "ftv.com.tw", "settv.com.tw",
-    "ettoday.net", "nownews.com", "storm.mg", "thenewslens.com",
-    "cna.com.tw", "rti.org.tw", "pts.org.tw", "bcc.com.tw",
-    
+    "udn.com": "聯合新聞網",
+    "chinatimes.com": "中時新聞網",
+    "ltn.com.tw": "自由時報電子報",
+    "appledaily.com.tw": "蘋果新聞網 (台灣)",  # 注意：可能已停止營運或轉型
+    "tvbs.com.tw": "TVBS 新聞網",
+    "cts.com.tw": "華視新聞網",
+    "ftv.com.tw": "民視新聞網",
+    "settv.com.tw": "三立新聞網",
+    "ettoday.net": "ETtoday 新聞雲",
+    "nownews.com": "NOWnews 今日新聞",
+    "storm.mg": "風傳媒 (網路媒體)",
+    "thenewslens.com": "關鍵評論網 (網路媒體)",
+    "cna.com.tw": "中央通訊社",
+    "rti.org.tw": "中央廣播電臺 (Radio Taiwan International)",
+    "pts.org.tw": "公共電視",
+    "bcc.com.tw": "中廣新聞網 (中國廣播公司)",
+
     # 科技公司
-    "asus.com", "acer.com", "msi.com", "gigabyte.com", "asrock.com",
-    "htc.com", "mediatek.com", "tsmc.com", "foxconn.com", "quanta.com",
-    "wistron.com", "inventec.com", "compal.com", "pegatron.com",
-    "technews.tw",  # 科技新聞網站
-    
+    "asus.com": "華碩 (電腦硬體、手機)",
+    "acer.com": "宏碁 (電腦硬體)",
+    "msi.com": "微星科技 (電腦硬體、電競)",
+    "gigabyte.com": "技嘉科技 (電腦硬體)",
+    "asrock.com": "華擎科技 (主機板、電腦硬體)",
+    "htc.com": "HTC (手機、VR裝置)",
+    "mediatek.com": "聯發科 (晶片設計)",
+    "tsmc.com": "台積電 (晶圓代工)",
+    "foxconn.com": "鴻海/富士康 (電子代工)",
+    "quanta.com": "廣達電腦 (筆電代工、雲端硬體)",
+    "wistron.com": "緯創資通 (資訊及通訊產品代工)",
+    "inventec.com": "英業達 (筆電代工、伺服器)",
+    "compal.com": "仁寶電腦 (筆電代工)",
+    "pegatron.com": "和碩聯合科技 (電子代工)",
+    "technews.tw": "科技新報 (科技新聞網站)",
+
     # 電信業者
-    "chunghwa.com.tw", "taiwanmobile.com", "fetnet.net", "aptg.com.tw",
-    "gt.com.tw", "so-net.net.tw", "seednet.net", "hinet.net",
-    
+    "cht.com.tw": "中華電信",  # 修正：chunghwa.com.tw -> cht.com.tw (更常用)
+    "taiwanmobile.com": "台灣大哥大",
+    "fetnet.net": "遠傳電信",
+    "aptg.com.tw": "亞太電信 (已被遠傳合併)",
+    "gt.com.tw": "Gt智慧生活 (亞太電信旗下品牌, 已被遠傳合併)",
+    "so-net.net.tw": "So-net (ISP, 台灣碩網)",
+    "seed.net.tw": "Seednet (ISP, 遠傳旗下)",  # 修正：seednet.net -> seed.net.tw
+    "hinet.net": "HiNet (中華電信網路服務)",
+
     # 交通運輸
-    "railway.gov.tw", "thsrc.com.tw", "taoyuan-airport.com", "ksf.gov.tw",
-    "klcg.gov.tw", "trtc.com.tw", "krtc.com.tw", "kmrt.com.tw",
-    "ubus.com.tw", "ebus.gov.tw", "motc.gov.tw",
-    
+    "railway.gov.tw": "臺灣鐵路管理局 (台鐵) 官方網站",
+    "thsrc.com.tw": "台灣高鐵官方網站",
+    "taoyuan-airport.com": "桃園國際機場官方網站",
+    "ksf.gov.tw": "交通部航港局 (海運相關)",  # 修正: 假設 KSF 指 Kaohsiung Shipping & Ferry, 但更可能是航港局
+    "klcg.gov.tw": "基隆市政府 (可能包含交通資訊)",
+    "trtc.com.tw": "台北捷運公司",
+    "krtc.com.tw": "高雄捷運公司",
+    "kmrt.com.tw": "高雄捷運 (同上, 可能是不同網域或特定服務)",
+    "ubus.com.tw": "統聯客運",
+    "ebus.gov.tw": "公路客運即時動態資訊網 (iBus)",
+    "motc.gov.tw": "交通部官方網站 (已列於政府機關)",  # 重複，可刪除或註記
+
     # 教育機構
-    "ntu.edu.tw", "nctu.edu.tw", "nthu.edu.tw", "nchu.edu.tw",
-    "ncku.edu.tw", "nsysu.edu.tw", "ncu.edu.tw", "ccu.edu.tw",
-    "ntnu.edu.tw", "ncue.edu.tw", "ntust.edu.tw", "nkust.edu.tw",
-    
+    "ntu.edu.tw": "台灣大學",
+    "nctu.edu.tw": "陽明交通大學 (原交通大學)",
+    "nthu.edu.tw": "清華大學",
+    "nchu.edu.tw": "中興大學",
+    "ncku.edu.tw": "成功大學",
+    "nsysu.edu.tw": "中山大學",
+    "ncu.edu.tw": "中央大學",
+    "ccu.edu.tw": "中正大學",
+    "ntnu.edu.tw": "台灣師範大學",
+    "ncue.edu.tw": "彰化師範大學",
+    "ntust.edu.tw": "台灣科技大學 (台科大)",
+    "nkust.edu.tw": "高雄科技大學 (高科大)",
+
     # 生活服務
-    "7-eleven.com.tw", "family.com.tw", "hilife.com.tw", "okmart.com.tw",
-    "cplife.com.tw", "dominos.com.tw", "kfc.com.tw", "mcdonalds.com.tw",
-    "starbucks.com.tw", "85cafe.com", "comebuy.com.tw",
-    
+    "7-eleven.com.tw": "7-ELEVEN 便利商店",
+    "family.com.tw": "全家便利商店",
+    "hilife.com.tw": "萊爾富便利商店",
+    "okmart.com.tw": "OK便利商店",
+    "cplife.com.tw": "中保無限+ (保全、生活服務)",
+    "dominos.com.tw": "達美樂披薩",
+    "kfc.com.tw": "肯德基速食",
+    "mcdonalds.com.tw": "麥當勞速食",
+    "starbucks.com.tw": "星巴克咖啡",
+    "85cafe.com": "85度C 咖啡蛋糕烘焙",
+    "comebuy.com.tw": "COMEBUY (手搖飲料)",
+
     # 虛擬資產交易所
-    "twex.tw", "max.maicoin.com", "bitopro.com",
-    
+    "twex.tw": "TWEX 數位資產交易所",
+    "max.maicoin.com": "MaiCoin MAX 數位資產交易所",
+    "bitopro.com": "BitoPro 幣託數位資產交易所",
+
     # 其他知名網站
-    "104.com.tw", "1111.com.tw", "518.com.tw", "yes123.com.tw",
-    "591.com.tw", "sinyi.com.tw", "cthouse.com.tw", "housefun.com.tw",
-    "mobile01.com", "ptt.cc", "dcard.tw", "pixnet.net",
-    "blogspot.com", "wordpress.com", "facebook.com", "instagram.com",
-    "youtube.com", "google.com", "microsoft.com", "apple.com",
-    
-    # 贊助網站
-    "buymeacoffee.com/todao_antifruad", "buymeacoffee.com/todao",
-    "ko-fi.com/todao", "patreon.com/todao"
-]
+    "104.com.tw": "104 人力銀行 (求職)",
+    "1111.com.tw": "1111 人力銀行 (求職)",
+    "518.com.tw": "518 熊班 (求職，原518人力銀行)",
+    "yes123.com.tw": "yes123 求職網",
+    "591.com.tw": "591 房屋交易網 (租屋、售屋)",
+    "sinyi.com.tw": "信義房屋 (房仲)",
+    "cthouse.com.tw": "中信房屋 (房仲)",
+    "housefun.com.tw": "好房網 (房地產資訊)",
+    "mobile01.com": "Mobile01 (3C、生活綜合論壇)",
+    "ptt.cc": "PTT 批踢踢實業坊 (電子佈告欄系統)",
+    "dcard.tw": "Dcard (大學生、年輕族群社群論壇)",
+    "pixnet.net": "痞客邦 (部落格、社群平台)",
+    "blogspot.com": "Blogger (Google 旗下部落格平台)",
+    "wordpress.com": "WordPress.com (部落格/網站架設平台)",
+    "facebook.com": "Facebook (社群媒體)",
+    "instagram.com": "Instagram (圖片影音社群媒體)",
+    "youtube.com": "YouTube (影音分享平台)",
+    "google.com": "Google (搜尋引擎、網路服務)",
+    "microsoft.com": "微軟 (軟體、作業系統、雲端服務)",
+    "apple.com": "蘋果公司 (電子產品、軟體服務)",
+
+    # 贊助網站 (通常為創作者或專案提供小額贊助的平台)
+    "buymeacoffee.com/todao_antifruad": "Buy Me a Coffee (創作者贊助平台 - ToDAO 防詐專案)",
+    "buymeacoffee.com/todao": "Buy Me a Coffee (創作者贊助平台 - ToDAO)",
+    "ko-fi.com/todao": "Ko-fi (創作者贊助平台 - ToDAO)",
+    "patreon.com/todao": "Patreon (創作者訂閱贊助平台 - ToDAO)"
+}
 
 # 單獨定義贊助網站列表
 DONATION_DOMAINS = [
@@ -667,16 +784,18 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
             analysis_message = user_message
 
         # 檢查訊息是否包含白名單中的網址
-        for safe_domain in SAFE_DOMAINS:
+        for safe_domain in SAFE_DOMAINS.keys():  # 修復：使用.keys()來遍歷字典的鍵
             if safe_domain in analysis_message:
                 logger.info(f"檢測到白名單中的域名: {safe_domain}")
+                # 獲取網站描述信息
+                site_description = SAFE_DOMAINS.get(safe_domain, "台灣常見的可靠網站")
                 return {
                     "success": True,
                     "message": "分析完成",
                     "result": {
                         "risk_level": "低風險",
                         "fraud_type": "非詐騙相關",
-                        "explanation": f"這個網站是{safe_domain}，是台灣常見的可靠網站，可以安心使用。",
+                        "explanation": f"這個網站是 {safe_domain}，{site_description}，可以安心使用。",
                         "suggestions": "這是正規網站，不必特別擔心。如有疑慮，建議您直接從官方管道進入該網站。",
                         "is_emerging": False,
                         "display_name": display_name,
@@ -685,7 +804,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                         "is_short_url": is_short_url,
                         "url_expanded_successfully": url_expanded_successfully
                     },
-                    "raw_result": "經過分析，這是已知的可信任網站。"
+                    "raw_result": f"經過分析，這是已知的可信任網站：{site_description}"
                 }
             
         # 如果是短網址但無法展開，提高風險評估
@@ -2306,7 +2425,7 @@ def should_perform_fraud_analysis(text_message):
         return True
         
     # 5. 檢查是否與已知的網域相關
-    for domain in SHORT_URL_DOMAINS + SAFE_DOMAINS:
+    for domain in SHORT_URL_DOMAINS + list(SAFE_DOMAINS.keys()):  # 修復：將字典鍵轉換為列表
         if domain.lower() in text_message.lower():
             logger.info(f"訊息包含已知網域 {domain}，將進行詐騙分析")
             return True
