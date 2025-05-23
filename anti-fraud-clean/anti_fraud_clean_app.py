@@ -67,6 +67,7 @@ SAFE_DOMAINS = [
     "asus.com", "acer.com", "msi.com", "gigabyte.com", "asrock.com",
     "htc.com", "mediatek.com", "tsmc.com", "foxconn.com", "quanta.com",
     "wistron.com", "inventec.com", "compal.com", "pegatron.com",
+    "technews.tw",  # 科技新聞網站
     
     # 電信業者
     "chunghwa.com.tw", "taiwanmobile.com", "fetnet.net", "aptg.com.tw",
@@ -98,6 +99,12 @@ SAFE_DOMAINS = [
     "youtube.com", "google.com", "microsoft.com", "apple.com",
     
     # 贊助網站
+    "buymeacoffee.com/todao_antifruad", "buymeacoffee.com/todao",
+    "ko-fi.com/todao", "patreon.com/todao"
+]
+
+# 單獨定義贊助網站列表
+DONATION_DOMAINS = [
     "buymeacoffee.com/todao_antifruad", "buymeacoffee.com/todao",
     "ko-fi.com/todao", "patreon.com/todao"
 ]
@@ -1151,7 +1158,7 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
         # 檢查是否是贊助鏈接
         is_donation_link = False
         donation_url = ""
-        for domain in SAFE_DOMAINS:
+        for domain in DONATION_DOMAINS:  # 改為只檢查贊助網站
             if domain in message_to_analyze:
                 is_donation_link = True
                 
@@ -1162,6 +1169,7 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
                     url_match = re.search(r'(https?://[^\s]+)', message_to_analyze)
                     if url_match:
                         donation_url = url_match.group(0)
+                    else:
                         donation_url = f"https://{domain}"
                 else:
                     donation_url = f"https://{domain}"
@@ -1170,6 +1178,7 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
                 if not donation_url.startswith("https://"):
                     if donation_url.startswith("http://"):
                         donation_url = "https://" + donation_url[7:]
+                    else:
                         donation_url = "https://" + donation_url
                 
                 logger.info(f"找到贊助鏈接: {donation_url}")
