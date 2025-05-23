@@ -1776,7 +1776,7 @@ def handle_message(event):
                 
             # 發送Flex消息
             if flex_message:
-        line_bot_api.reply_message(reply_token, flex_message)
+                line_bot_api.reply_message(reply_token, flex_message)
             else:
                 # 如果Flex消息創建失敗，發送基本文本消息
                 text_response = f"風險等級：{risk_level}\n詐騙類型：{fraud_type}\n\n分析：{explanation}\n\n建議：{suggestions}"
@@ -1789,13 +1789,13 @@ def handle_message(event):
         if is_emerging and fraud_type != "非詐騙相關":
             # 新增詐騙手法記錄通知改為單獨推送，避免混淆Flex Message
             emerging_text = "⚠️ 這可能是一種新的詐騙手法，我已經記錄下來了，謝謝您的資訊！"
-                if is_group_message:
+            if is_group_message:
                     mention_message = create_mention_message(emerging_text, display_name, user_id)
                     line_bot_api.push_message(group_id if group_id else user_id, mention_message)
         else:
                     line_bot_api.push_message(user_id, TextSendMessage(text=emerging_text))
                 firebase_manager.save_emerging_fraud_report(user_id, display_name, text_message, raw_result)
-            
+        firebase_manager.save_emerging_fraud_report(user_id, display_name, text_message, raw_result)
             is_fraud_related = True if fraud_type != "非詐騙相關" and risk_level not in ["無風險", "低"] else False
             
         # 保存互動記錄到Firebase
