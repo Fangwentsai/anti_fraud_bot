@@ -87,12 +87,19 @@ SAFE_DOMAINS = [
     "cplife.com.tw", "dominos.com.tw", "kfc.com.tw", "mcdonalds.com.tw",
     "starbucks.com.tw", "85cafe.com", "comebuy.com.tw",
     
+    # 虛擬資產交易所
+    "twex.tw", "max.maicoin.com", "bitopro.com",
+    
     # 其他知名網站
     "104.com.tw", "1111.com.tw", "518.com.tw", "yes123.com.tw",
     "591.com.tw", "sinyi.com.tw", "cthouse.com.tw", "housefun.com.tw",
     "mobile01.com", "ptt.cc", "dcard.tw", "pixnet.net",
     "blogspot.com", "wordpress.com", "facebook.com", "instagram.com",
-    "youtube.com", "google.com", "microsoft.com", "apple.com"
+    "youtube.com", "google.com", "microsoft.com", "apple.com",
+    
+    # 贊助網站
+    "buymeacoffee.com/todao_antifruad", "buymeacoffee.com/todao",
+    "ko-fi.com/todao", "patreon.com/todao"
 ]
 
 app = Flask(__name__)
@@ -620,14 +627,6 @@ def parse_fraud_analysis(analysis_result):
             "suggestions": "請保持警惕，如有疑問可諮詢165反詐騙專線。",
             "is_emerging": False
         }
-
-# 添加安全白名單
-SAFE_DOMAINS = [
-    "buymeacoffee.com/todao_antifruad",
-    "buymeacoffee.com/todao",
-    "ko-fi.com/todao",
-    "patreon.com/todao"
-]
 
 def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None):
     """使用OpenAI的API檢測詐騙信息"""
