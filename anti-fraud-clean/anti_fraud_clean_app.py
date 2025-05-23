@@ -693,13 +693,13 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
             logger.warning(f"無法展開的短網址: {original_url}，建議提高警覺")
         
         openai_prompt = f"""
-        你是一個詐騙風險評估專家，專門為50歲以上的中老年人提供易懂的風險分析。
+        你是一個詐騙風險評估專家，專門為用戶提供易懂的風險分析。
         請分析以下信息是否包含詐騙相關內容，並按照以下格式輸出結果：
         
         風險等級：（低風險、中風險、高風險）
         詐騙類型：（如果有詐騙風險，請指出具體類型，例如：假網購、假交友、假投資、假貸款、假求職等；如果無風險，填"無"）
-        說明：（請用非常口語化、親切的語氣說明判斷依據，避免使用專業術語，就像在跟鄰居阿姨聊天一樣。例如不要說「此網站使用混淆技術規避檢測」，而是說「這個網站看起來怪怪的，網址跟正常的不一樣，可能是假冒的」。語言要簡單直白，不要太長篇大論）
-        建議：（針對潛在風險，用🚫🔍🌐🛡️💡⚠️等emoji符號代替數字編號，提供2-3點簡單易懂的建議，例如「🚫 不要點這個連結」「🔍 先問問家人這是什麼」「🛡️ 不要提供銀行帳號」等）
+        說明：（請用親切有禮的語氣說明判斷依據，避免使用專業術語，語言要簡單直白。例如不要說「此網站使用混淆技術規避檢測」，而是說「這個網站看起來怪怪的，網址跟正常的不一樣，可能是假冒的」。請多使用「請」、「謝謝」等禮貌用語，不要太長篇大論）
+        建議：（針對潛在風險，用🚫🔍🌐🛡️💡⚠️等emoji符號代替數字編號，提供2-3點簡單易懂的建議，例如「🚫 請不要點這個連結」「🔍 建議先詢問家人這是什麼」「🛡️ 請不要提供銀行帳號」等，記得要有禮貌）
         新興手法：是/否
         
         {special_notes}
@@ -709,14 +709,14 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         {analysis_message}
         ---
         
-        請用繁體中文回答，避免直接使用問候語。直接開始分析。回答應簡潔直接，像是鄰居阿姨給出的貼心提醒。
+        請用繁體中文回答，避免直接使用問候語。直接開始分析。回答應簡潔直接，但要保持禮貌和尊重。
         """
         
         # 調用OpenAI API (修正為新版API格式)
         response = openai.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "你是一個詐騙風險評估專家，請以50歲以上的長輩能理解的口語化方式分析詐騙風險。避免使用「您」「我」等主觀用詞，而是使用更直接的表述。提供的建議應該具體實用且直接，並且一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號。語言要像鄰居阿姨在關心提醒一樣親切簡單。"},
+                {"role": "system", "content": "你是一個詐騙風險評估專家，請以用戶能理解的禮貌方式分析詐騙風險。避免使用「您」「我」等主觀用詞，而是使用更直接的表述。提供的建議應該具體實用且直接，並且一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號。語言要親切有禮，多使用「請」、「謝謝」等禮貌用語。"},
                 {"role": "user", "content": openai_prompt}
             ],
             temperature=0.2,
@@ -1970,7 +1970,7 @@ def handle_message(event):
             # 系統提示消息
             system_message = {
                 "role": "system", 
-                "content": "你是一位名為「土豆」的AI聊天機器人，專門幫助50-60歲的阿姨叔叔防範詐騙。你的說話風格要：\n1. 非常簡單易懂，像鄰居阿姨在聊天\n2. 用溫暖親切的語氣，不要太正式\n3. 當給建議時，一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號\n4. 避免複雜的專業術語，用日常生活的話來解釋\n5. 當用戶提到投資、轉帳、可疑訊息時，要特別關心並給出簡單明確的建議\n6. 回應要簡短，不要太長篇大論"
+                "content": f"你是一位名為「土豆」的AI聊天機器人，專門幫助用戶防範詐騙。你的說話風格要：\n1. 非常有禮貌，經常使用「請」、「謝謝」、「您好」等禮貌用語\n2. 稱呼用戶時請使用他們的暱稱「{display_name}」，不要使用「阿姨」、「叔叔」等稱呼\n3. 用溫暖親切的語氣，但要保持尊重\n4. 當給建議時，一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號\n5. 避免複雜的專業術語，用簡單易懂的話來解釋\n6. 當用戶提到投資、轉帳、可疑訊息時，要特別關心並給出簡單明確的建議\n7. 回應要簡短，不要太長篇大論\n8. 記住要有禮貌，多說「請」、「謝謝」、「不好意思」等用語"
             }
             
             # 如果成功獲取到歷史對話，則使用它們
@@ -2306,7 +2306,7 @@ def create_donation_flex_message():
     """創建贊助訊息的Flex Message"""
     try:
         # 確保URL格式正確包含https://
-        donation_url = "https://buymeacoffee.com/todao_antifruad"
+        donation_url = "https://buymeacoffee.com/todao_antifraud"
         logger.info(f"創建贊助Flex Message，使用URL: {donation_url}")
         
         flex_message = FlexSendMessage(
@@ -2327,14 +2327,14 @@ def create_donation_flex_message():
                         },
                         {
                             "type": "text",
-                            "text": "叔叔阿姨，最近詐騙真的好多喔！幸好有這個小幫手可以幫忙檢查。它就像我們派在您身邊的小保鑣一樣！👮‍♂️",
+                            "text": "您好！最近詐騙真的好多，幸好有這個小幫手可以幫忙檢查。它就像派在您身邊的小保鑣一樣！👮‍♂️",
                             "margin": "md",
                             "wrap": True,
                             "size": "md"
                         },
                         {
                             "type": "text",
-                            "text": "不過這個小保鑣也需要補充體力（系統維護費啦～）。如果叔叔阿姨覺得它做得不錯，願意請它吃個『乖乖』（讓系統乖乖運作），我們會超級感動的！一點點心意，就能讓它更有力氣保護大家喔！💪",
+                            "text": "不過這個小保鑣也需要補充體力（系統維護費）。如果您覺得它做得不錯，願意請它吃個『乖乖』（讓系統乖乖運作），我們會超級感動的！一點點心意，就能讓它更有力氣保護大家喔！💪",
                             "margin": "md",
                             "wrap": True,
                             "size": "md"
@@ -2381,7 +2381,7 @@ def create_donation_flex_message():
     except Exception as e:
         logger.error(f"創建贊助Flex Message時發生錯誤: {e}")
         # 返回一個簡單的文本消息作為備用
-        return TextSendMessage(text="感謝您的使用！如果覺得服務有幫助，歡迎贊助支持我們：https://buymeacoffee.com/todao_antifruad")
+        return TextSendMessage(text="感謝您的使用！如果覺得服務有幫助，歡迎贊助支持我們：https://buymeacoffee.com/todao_antifraud")
     logger.info(f"User {user_id} is chatting for the first time")
 
 # 升級為使用LINE官方Text message v2的Mention功能
