@@ -1954,7 +1954,6 @@ def handle_message(event):
         )
         return  # 添加return語句，防止繼續執行後續邏輯
         return  # 添加return語句，防止繼續執行後續邏輯
-        return  # 添加return語句，防止繼續執行後續邏輯
 
 @handler.add(PostbackEvent)
 def handle_postback(event):
@@ -2445,14 +2444,3 @@ def should_perform_fraud_analysis(text_message):
 if __name__ == "__main__":
     # 確保在服務啟動時重新加載題庫
     load_fraud_tactics()
-    load_potato_game_questions()
-    
-    # 打印題庫加載結果
-    logger.info(f"服務啟動時載入題庫：potato_game_questions 包含 {len(potato_game_questions)} 道題目")
-    logger.info(f"題庫中有選項的題目數量: {sum(1 for q in potato_game_questions if 'options' in q and q['options'] and 'correct_option' in q)}")
-    if potato_game_questions:
-        logger.info(f"題庫路徑: {os.path.abspath(POTATO_GAME_QUESTIONS_DB)}")
-        logger.info(f"工作目錄: {os.getcwd()}")
-        
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port) 
