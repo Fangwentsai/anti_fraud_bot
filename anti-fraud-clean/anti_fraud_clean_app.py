@@ -1952,6 +1952,7 @@ def handle_message(event):
             fraud_type=None,
             risk_level=None
         )
+        return  # 添加return語句，防止繼續執行後續邏輯
 
 @handler.add(PostbackEvent)
 def handle_postback(event):
