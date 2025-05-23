@@ -43,50 +43,66 @@ def detect_domain_spoofing(url_or_message, safe_domains):
             domain = parsed.netloc.lower()
             
             # 移除 www. 前綴進行比較
-            if domain.startswith('www.'):
-                domain = domain[4:]
+            domain_without_www = domain[4:] if domain.startswith('www.') else domain
             
-            # 首先檢查是否本身就是白名單網域
-            if domain in [safe_domain.lower() for safe_domain in safe_domains.keys()]:
+            # 創建標準化的安全網域列表（包含www和非www版本）
+            normalized_safe_domains = set()
+            for safe_domain in safe_domains.keys():
+                safe_domain_lower = safe_domain.lower()
+                normalized_safe_domains.add(safe_domain_lower)
+                
+                # 添加www和非www版本
+                if safe_domain_lower.startswith('www.'):
+                    normalized_safe_domains.add(safe_domain_lower[4:])
+                else:
+                    normalized_safe_domains.add('www.' + safe_domain_lower)
+            
+            # 檢查是否本身就是白名單網域（包含www變體）
+            if domain in normalized_safe_domains or domain_without_www in normalized_safe_domains:
                 continue  # 這是正常的白名單網域，跳過
             
             # 檢查每個白名單網域
             for safe_domain in safe_domains.keys():
                 safe_domain_lower = safe_domain.lower()
+                safe_domain_without_www = safe_domain_lower[4:] if safe_domain_lower.startswith('www.') else safe_domain_lower
                 
-                # 跳過完全相同的網域（這是正常的）
-                if domain == safe_domain_lower:
+                # 跳過完全相同的網域（包含www變體）
+                if (domain == safe_domain_lower or 
+                    domain == safe_domain_without_www or 
+                    domain_without_www == safe_domain_lower or 
+                    domain_without_www == safe_domain_without_www):
                     continue
                 
                 # 跳過合法的子網域（例如 mail.google.com, maps.google.com）
-                if domain.endswith('.' + safe_domain_lower):
+                if (domain.endswith('.' + safe_domain_lower) or 
+                    domain.endswith('.' + safe_domain_without_www)):
                     continue
                 
                 # 跳過已知的合法變體（避免誤報）
-                if _is_legitimate_variant(domain, safe_domain_lower, safe_domains):
+                if _is_legitimate_variant(domain_without_www, safe_domain_without_www, safe_domains):
                     continue
                 
-                # 檢測各種變形手法
+                # 檢測各種變形手法（使用去除www的版本進行比較）
                 spoofing_detected = False
                 spoofing_type = ""
                 
                 # 1. 字元替換攻擊 (例如 google.com -> goog1e.com, googlе.com)
-                if _is_character_substitution(domain, safe_domain_lower):
+                if _is_character_substitution(domain_without_www, safe_domain_without_www):
                     spoofing_detected = True
                     spoofing_type = "字元替換"
                 
                 # 2. 插入額外字元 (例如 google.com -> google-tw.com, google.com.tw)
-                elif _is_character_insertion(domain, safe_domain_lower):
+                elif _is_character_insertion(domain_without_www, safe_domain_without_www):
                     spoofing_detected = True
                     spoofing_type = "插入額外字元"
                 
                 # 3. 網域後綴變形 (例如 google.com -> google.com.tw, google-tw.com)
-                elif _is_domain_suffix_spoofing(domain, safe_domain_lower):
+                elif _is_domain_suffix_spoofing(domain_without_www, safe_domain_without_www):
                     spoofing_detected = True
                     spoofing_type = "網域後綴變形"
                 
                 # 4. 同音字或相似字攻擊 (例如 google.com -> goog1e.com)
-                elif _is_homograph_attack(domain, safe_domain_lower):
+                elif _is_homograph_attack(domain_without_www, safe_domain_without_www):
                     spoofing_detected = True
                     spoofing_type = "相似字元攻擊"
                 

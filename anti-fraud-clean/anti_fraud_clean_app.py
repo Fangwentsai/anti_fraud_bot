@@ -671,10 +671,68 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                 "raw_result": f"網域變形攻擊檢測：{spoofing_result['spoofing_type']} - {spoofing_result['risk_explanation']}"
             }
 
-        # 檢查訊息是否包含白名單中的網址
-        for safe_domain in SAFE_DOMAINS.keys():  # 修復：使用.keys()來遍歷字典的鍵
+        # 檢查訊息是否包含白名單中的網址 - 改進版
+        import re
+        from urllib.parse import urlparse
+        
+        # 提取URL進行精確匹配
+        url_pattern = re.compile(r'https?://[^\s]+|www\.[^\s]+|[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}[^\s]*')
+        urls = url_pattern.findall(analysis_message)
+        
+        # 創建標準化的安全網域列表（包含www和非www版本）
+        normalized_safe_domains = {}
+        for safe_domain, description in SAFE_DOMAINS.items():
+            safe_domain_lower = safe_domain.lower()
+            normalized_safe_domains[safe_domain_lower] = (safe_domain, description)
+            
+            # 添加www和非www版本
+            if safe_domain_lower.startswith('www.'):
+                normalized_safe_domains[safe_domain_lower[4:]] = (safe_domain, description)
+            else:
+                normalized_safe_domains['www.' + safe_domain_lower] = (safe_domain, description)
+        
+        # 檢查每個提取的URL
+        for url in urls:
+            # 標準化URL
+            if not url.startswith(('http://', 'https://')):
+                if url.startswith('www.'):
+                    url = 'https://' + url
+                else:
+                    url = 'https://' + url
+            
+            try:
+                parsed = urlparse(url)
+                domain = parsed.netloc.lower()
+                
+                # 檢查是否完全匹配白名單網域
+                if domain in normalized_safe_domains:
+                    original_domain, site_description = normalized_safe_domains[domain]
+                    logger.info(f"檢測到白名單中的域名: {domain} -> {original_domain}")
+                    return {
+                        "success": True,
+                        "message": "分析完成",
+                        "result": {
+                            "risk_level": "低風險",
+                            "fraud_type": "非詐騙相關",
+                            "explanation": f"這個網站是 {original_domain}，{site_description}，可以安心使用。",
+                            "suggestions": "這是正規網站，不必特別擔心。如有疑慮，建議您直接從官方管道進入該網站。",
+                            "is_emerging": False,
+                            "display_name": display_name,
+                            "original_url": original_url,
+                            "expanded_url": expanded_url,
+                            "is_short_url": is_short_url,
+                            "url_expanded_successfully": url_expanded_successfully
+                        },
+                        "raw_result": f"經過分析，這是已知的可信任網站：{site_description}"
+                    }
+            except Exception as e:
+                # URL解析失敗，繼續檢查下一個
+                continue
+        
+        # 如果沒有精確匹配，則進行包含檢查（保留原有邏輯作為備用）
+        for safe_domain in SAFE_DOMAINS.keys():
             if safe_domain in analysis_message:
-                logger.info(f"檢測到白名單中的域名: {safe_domain}")
+                logger.info(f"檢測到白名單中的域名（包含匹配）: {safe_domain}")
                 # 獲取網站描述信息
                 site_description = SAFE_DOMAINS.get(safe_domain, "台灣常見的可靠網站")
                 return {
@@ -694,7 +752,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                     },
                     "raw_result": f"經過分析，這是已知的可信任網站：{site_description}"
                 }
-            
+
         # 如果是短網址但無法展開，提高風險評估
         special_notes = ""
         if is_short_url and not url_expanded_successfully:
@@ -2457,6 +2515,165 @@ def should_perform_fraud_analysis(text_message):
         
     # 11. 預設不進行詐騙分析，將訊息作為一般閒聊處理
     return False
+
+# 在create_analysis_flex_message函數之後添加新函數
+def create_domain_spoofing_flex_message(spoofing_result, display_name, message_to_analyze, user_id=None):
+    """
+    創建網域變形攻擊專用的Flex Message
+    """
+    try:
+        original_domain = spoofing_result.get('original_domain', '未知網域')
+        spoofed_domain = spoofing_result.get('spoofed_domain', '可疑網域')
+        spoofing_type = spoofing_result.get('spoofing_type', '網域變形')
+        risk_explanation = spoofing_result.get('risk_explanation', '檢測到可疑的網域變形攻擊')
+        
+        # 獲取網站描述
+        site_description = SAFE_DOMAINS.get(original_domain, "知名網站")
+        
+        flex_content = {
+            "type": "bubble",
+            "size": "kilo",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "🚨 網域變形攻擊警告",
+                        "weight": "bold",
+                        "size": "lg",
+                        "color": "#FF0000",
+                        "align": "center"
+                    }
+                ],
+                "backgroundColor": "#FFE6E6",
+                "paddingAll": "15px"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": f"⚠️ 檢測類型：{spoofing_type}",
+                                "size": "sm",
+                                "color": "#FF6B35",
+                                "weight": "bold",
+                                "margin": "md"
+                            },
+                            {
+                                "type": "separator",
+                                "margin": "md"
+                            },
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": "🎯 可疑網域：",
+                                        "size": "sm",
+                                        "color": "#FF0000",
+                                        "weight": "bold",
+                                        "margin": "md"
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": spoofed_domain,
+                                        "size": "sm",
+                                        "color": "#333333",
+                                        "wrap": True,
+                                        "margin": "xs"
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": "✅ 正牌網域：",
+                                        "size": "sm",
+                                        "color": "#00AA00",
+                                        "weight": "bold",
+                                        "margin": "md"
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": f"{original_domain} ({site_description})",
+                                        "size": "sm",
+                                        "color": "#333333",
+                                        "wrap": True,
+                                        "margin": "xs"
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "separator",
+                                "margin": "md"
+                            },
+                            {
+                                "type": "text",
+                                "text": "🚫 緊急建議：",
+                                "size": "sm",
+                                "color": "#FF0000",
+                                "weight": "bold",
+                                "margin": "md"
+                            },
+                            {
+                                "type": "text",
+                                "text": "• 立即停止使用這個網站\n• 不要輸入任何個人資料\n• 不要下載任何檔案\n• 如需使用正牌網站，請重新搜尋",
+                                "size": "xs",
+                                "color": "#333333",
+                                "wrap": True,
+                                "margin": "sm"
+                            }
+                        ]
+                    }
+                ],
+                "paddingAll": "15px"
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "button",
+                        "action": {
+                            "type": "uri",
+                            "label": "📞 撥打165反詐騙專線",
+                            "uri": "tel:165"
+                        },
+                        "style": "primary",
+                        "color": "#FF4444",
+                        "margin": "sm"
+                    },
+                    {
+                        "type": "button",
+                        "action": {
+                            "type": "message",
+                            "label": "🎯 測試防詐騙能力",
+                            "text": "選哪顆土豆"
+                        },
+                        "style": "secondary",
+                        "margin": "sm"
+                    }
+                ],
+                "paddingAll": "15px"
+            }
+        }
+        
+        return FlexSendMessage(alt_text="🚨 網域變形攻擊警告", contents=flex_content)
+        
+    except Exception as e:
+        logger.error(f"創建網域變形攻擊Flex Message時發生錯誤: {e}")
+        # 返回簡單的文字訊息作為備用
+        return TextSendMessage(text=f"🚨 網域變形攻擊警告\n\n{risk_explanation}")
 
 if __name__ == "__main__":
     # 確保在服務啟動時重新加載題庫
