@@ -39,7 +39,11 @@ SHORT_URL_DOMAINS = [
 def load_safe_domains():
     """從safe_domains.json文件載入安全網域列表"""
     try:
-        with open('safe_domains.json', 'r', encoding='utf-8') as f:
+        # 獲取當前腳本的目錄
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        safe_domains_path = os.path.join(script_dir, 'safe_domains.json')
+        
+        with open(safe_domains_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
             
             # 扁平化分類的安全網域字典
@@ -371,7 +375,7 @@ fraud_types = {
 }
 
 # 加載詐騙話術資料庫 (可選)
-FRAUD_TACTICS_DB = "fraud_tactics.json"
+FRAUD_TACTICS_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fraud_tactics.json")
 fraud_tactics_data = {}
 
 def load_fraud_tactics():
