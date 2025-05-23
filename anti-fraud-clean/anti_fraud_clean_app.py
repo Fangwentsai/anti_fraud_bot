@@ -1697,55 +1697,6 @@ def handle_message(event):
         firebase_manager.save_user_interaction(user_id, display_name, text_message, "Responded to analysis request prompt", is_fraud_related=False)
         return
 
-    # 檢查訊息是否包含URL
-    def contains_url(text):
-        # 一個簡單的URL檢測正則表達式
-        url_pattern = re.compile(r'https?://\S+|www\.\S+|\S+\.\w{2,}(/\S*)?')
-        return bool(url_pattern.search(text))
-
-    # 檢查是否需要對消息進行詐騙分析的邏輯
-    def should_perform_fraud_analysis(text_message):
-        # 1. 先检查是否是次数查询，避免这类消息被分析
-        if any(keyword in text_message.lower() for keyword in ["剩余次数", "剩餘次數", "查詢次數", "查询次数", "還有幾次", "还有几次", "剩下幾次", "剩下几次", "幾次機會", "几次机会", "幾次分析", "几次分析"]):
-            return False
-            
-        # 2. 直接檢查是否含有URL，如果有優先分析
-        if contains_url(text_message):
-            logger.info(f"訊息中含有URL，將進行詐騙分析")
-            return True
-            
-        # 3. 檢查是否包含常見問候詞
-        common_greetings = ["你好", "嗨", "哈囉", "嘿", "hi", "hello", "hey", "早安", "午安", "晚安"]
-        if text_message.lower() in common_greetings or (len(text_message) <= 5 and any(greeting in text_message.lower() for greeting in common_greetings)):
-            return False
-            
-        # 4. 檢查是否是功能相關指令
-        if any(keyword in text_message.lower() for keyword in function_inquiry_keywords + potato_game_trigger_keywords) or "詐騙類型" in text_message:
-            return False
-            
-        # 5. 檢查是否是跟踪模式的問句
-        if any(pattern in text_message.lower() for pattern in follow_up_patterns):
-            return True
-            
-        # 6. 檢查是否是請求分析的明顯特徵
-        analysis_indicators = ["幫我分析", "幫忙看看", "這是不是詐騙", "這是真的嗎", "這可靠嗎", "分析一下", "這樣是詐騙嗎"]
-        if any(indicator in text_message for indicator in analysis_indicators):
-            return True
-            
-        # 7. 檢查是否包含特定詐騙相關關鍵詞
-        # 只有使用者明確表示需要分析，或者文本包含多個詐騙關鍵詞才進行分析
-        fraud_related_keywords = ["詐騙", "被騙", "騙子", "可疑", "轉帳", "匯款", "銀行帳號", "個資", "身份證", "密碼", 
-                                "通知", "中獎", "貸款", "投資", "急需", "幫我處理", "急用", "解除設定", "提款卡", 
-                                "監管帳戶", "解凍", "安全帳戶", "簽證", "保證金", "違法", "洗錢", "警察", "檢察官"]
-                                
-        # 要求至少包含兩個詐騙相關關鍵詞
-        keyword_count = sum(1 for keyword in fraud_related_keywords if keyword in text_message)
-        if keyword_count >= 2:
-            return True
-            
-        # 8. 預設不進行詐騙分析，將訊息作為一般閒聊處理
-        return False
-
     # 預設使用ChatGPT進行閒聊回應或詐騙分析
     logger.info(f"Message from {user_id}: {text_message} - Determining if fraud analysis is needed")
     
