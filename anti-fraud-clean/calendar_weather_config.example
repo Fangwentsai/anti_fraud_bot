@@ -1,0 +1,26 @@
+# 國曆農曆天氣服務環境變數配置範例
+# Calendar Weather Service Environment Variables Example
+
+# 中央氣象署開放資料API金鑰
+# 申請網址：https://opendata.cwb.gov.tw/index
+CWB_API_KEY=your_cwb_api_key_here
+
+# 其他天氣API選項（可選）
+# OpenWeatherMap API Key (備用)
+OPENWEATHER_API_KEY=your_openweather_api_key_here
+
+# 服務設定
+# 預設城市
+DEFAULT_CITY=台北
+
+# 預設天氣預報天數
+DEFAULT_FORECAST_DAYS=3
+
+# 快取設定（秒）
+WEATHER_CACHE_DURATION=1800
+
+# 日誌等級
+LOG_LEVEL=INFO
+
+# 時區設定
+TIMEZONE=Asia/Taipei 

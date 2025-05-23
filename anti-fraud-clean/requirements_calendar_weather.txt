@@ -1,0 +1,28 @@
+# 國曆農曆天氣服務模組依賴套件
+# Calendar Weather Service Dependencies
+
+# 基礎套件
+requests>=2.31.0
+python-dotenv>=1.0.0
+
+# 日期時間處理
+python-dateutil>=2.8.2
+
+# 農曆轉換（可選，更精確的農曆計算）
+lunardate>=0.2.0
+
+# 天文計算（可選，更精確的節氣計算）
+ephem>=4.1.4
+
+# 中文處理
+zhconv>=1.4.3
+
+# 資料處理
+pandas>=2.0.0
+
+# 型別提示支援
+typing-extensions>=4.5.0
+
+# 測試套件（開發用）
+pytest>=7.0.0
+pytest-cov>=4.0.0 
