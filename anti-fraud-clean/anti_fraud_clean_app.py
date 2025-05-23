@@ -1793,10 +1793,9 @@ def handle_message(event):
                     mention_message = create_mention_message(emerging_text, display_name, user_id)
                     line_bot_api.push_message(group_id if group_id else user_id, mention_message)
         else:
-                    line_bot_api.push_message(user_id, TextSendMessage(text=emerging_text))
-                firebase_manager.save_emerging_fraud_report(user_id, display_name, text_message, raw_result)
+                line_bot_api.push_message(user_id, TextSendMessage(text=emerging_text))
         firebase_manager.save_emerging_fraud_report(user_id, display_name, text_message, raw_result)
-            is_fraud_related = True if fraud_type != "非詐騙相關" and risk_level not in ["無風險", "低"] else False
+        is_fraud_related = True if fraud_type != "非詐騙相關" and risk_level not in ["無風險", "低"] else False
             
         # 保存互動記錄到Firebase
         firebase_manager.save_user_interaction(
@@ -1807,7 +1806,7 @@ def handle_message(event):
         )
             
             # 以15%的機率顯示贊助信息
-            if random.random() < 0.15:
+        if random.random() < 0.15:
                 logger.info(f"隨機觸發贊助信息顯示給用戶 {user_id}")
                 try:
                     # 延遲1秒發送，避免訊息堆疊
@@ -1958,7 +1957,7 @@ def handle_postback(event):
     """处理PostbackEvent（按钮点击等）"""
     try:
         data = event.postback.data
-    reply_token = event.reply_token
+        reply_token = event.reply_token
         user_id = event.source.user_id
         
         # 获取用户显示名称
@@ -1982,12 +1981,12 @@ def handle_postback(event):
         # 根据 action 参数处理不同的按钮点击
         
         # 处理土豆游戏答案 - 修复action名称不匹配问题
-    if action == 'potato_game_answer':
-        handle_potato_game_answer(user_id, reply_token, data_params)
-        return
+        if action == 'potato_game_answer':
+            handle_potato_game_answer(user_id, reply_token, data_params)
+            return
         
         # 处理新游戏请求
-    elif action == 'start_potato_game':
+        elif action == 'start_potato_game':
             send_potato_game_question(user_id, reply_token)
             return
         
@@ -2003,12 +2002,12 @@ def handle_postback(event):
             )
             
             # 記錄互動
-        firebase_manager.save_user_interaction(
+            firebase_manager.save_user_interaction(
                 user_id, display_name, "請求免費分析次數", 
                 "已給予5次分析次數，現已開放免費無限使用", 
                 is_fraud_related=False
         )
-        return
+            return
     
         # 处理赞助
         elif action == 'donate':
