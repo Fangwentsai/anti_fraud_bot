@@ -1770,6 +1770,9 @@ def handle_message(event):
                 flex_message = create_domain_spoofing_flex_message(spoofing_result, display_name, text_message, user_id)
             elif analysis_data.get("is_donation_easter_egg", False):
                 flex_message = create_analysis_flex_message(analysis_data, display_name, text_message, user_id)
+            else:
+                # 一般的詐騙分析，使用標準的Flex Message
+                flex_message = create_analysis_flex_message(analysis_data, display_name, text_message, user_id)
             
             # 在群組中增加前綴提及用戶
             if is_group_message and flex_message and isinstance(flex_message, FlexSendMessage):
