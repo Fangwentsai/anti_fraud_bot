@@ -1,26 +1,24 @@
 # -*- coding: utf-8 -*-
 import os
 import json
-from flask import Flask, request, abort, render_template, jsonify
-from linebot import LineBotApi, WebhookHandler
-from linebot.exceptions import InvalidSignatureError, LineBotApiError
-from linebot.models import (
-    MessageEvent, TextMessage, TextSendMessage, FlexSendMessage,
-    QuickReply, QuickReplyButton, MessageAction, PostbackEvent, PostbackAction,
-    BubbleContainer, BoxComponent, ButtonComponent, TextComponent,
-    CarouselContainer, URIAction, SeparatorComponent, 
-    ImageSendMessage, Sender, SendMessage
-)
-from dotenv import load_dotenv
-import openai
 import logging
-from firebase_manager import FirebaseManager
 import random
-import datetime  # 導入datetime用於時間比較
 import re
-import time
 import requests
 from urllib.parse import urlparse
+from datetime import datetime, timedelta
+import openai
+from flask import Flask, request, abort, render_template, jsonify
+from linebot import LineBotApi, WebhookHandler
+from linebot.exceptions import InvalidSignatureError
+from linebot.models import (
+    MessageEvent, TextMessage, TextSendMessage, FlexSendMessage,
+    PostbackEvent, QuickReply, QuickReplyButton, MessageAction
+)
+from firebase_manager import FirebaseManager
+from domain_spoofing_detector import detect_domain_spoofing
+from dotenv import load_dotenv
+import time
 
 # 指定 .env 文件的路徑
 # 假設 anti-fraud-clean 和 linebot-anti-fraud 是同級目錄
@@ -783,6 +781,28 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                 analysis_message = user_message
         else:
             analysis_message = user_message
+
+        # 首先檢查網域變形攻擊
+        spoofing_result = detect_domain_spoofing(analysis_message, SAFE_DOMAINS)
+        if spoofing_result['is_spoofed']:
+            logger.warning(f"檢測到網域變形攻擊: {spoofing_result['spoofed_domain']} 模仿 {spoofing_result['original_domain']}")
+            return {
+                "success": True,
+                "message": "分析完成",
+                "result": {
+                    "risk_level": "高風險",
+                    "fraud_type": "網域變形詐騙",
+                    "explanation": spoofing_result['risk_explanation'],
+                    "suggestions": f"• 立即停止使用這個網站\n• 不要輸入任何個人資料或密碼\n• 如需使用正牌網站，請直接搜尋 {spoofing_result['original_domain']} 或從書籤進入\n• 將此可疑網址回報給165反詐騙專線",
+                    "is_emerging": False,
+                    "display_name": display_name,
+                    "original_url": original_url,
+                    "expanded_url": expanded_url,
+                    "is_short_url": is_short_url,
+                    "url_expanded_successfully": url_expanded_successfully
+                },
+                "raw_result": f"網域變形攻擊檢測：{spoofing_result['spoofing_type']} - {spoofing_result['risk_explanation']}"
+            }
 
         # 檢查訊息是否包含白名單中的網址
         for safe_domain in SAFE_DOMAINS.keys():  # 修復：使用.keys()來遍歷字典的鍵
@@ -1651,7 +1671,7 @@ def handle_message(event):
     display_name = profile.display_name if profile else "未知用戶"
     text_message = event.message.text
     reply_token = event.reply_token
-    current_time = datetime.datetime.now()
+    current_time = datetime.now()
 
     logger.info(f"Received message from {display_name} ({user_id}): {text_message}")
 
