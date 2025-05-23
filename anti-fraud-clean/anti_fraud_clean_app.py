@@ -1869,6 +1869,10 @@ def handle_message(event):
     # 預設使用ChatGPT進行閒聊回應或詐騙分析
     logger.info(f"Message from {user_id}: {text_message} - Determining if fraud analysis is needed")
     
+    # 初始化變量
+    reply_text = ""
+    is_fraud_related = False
+    
     # 判斷是否需要進行詐騙分析
     if should_perform_fraud_analysis(text_message):
         logger.info(f"Performing fraud analysis for message from {user_id}: {text_message}")
@@ -1879,13 +1883,12 @@ def handle_message(event):
             analysis_data = analysis_result.get("result", {})
             raw_result = analysis_result.get("raw_result", "")
 
-        risk_level = analysis_data.get("risk_level", "不確定")
-        fraud_type = analysis_data.get("fraud_type", "未知")
-        explanation = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
-        suggestions = analysis_data.get("suggestions", "請隨時保持警惕。")
-        is_emerging = analysis_data.get("is_emerging", False)
+            risk_level = analysis_data.get("risk_level", "不確定")
+            fraud_type = analysis_data.get("fraud_type", "未知")
+            explanation = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
+            suggestions = analysis_data.get("suggestions", "請隨時保持警惕。")
+            is_emerging = analysis_data.get("is_emerging", False)
 
-        if analysis_result and analysis_result.get("success", False):
             flex_message = create_analysis_flex_message(analysis_data, display_name, text_message, user_id)
             
             # 在群組中增加前綴提及用戶
@@ -1906,28 +1909,28 @@ def handle_message(event):
                 else:
                     line_bot_api.reply_message(reply_token, TextSendMessage(text=text_response))
 
-        if is_emerging and fraud_type != "非詐騙相關":
-            # 新增詐騙手法記錄通知改為單獨推送，避免混淆Flex Message
-            emerging_text = "⚠️ 這可能是一種新的詐騙手法，我已經記錄下來了，謝謝您的資訊！"
-            if is_group_message:
+            if is_emerging and fraud_type != "非詐騙相關":
+                # 新增詐騙手法記錄通知改為單獨推送，避免混淆Flex Message
+                emerging_text = "⚠️ 這可能是一種新的詐騙手法，我已經記錄下來了，謝謝您的資訊！"
+                if is_group_message:
                     mention_message = create_mention_message(emerging_text, display_name, user_id)
                     line_bot_api.push_message(group_id if group_id else user_id, mention_message)
-        else:
-            if not is_group_message:
-                line_bot_api.push_message(user_id, TextSendMessage(text=emerging_text))
-        firebase_manager.save_emerging_fraud_report(user_id, display_name, text_message, raw_result)
-        is_fraud_related = True if fraud_type != "非詐騙相關" and risk_level not in ["無風險", "低"] else False
-            
-        # 保存互動記錄到Firebase
-        firebase_manager.save_user_interaction(
+                else:
+                    line_bot_api.push_message(user_id, TextSendMessage(text=emerging_text))
+                firebase_manager.save_emerging_fraud_report(user_id, display_name, text_message, raw_result)
+                
+            is_fraud_related = True if fraud_type != "非詐騙相關" and risk_level not in ["無風險", "低"] else False
+                
+            # 保存互動記錄到Firebase
+            firebase_manager.save_user_interaction(
                 user_id, display_name, text_message, raw_result,
-            is_fraud_related=is_fraud_related,
-            fraud_type=fraud_type if is_fraud_related else None,
-            risk_level=risk_level if is_fraud_related else None
-        )
-            
+                is_fraud_related=is_fraud_related,
+                fraud_type=fraud_type if is_fraud_related else None,
+                risk_level=risk_level if is_fraud_related else None
+            )
+                
             # 以15%的機率顯示贊助信息
-        if random.random() < 0.15:
+            if random.random() < 0.15:
                 logger.info(f"隨機觸發贊助信息顯示給用戶 {user_id}")
                 try:
                     # 延遲1秒發送，避免訊息堆疊
@@ -1947,6 +1950,7 @@ def handle_message(event):
                 line_bot_api.reply_message(reply_token, TextSendMessage(text=error_message))
             
         return
+    else:
         # 使用ChatGPT進行閒聊回應
         logger.info(f"Using chat response for message from {user_id}: {text_message}")
         
@@ -2021,15 +2025,6 @@ def handle_message(event):
             else:
                 reply_text = chat_reply
             
-            # 在群組中添加前綴
-            if is_group_message:
-                mention_message = create_mention_message(reply_text, display_name, user_id, quick_reply)
-                line_bot_api.reply_message(reply_token, mention_message)
-            else:
-                line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
-            
-            is_fraud_related = False
-            
         except Exception as e:
             logger.error(f"閒聊回應錯誤: {e}")
             # 如果閒聊回應失敗，使用簡單的問候
@@ -2042,36 +2037,31 @@ def handle_message(event):
                 reply_text = f"{random.choice(greetings)}有什麼我能幫您的嗎？您可以輸入「功能」來了解我能做什麼。"
             else:
                 reply_text = f"{random.choice(greetings)}有什麼我能幫您的嗎？"
-            
-            # 在群組中添加前綴
-            if is_group_message:
-                mention_message = create_mention_message(reply_text, display_name, user_id, quick_reply)
-                line_bot_api.reply_message(reply_token, mention_message)
-            
-            is_fraud_related = False
-    
-    # 添加功能按鈕到所有回覆
-    if is_group_message:
-        quick_reply = QuickReply(items=[
-            QuickReplyButton(action=MessageAction(label="分析可疑訊息", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
-            QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text=f"{bot_trigger_keyword} 選哪顆土豆")),
-            QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text=f"{bot_trigger_keyword} 詐騙類型列表"))
-        ])
-    quick_reply = QuickReply(items=[
-        QuickReplyButton(action=MessageAction(label="分析可疑訊息", text="請幫我分析這則訊息：")),
-        QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text="選哪顆土豆")),
-        QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text="詐騙類型列表"))
-    ])
-    
-    line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
-    
-    # 保存互動記錄到Firebase
-    firebase_manager.save_user_interaction(
-        user_id, display_name, text_message, reply_text,
-        is_fraud_related=is_fraud_related,
-        fraud_type=None,
-        risk_level=None
-    )
+        
+        # 添加功能按鈕到閒聊回覆
+        if is_group_message:
+            quick_reply = QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label="分析可疑訊息", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
+                QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text=f"{bot_trigger_keyword} 選哪顆土豆")),
+                QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text=f"{bot_trigger_keyword} 詐騙類型列表"))
+            ])
+            mention_message = create_mention_message(reply_text, display_name, user_id, quick_reply)
+            line_bot_api.reply_message(reply_token, mention_message)
+        else:
+            quick_reply = QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label="分析可疑訊息", text="請幫我分析這則訊息：")),
+                QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text="選哪顆土豆")),
+                QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text="詐騙類型列表"))
+            ])
+            line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
+        
+        # 保存互動記錄到Firebase
+        firebase_manager.save_user_interaction(
+            user_id, display_name, text_message, reply_text,
+            is_fraud_related=is_fraud_related,
+            fraud_type=None,
+            risk_level=None
+        )
 
 @handler.add(PostbackEvent)
 def handle_postback(event):
