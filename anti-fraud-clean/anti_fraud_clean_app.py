@@ -672,10 +672,10 @@ def create_suspicious_ad_warning_message(display_name, ad_description="兼職計
     """創建可疑廣告警告訊息，使用emoji代替數字編號"""
     warning_message = f"@{display_name} 聽起來這個廣告有點讓人疑惑，尤其是牽涉到「{ad_description}」這類說法時，我們要特別小心。這類廣告常見於詐騙手法裡，可能會利用「兼職」或「免費旅遊」的誘因，誘使你留下個人資料，甚至進一步要求匯款或購買昂貴課程。\n\n建議你可以先做以下幾件事：\n\n"
     
-    warning_message += "🚫 **不要急著留下信箱或任何個人資料**，先觀察和詢問更多細節。\n"
-    warning_message += "🔍 **查詢這個廣告的來源**，例如公司名稱或負責人資料，看看是否有正當的背景。\n"
-    warning_message += "🌐 **搜尋網路評價或負評**，看看其他人有沒有遭遇過類似的詐騙。\n"
-    warning_message += "🛡️ **如果覺得不安全，直接忽略或封鎖廣告**，避免被騙。\n\n"
+    warning_message += "🚫 不要急著留下信箱或任何個人資料，先觀察和詢問更多細節。\n"
+    warning_message += "🔍 查詢這個廣告的來源，例如公司名稱或負責人資料，看看是否有正當的背景。\n"
+    warning_message += "🌐 搜尋網路評價或負評，看看其他人有沒有遭遇過類似的詐騙。\n"
+    warning_message += "🛡️ 如果覺得不安全，直接忽略或封鎖廣告，避免被騙。\n\n"
     
     warning_message += "如果方便的話，可以把廣告內容或截圖分享給我，我可以幫你分析得更詳細喔！你的安全最重要，我會一直陪著你。😊"
     
