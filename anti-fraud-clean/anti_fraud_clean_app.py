@@ -9,7 +9,7 @@ from linebot.models import (
     QuickReply, QuickReplyButton, MessageAction, PostbackEvent, PostbackAction,
     BubbleContainer, BoxComponent, ButtonComponent, TextComponent,
     CarouselContainer, URIAction, SeparatorComponent, 
-    ImageSendMessage, Sender, SendMessage, Mention, MentionedJSONObject
+    ImageSendMessage, Sender, SendMessage
 )
 from dotenv import load_dotenv
 import openai
@@ -2267,23 +2267,9 @@ def create_donation_flex_message():
 
 # 修改原來使用@前綴的地方，改為使用Mention功能
 def create_mention_message(text, display_name, user_id, quick_reply=None):
-    """創建帶有提及功能的消息"""
-    mention = Mention(
-        mentionedUserIds=[user_id],
-        index=0,
-        length=len(display_name) + 1  # +1 是為了包含@符號
-    )
-    
+    """創建帶有文本@功能的消息，兼容舊版本SDK"""
     text_with_mention = f"@{display_name} {text}"
-    
-    message = TextSendMessage(
-        text=text_with_mention,
-        mention=MentionedJSONObject(
-            mentionedUserIds=[user_id]
-        ),
-        quick_reply=quick_reply
-    )
-    return message
+    return TextSendMessage(text=text_with_mention, quick_reply=quick_reply)
 
 # 創建一個全局字典來跟踪用戶狀態
 user_conversation_state = {}  # 格式: {user_id: {"last_time": timestamp, "waiting_for_analysis": True/False}}
