@@ -13,7 +13,9 @@ from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage, FlexSendMessage,
-    PostbackEvent, QuickReply, QuickReplyButton, MessageAction
+    PostbackEvent, QuickReply, QuickReplyButton, MessageAction,
+    BubbleContainer, BoxComponent, TextComponent, SeparatorComponent,
+    ButtonComponent, URIAction, PostbackAction
 )
 from firebase_manager import FirebaseManager
 from domain_spoofing_detector import detect_domain_spoofing
@@ -799,7 +801,9 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                     "original_url": original_url,
                     "expanded_url": expanded_url,
                     "is_short_url": is_short_url,
-                    "url_expanded_successfully": url_expanded_successfully
+                    "url_expanded_successfully": url_expanded_successfully,
+                    "is_domain_spoofing": True,  # 特殊標記
+                    "spoofing_result": spoofing_result  # 包含完整的變形檢測結果
                 },
                 "raw_result": f"網域變形攻擊檢測：{spoofing_result['spoofing_type']} - {spoofing_result['risk_explanation']}"
             }
@@ -1910,7 +1914,12 @@ def handle_message(event):
             suggestions = analysis_data.get("suggestions", "請隨時保持警惕。")
             is_emerging = analysis_data.get("is_emerging", False)
 
-            flex_message = create_analysis_flex_message(analysis_data, display_name, text_message, user_id)
+            # 檢查是否是網域變形攻擊，如果是則使用專門的Flex Message
+            if analysis_data.get("is_domain_spoofing", False):
+                spoofing_result = analysis_data.get("spoofing_result", {})
+                flex_message = create_domain_spoofing_flex_message(spoofing_result, display_name, text_message, user_id)
+            else:
+                flex_message = create_analysis_flex_message(analysis_data, display_name, text_message, user_id)
             
             # 在群組中增加前綴提及用戶
             if is_group_message and flex_message and isinstance(flex_message, FlexSendMessage):
