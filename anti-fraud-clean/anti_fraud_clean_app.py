@@ -172,6 +172,7 @@ SAFE_DOMAINS = {
     "ncue.edu.tw": "彰化師範大學",
     "ntust.edu.tw": "台灣科技大學 (台科大)",
     "nkust.edu.tw": "高雄科技大學 (高科大)",
+    "accupass.com": "活動通 (活動票務)",
 
     # 生活服務
     "7-eleven.com.tw": "7-ELEVEN 便利商店",
@@ -2396,44 +2397,55 @@ def should_perform_fraud_analysis(text_message):
     # 1. 先检查是否是次数查询，避免这类消息被分析
     if any(keyword in text_message.lower() for keyword in ["剩余次数", "剩餘次數", "查詢次數", "查询次数", "還有幾次", "还有几次", "剩下幾次", "剩下几次", "幾次機會", "几次机会", "幾次分析", "几次分析"]):
         return False
+    
+    # 2. 檢查是否是詢問機器人工作原理或功能的問題（新增）
+    meta_questions = ["判斷.*邏輯", "如何.*分析", "怎麼.*判斷", "原理.*什麼", "怎麼.*運作", "如何.*運作", "工作.*原理", "分析.*方式", "檢測.*方法"]
+    if any(re.search(pattern, text_message) for pattern in meta_questions):
+        logger.info(f"訊息是詢問機器人工作原理，不進行詐騙分析")
+        return False
         
-    # 2. 直接檢查是否含有URL，如果有優先分析
+    # 3. 直接檢查是否含有URL，如果有優先分析
     if contains_url(text_message):
         logger.info(f"訊息中含有URL，將進行詐騙分析")
         return True
         
-    # 3. 檢查是否包含常見問候詞和簡短訊息
+    # 4. 檢查是否包含常見問候詞和簡短訊息
     common_greetings = ["你好", "嗨", "哈囉", "嘿", "hi", "hello", "hey", "早安", "午安", "晚安"]
     if text_message.lower() in common_greetings or (len(text_message) <= 5 and any(greeting in text_message.lower() for greeting in common_greetings)):
         return False
         
-    # 4. 檢查是否含有明確的分析請求關鍵詞
+    # 5. 檢查是否含有明確的分析請求關鍵詞
     analysis_keywords = ["分析", "詐騙", "安全", "可疑", "風險", "網站"]
     if any(keyword in text_message.lower() for keyword in analysis_keywords) and "嗎" in text_message:
         # 如果同時包含分析關鍵詞和疑問詞，可能是請求分析
         logger.info(f"訊息包含分析請求關鍵詞和疑問詞，將進行詐騙分析")
         return True
         
-    # 5. 檢查是否與已知的網域相關
+    # 6. 檢查是否與已知的網域相關
     for domain in SHORT_URL_DOMAINS + list(SAFE_DOMAINS.keys()):  # 修復：將字典鍵轉換為列表
         if domain.lower() in text_message.lower():
             logger.info(f"訊息包含已知網域 {domain}，將進行詐騙分析")
             return True
     
-    # 6. 檢查是否是功能相關指令
+    # 7. 檢查是否是功能相關指令
     if any(keyword in text_message.lower() for keyword in function_inquiry_keywords + potato_game_trigger_keywords) or "詐騙類型" in text_message:
         return False
         
-    # 7. 檢查是否是跟踪模式的問句
+    # 8. 檢查是否是跟踪模式的問句（修改邏輯，排除詢問機器人的問題）
     if any(pattern in text_message.lower() for pattern in follow_up_patterns):
+        # 如果包含詢問詞（什麼、如何、怎麼等），可能是詢問而非需要分析的內容
+        inquiry_words = ["什麼", "如何", "怎麼", "為什麼", "邏輯", "原理", "方式", "方法"]
+        if any(word in text_message for word in inquiry_words):
+            logger.info(f"訊息包含詢問詞，判斷為詢問而非需要分析的內容")
+            return False
         return True
         
-    # 8. 檢查是否是請求分析的明顯特徵
+    # 9. 檢查是否是請求分析的明顯特徵
     analysis_indicators = ["幫我分析", "幫忙看看", "這是不是詐騙", "這是真的嗎", "這可靠嗎", "分析一下", "這樣是詐騙嗎"]
     if any(indicator in text_message for indicator in analysis_indicators):
         return True
         
-    # 9. 檢查是否包含特定詐騙相關關鍵詞
+    # 10. 檢查是否包含特定詐騙相關關鍵詞
     # 只有使用者明確表示需要分析，或者文本包含多個詐騙關鍵詞才進行分析
     fraud_related_keywords = ["詐騙", "被騙", "騙子", "可疑", "轉帳", "匯款", "銀行帳號", "個資", "身份證", "密碼", 
                             "通知", "中獎", "貸款", "投資", "急需", "幫我處理", "急用", "解除設定", "提款卡", 
@@ -2444,7 +2456,7 @@ def should_perform_fraud_analysis(text_message):
     if keyword_count >= 2:
         return True
         
-    # 10. 預設不進行詐騙分析，將訊息作為一般閒聊處理
+    # 11. 預設不進行詐騙分析，將訊息作為一般閒聊處理
     return False
 
 if __name__ == "__main__":
