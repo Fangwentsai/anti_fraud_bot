@@ -7,7 +7,7 @@ anti_fraud_clean_dir = os.path.join(current_dir, 'anti-fraud-clean')
 sys.path.insert(0, anti_fraud_clean_dir)
 
 # 导入子目录中的app
-from app import app
+from anti_fraud_clean_app import app
 
 # 如果直接运行此文件
 if __name__ == '__main__':
