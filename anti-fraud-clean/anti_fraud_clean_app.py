@@ -257,7 +257,7 @@ CHAT_TIP_PROBABILITY = 0.3 # 閒聊時回覆防詐小知識的機率
 function_inquiry_keywords = ["功能", "幫助", "會什麼", "能做什麼", "使用說明", "你是誰"]
 follow_up_patterns = ["被騙", "詐騙", "可疑", "不確定", "幫我看看", "這是詐騙嗎", "這是真的嗎"]
 potato_game_trigger_keywords = ["選哪顆土豆", "玩遊戲", "土豆遊戲", "選土豆", "選土豆遊戲", "開始遊戲"]
-bot_trigger_keyword = "嗨土豆" # 群組中觸發機器人服務的關鍵詞
+bot_trigger_keyword = "土豆" # 群組中觸發機器人服務的關鍵詞
 
 # 定義分析提示詞
 analysis_prompts = ["請幫我分析這則訊息：", "幫我分析這則訊息", "分析這則訊息", "幫我分析訊息", "請幫我分析詐騙網站", "幫我分析詐騙網站"]
@@ -2405,11 +2405,102 @@ def create_donation_flex_message():
         return TextSendMessage(text="感謝您的使用！如果覺得服務有幫助，歡迎贊助支持我們：https://buymeacoffee.com/todao_antifruad")
     logger.info(f"User {user_id} is chatting for the first time")
 
-# 修改原來使用@前綴的地方，改為使用Mention功能
+# 升級為使用LINE官方Text message v2的Mention功能
 def create_mention_message(text, display_name, user_id, quick_reply=None):
-    """創建帶有文本@功能的消息，兼容舊版本SDK"""
-    text_with_mention = f"@{display_name} {text}"
-    return TextSendMessage(text=text_with_mention, quick_reply=quick_reply)
+    """創建帶有官方mention功能的消息，使用LINE Text message v2格式"""
+    try:
+        # 構建mention文本，格式為 "@用戶名 訊息內容"
+        mention_text = f"@{display_name} {text}"
+        
+        # 計算mention的位置
+        mention_start = 0
+        mention_end = len(display_name) + 1  # +1 是因為@符號
+        
+        # 創建自定義的TextSendMessage類來支持mention
+        class MentionTextSendMessage(TextSendMessage):
+            def __init__(self, text, mention=None, quick_reply=None, **kwargs):
+                super().__init__(text=text, quick_reply=quick_reply, **kwargs)
+                self.mention = mention
+            
+            def as_json_dict(self):
+                json_dict = super().as_json_dict()
+                if self.mention:
+                    json_dict['mention'] = self.mention
+                return json_dict
+        
+        # 創建mention數據
+        mention_data = {
+            "mentionees": [
+                {
+                    "index": mention_start,
+                    "length": mention_end,
+                    "type": "user",
+                    "userId": user_id
+                }
+            ]
+        }
+        
+        # 創建包含mention的消息
+        mention_message = MentionTextSendMessage(
+            text=mention_text,
+            mention=mention_data,
+            quick_reply=quick_reply
+        )
+        
+        logger.info(f"創建mention消息成功: @{display_name} (用戶ID: {user_id})")
+        return mention_message
+        
+    except Exception as e:
+        logger.error(f"創建mention消息時發生錯誤: {e}")
+        # 降級到傳統@格式
+        text_with_mention = f"@{display_name} {text}"
+        return TextSendMessage(text=text_with_mention, quick_reply=quick_reply)
+
+# 創建一個專門用於@所有人的mention功能
+def create_mention_all_message(text, quick_reply=None):
+    """創建@所有人的mention消息"""
+    try:
+        # 構建mention文本
+        mention_text = f"@所有人 {text}"
+        
+        # 創建自定義的TextSendMessage類來支持mention
+        class MentionTextSendMessage(TextSendMessage):
+            def __init__(self, text, mention=None, quick_reply=None, **kwargs):
+                super().__init__(text=text, quick_reply=quick_reply, **kwargs)
+                self.mention = mention
+            
+            def as_json_dict(self):
+                json_dict = super().as_json_dict()
+                if self.mention:
+                    json_dict['mention'] = self.mention
+                return json_dict
+        
+        # 創建@所有人的mention數據
+        mention_data = {
+            "mentionees": [
+                {
+                    "index": 0,
+                    "length": 4,  # "@所有人" 的長度
+                    "type": "all"
+                }
+            ]
+        }
+        
+        # 創建包含mention的消息
+        mention_message = MentionTextSendMessage(
+            text=mention_text,
+            mention=mention_data,
+            quick_reply=quick_reply
+        )
+        
+        logger.info("創建@所有人mention消息成功")
+        return mention_message
+        
+    except Exception as e:
+        logger.error(f"創建@所有人mention消息時發生錯誤: {e}")
+        # 降級到傳統@格式
+        text_with_mention = f"@所有人 {text}"
+        return TextSendMessage(text=text_with_mention, quick_reply=quick_reply)
 
 # 創建一個全局字典來跟踪用戶狀態
 user_conversation_state = {}  # 格式: {user_id: {"last_time": timestamp, "waiting_for_analysis": True/False}}
