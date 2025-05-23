@@ -714,7 +714,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         
         # 調用OpenAI API (修正為新版API格式)
         response = openai.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4.1-mini",
             messages=[
                 {"role": "system", "content": "你是一個詐騙風險評估專家，請以用戶能理解的禮貌方式分析詐騙風險。避免使用「您」「我」等主觀用詞，而是使用更直接的表述。提供的建議應該具體實用且直接，並且一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號。語言要親切有禮，多使用「請」、「謝謝」等禮貌用語。"},
                 {"role": "user", "content": openai_prompt}
@@ -2014,7 +2014,7 @@ def handle_message(event):
             
             # 使用更新後的OpenAI API格式
             chat_response = openai.chat.completions.create(
-                model=os.environ.get('OPENAI_MODEL', 'gpt-3.5-turbo'),
+                model=os.environ.get('OPENAI_MODEL', 'gpt-4.1-mini'),
                 messages=messages,
                 temperature=0.7,
                 max_tokens=500
