@@ -2057,7 +2057,7 @@ def handle_postback(event):
         line_bot_api.reply_message(reply_token, TextSendMessage(text="抱歉，處理 Postback 事件時出現錯誤。請稍後再試一次。"))
 
 # 載入詐騙題庫
-POTATO_GAME_QUESTIONS_DB = "potato_game_questions.json"
+POTATO_GAME_QUESTIONS_DB = os.path.join(os.path.dirname(__file__), "potato_game_questions.json")
 potato_game_questions = []
 
 def load_potato_game_questions():
@@ -2259,9 +2259,4 @@ def create_donation_flex_message():
         logger.error(f"創建贊助Flex Message時發生錯誤: {e}")
         # 返回一個簡單的文本消息作為備用
         return TextSendMessage(text="感謝您的使用！如果覺得服務有幫助，歡迎贊助支持我們：https://buymeacoffee.com/todao_antifruad")
-
-# 檢查是否為首次對話的用戶
-is_first_time = user_id not in first_time_chatters
-if is_first_time:
-    first_time_chatters.add(user_id)
     logger.info(f"User {user_id} is chatting for the first time")
