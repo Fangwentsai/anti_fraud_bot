@@ -3,7 +3,7 @@ import os
 import json
 from flask import Flask, request, abort, render_template, jsonify
 from linebot import LineBotApi, WebhookHandler
-from linebot.exceptions import InvalidSignatureError
+from linebot.exceptions import InvalidSignatureError, LineBotApiError
 from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage, FlexSendMessage,
     QuickReply, QuickReplyButton, MessageAction, PostbackEvent, PostbackAction,
@@ -84,6 +84,9 @@ function_inquiry_keywords = ["功能", "幫助", "會什麼", "能做什麼", "�
 follow_up_patterns = ["被騙", "詐騙", "可疑", "不確定", "幫我看看", "這是詐騙嗎", "這是真的嗎"]
 potato_game_trigger_keywords = ["選哪顆土豆", "玩遊戲", "土豆遊戲", "選土豆", "選土豆遊戲", "開始遊戲"]
 bot_trigger_keyword = "嗨土豆" # 群組中觸發機器人服務的關鍵詞
+
+# 定義分析提示詞
+analysis_prompts = ["請幫我分析這則訊息：", "幫我分析這則訊息", "分析這則訊息", "幫我分析訊息", "請幫我分析詐騙網站", "幫我分析詐騙網站"]
 
 def expand_short_url(url):
     """
@@ -396,7 +399,7 @@ def parse_fraud_analysis(analysis_result):
             "suggestions": "請稍後再試或聯繫客服。",
             "is_emerging": False
         }
-    
+
     # 初始結果字典，包含預設值
     result = {
         "risk_level": "不確定",
@@ -405,7 +408,7 @@ def parse_fraud_analysis(analysis_result):
         "suggestions": "請保持警惕，如有疑問可諮詢165反詐騙專線。",
         "is_emerging": False
     }
-    
+
     try:
         # 先處理最常見的情況：JSON格式
         if analysis_result.strip().startswith('{') and analysis_result.strip().endswith('}'):
@@ -428,7 +431,7 @@ def parse_fraud_analysis(analysis_result):
                 
                 # 處理"無"或"不適用"的詐騙類型
                 if result["fraud_type"].lower() in ["不適用", "無", "none", "n/a"]:
-                    result["fraud_type"] = "非詐騙相關"
+                 result["fraud_type"] = "非詐騙相關"
                 
                 # 解釋說明 - 處理各種可能的鍵名和格式
                 for key in ['explanation', 'explain', '說明', '分析理由', '理由', '分析']:
@@ -468,8 +471,8 @@ def parse_fraud_analysis(analysis_result):
                     # 繼續使用文本解析方法
                     logger.info("JSON解析結果不完整，使用額外的文本解析")
                 else:
-                    return result
-                    
+    return result
+
             except json.JSONDecodeError as e:
                 # JSON解析失敗，使用文本解析
                 logger.warning(f"JSON解析失敗: {e}，改用文本解析")
@@ -1068,7 +1071,7 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
         fraud_type = analysis_data.get("fraud_type", "未知類型")
         explanation = analysis_data.get("explanation", "")
         suggestions = analysis_data.get("suggestions", "")
-        
+    
         # URL相關信息
         original_url = analysis_data.get("original_url")
         expanded_url = analysis_data.get("expanded_url")
@@ -1102,7 +1105,7 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
         # 計算風險等級顏色和圖示
         if "低風險" in risk_level:
             risk_color = "#27AE60"  # 綠色
-            risk_emoji = "✅"
+        risk_emoji = "✅"
         elif "中風險" in risk_level:
             risk_color = "#F39C12"  # 橙色
             risk_emoji = "⚠️"
@@ -1124,7 +1127,7 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
                     url_match = re.search(r'(https?://[^\s]+)', message_to_analyze)
                     if url_match:
                         donation_url = url_match.group(0)
-                    else:
+    else:
                         donation_url = f"https://{domain}"
                 else:
                     donation_url = f"https://{domain}"
@@ -1489,7 +1492,7 @@ def handle_message(event):
     current_time = datetime.datetime.now()
 
     logger.info(f"Received message from {display_name} ({user_id}): {text_message}")
-    
+
     # 檢查是否為群組訊息
     is_group_message = False
     group_id = None
@@ -1497,7 +1500,7 @@ def handle_message(event):
         is_group_message = True
         group_id = event.source.group_id if event.source.type == "group" else event.source.room_id
         logger.info(f"這是一則群組訊息 (類型: {event.source.type}, ID: {group_id})")
-    
+        
     # 更新用戶狀態
     current_state = user_conversation_state.get(user_id, {})
     current_state["last_time"] = current_time
@@ -1542,11 +1545,11 @@ def handle_message(event):
     # 如果移除關鍵詞後訊息為空，則發送功能說明
     if not text_message:
         reply_text = f"您好！我是防詐騙小幫手，我的功能包括：\n\n" \
-                    f"1️⃣ 詐騙風險分析：我可以分析您收到的可疑訊息，評估是否為詐騙\n\n" \
-                    f"2️⃣ 詐騙類型查詢：您可以輸入「詐騙類型列表」查看各種常見詐騙\n\n" \
-                    f"3️⃣ 「選哪顆土豆」小遊戲：通過遊戲學習辨識詐騙訊息\n\n" \
-                    f"請選擇您想嘗試的功能："
-        
+                        f"1️⃣ 詐騙風險分析：我可以分析您收到的可疑訊息，評估是否為詐騙\n\n" \
+                        f"2️⃣ 詐騙類型查詢：您可以輸入「詐騙類型列表」查看各種常見詐騙\n\n" \
+                        f"3️⃣ 「選哪顆土豆」小遊戲：通過遊戲學習辨識詐騙訊息\n\n" \
+                        f"請選擇您想嘗試的功能："
+            
         # 如果在群組中，QuickReply按鈕需要包含觸發關鍵詞
         if is_group_message:
             quick_reply = QuickReply(items=[
@@ -1566,7 +1569,7 @@ def handle_message(event):
             line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
         
         firebase_manager.save_user_interaction(user_id, display_name, text_message, "回覆功能說明", is_fraud_related=False)
-        return
+            return
 
     # 處理「選哪顆土豆」遊戲觸發
     if any(keyword in text_message.lower() for keyword in potato_game_trigger_keywords):
@@ -1577,7 +1580,7 @@ def handle_message(event):
         )
         send_potato_game_question(user_id, reply_token)
         return
-        
+
     # 處理詐騙類型列表查詢
     if text_message.lower() == "詐騙類型列表" or text_message.lower() == "詐騙類型":
         logger.info(f"User {user_id} is querying fraud types list")
@@ -1592,7 +1595,7 @@ def handle_message(event):
             if is_group_message:
                 quick_reply_items.append(QuickReplyButton(action=MessageAction(label=f_type, text=f"{bot_trigger_keyword} 什麼是{f_type}")))
             else:
-                quick_reply_items.append(QuickReplyButton(action=MessageAction(label=f_type, text=f"什麼是{f_type}")))
+            quick_reply_items.append(QuickReplyButton(action=MessageAction(label=f_type, text=f"什麼是{f_type}")))
 
         # 在群組中回覆時前綴用戶名稱
         if is_group_message:
@@ -1605,7 +1608,7 @@ def handle_message(event):
         
         firebase_manager.save_user_interaction(user_id, display_name, text_message, "Provided list of fraud types", is_fraud_related=False)
         return
-
+        
     # 處理特定詐騙類型資訊查詢 (例如 "什麼是網路購物詐騙")
     specific_type_query_match = re.match(r"^(什麼是|查詢|我想了解|我想知道)(.+詐騙)$", text_message.strip())
     if specific_type_query_match:
@@ -1640,9 +1643,9 @@ def handle_message(event):
             else:
                 line_bot_api.reply_message(reply_token, TextSendMessage(text=response_text, 
                     quick_reply=QuickReply(items=[
-                        QuickReplyButton(action=MessageAction(label="查看其他詐騙類型", text="詐騙類型列表")),
-                        QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text="選哪顆土豆")),
-                        QuickReplyButton(action=MessageAction(label="分析可疑訊息", text="請幫我分析這則訊息："))
+                QuickReplyButton(action=MessageAction(label="查看其他詐騙類型", text="詐騙類型列表")),
+                QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text="選哪顆土豆")),
+                QuickReplyButton(action=MessageAction(label="分析可疑訊息", text="請幫我分析這則訊息："))
                     ])))
             
             firebase_manager.save_user_interaction(user_id, display_name, text_message, f"Provided info about {matched_fraud_type}", is_fraud_related=False)
@@ -1664,15 +1667,14 @@ def handle_message(event):
             else:
                 line_bot_api.reply_message(reply_token, TextSendMessage(text=response_text, 
                     quick_reply=QuickReply(items=[
-                        QuickReplyButton(action=MessageAction(label="查看詐騙類型列表", text="詐騙類型列表")),
-                        QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text="選哪顆土豆"))
+                QuickReplyButton(action=MessageAction(label="查看詐騙類型列表", text="詐騙類型列表")),
+                QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text="選哪顆土豆"))
                     ])))
             
             firebase_manager.save_user_interaction(user_id, display_name, text_message, "Responded to unknown fraud type query", is_fraud_related=False)
             return
 
     # 檢查是否為請求分析的提示語
-    analysis_prompts = ["請幫我分析這則訊息：", "幫我分析這則訊息", "分析這則訊息", "幫我分析訊息", "請幫我分析詐騙網站", "幫我分析詐騙網站"]
     if any(text_message.strip() == prompt or text_message.strip() == prompt.rstrip("：") for prompt in analysis_prompts):
         logger.info(f"User {user_id} requested message analysis but didn't provide message content")
         
@@ -1695,21 +1697,21 @@ def handle_message(event):
             mention_message = create_mention_message(selected_reply, display_name, user_id, quick_reply)
             line_bot_api.reply_message(reply_token, mention_message)
         else:
-            quick_reply = QuickReply(items=[
-                QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text="選哪顆土豆")),
-                QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text="詐騙類型列表"))
-            ])
+        quick_reply = QuickReply(items=[
+            QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text="選哪顆土豆")),
+            QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text="詐騙類型列表"))
+        ])
             line_bot_api.reply_message(reply_token, TextSendMessage(text=selected_reply, quick_reply=quick_reply))
         
         firebase_manager.save_user_interaction(user_id, display_name, text_message, "Responded to analysis request prompt", is_fraud_related=False)
         return
-    
+
     # 檢查訊息是否包含URL
     def contains_url(text):
         # 一個簡單的URL檢測正則表達式
         url_pattern = re.compile(r'https?://\S+|www\.\S+|\S+\.\w{2,}(/\S*)?')
         return bool(url_pattern.search(text))
-    
+
     # 檢查是否需要對消息進行詐騙分析的邏輯
     def should_perform_fraud_analysis(text_message):
         # 1. 先检查是否是次数查询，避免这类消息被分析
@@ -1765,14 +1767,14 @@ def handle_message(event):
         if analysis_result and analysis_result.get("success", False):
             analysis_data = analysis_result.get("result", {})
             raw_result = analysis_result.get("raw_result", "")
-            
-            risk_level = analysis_data.get("risk_level", "不確定")
-            fraud_type = analysis_data.get("fraud_type", "未知")
-            explanation = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
-            suggestions = analysis_data.get("suggestions", "請隨時保持警惕。")
-            is_emerging = analysis_data.get("is_emerging", False)
-    
-            # 創建並發送Flex Message分析結果
+
+        risk_level = analysis_data.get("risk_level", "不確定")
+        fraud_type = analysis_data.get("fraud_type", "未知")
+        explanation = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
+        suggestions = analysis_data.get("suggestions", "請隨時保持警惕。")
+        is_emerging = analysis_data.get("is_emerging", False)
+
+        # 創建並發送Flex Message分析結果
             flex_message = create_analysis_flex_message(analysis_data, display_name, text_message, user_id)
             
             # 在群組中增加前綴提及用戶
@@ -1783,7 +1785,7 @@ def handle_message(event):
                 
             # 發送Flex消息
             if flex_message:
-                line_bot_api.reply_message(reply_token, flex_message)
+        line_bot_api.reply_message(reply_token, flex_message)
             else:
                 # 如果Flex消息創建失敗，發送基本文本消息
                 text_response = f"風險等級：{risk_level}\n詐騙類型：{fraud_type}\n\n分析：{explanation}\n\n建議：{suggestions}"
@@ -1793,25 +1795,25 @@ def handle_message(event):
                 else:
                     line_bot_api.reply_message(reply_token, TextSendMessage(text=text_response))
 
-            if is_emerging and fraud_type != "非詐騙相關":
-                # 新增詐騙手法記錄通知改為單獨推送，避免混淆Flex Message
-                emerging_text = "⚠️ 這可能是一種新的詐騙手法，我已經記錄下來了，謝謝您的資訊！"
+        if is_emerging and fraud_type != "非詐騙相關":
+            # 新增詐騙手法記錄通知改為單獨推送，避免混淆Flex Message
+            emerging_text = "⚠️ 這可能是一種新的詐騙手法，我已經記錄下來了，謝謝您的資訊！"
                 if is_group_message:
                     mention_message = create_mention_message(emerging_text, display_name, user_id)
                     line_bot_api.push_message(group_id if group_id else user_id, mention_message)
-                else:
+        else:
                     line_bot_api.push_message(user_id, TextSendMessage(text=emerging_text))
                 firebase_manager.save_emerging_fraud_report(user_id, display_name, text_message, raw_result)
             
             is_fraud_related = True if fraud_type != "非詐騙相關" and risk_level not in ["無風險", "低"] else False
             
-            # 保存互動記錄到Firebase
-            firebase_manager.save_user_interaction(
+        # 保存互動記錄到Firebase
+        firebase_manager.save_user_interaction(
                 user_id, display_name, text_message, raw_result,
-                is_fraud_related=is_fraud_related,
-                fraud_type=fraud_type if is_fraud_related else None,
-                risk_level=risk_level if is_fraud_related else None
-            )
+            is_fraud_related=is_fraud_related,
+            fraud_type=fraud_type if is_fraud_related else None,
+            risk_level=risk_level if is_fraud_related else None
+        )
             
             # 以15%的機率顯示贊助信息
             if random.random() < 0.15:
@@ -1946,11 +1948,11 @@ def handle_message(event):
             QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text=f"{bot_trigger_keyword} 詐騙類型列表"))
         ])
     else:
-        quick_reply = QuickReply(items=[
-            QuickReplyButton(action=MessageAction(label="分析可疑訊息", text="請幫我分析這則訊息：")),
-            QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text="選哪顆土豆")),
-            QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text="詐騙類型列表"))
-        ])
+    quick_reply = QuickReply(items=[
+        QuickReplyButton(action=MessageAction(label="分析可疑訊息", text="請幫我分析這則訊息：")),
+        QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text="選哪顆土豆")),
+        QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text="詐騙類型列表"))
+    ])
     
     line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
     
@@ -1967,15 +1969,15 @@ def handle_postback(event):
     """处理PostbackEvent（按钮点击等）"""
     try:
         data = event.postback.data
-        reply_token = event.reply_token
+    reply_token = event.reply_token
         user_id = event.source.user_id
         
         # 获取用户显示名称
         user_profile = get_user_profile(user_id)
         display_name = user_profile.display_name if user_profile else '朋友'
-        
+    
         logger.info(f"接收到來自用戶 {user_id} 的 Postback: {data}")
-        
+    
         # 解析 data 参数
         data_parts = data.split('&')
         data_params = {}
@@ -1991,12 +1993,12 @@ def handle_postback(event):
         # 根据 action 参数处理不同的按钮点击
         
         # 处理土豆游戏答案 - 修复action名称不匹配问题
-        if action == 'potato_game_answer':
-            handle_potato_game_answer(user_id, reply_token, data_params)
-            return
+    if action == 'potato_game_answer':
+        handle_potato_game_answer(user_id, reply_token, data_params)
+        return
         
         # 处理新游戏请求
-        elif action == 'start_potato_game':
+    elif action == 'start_potato_game':
             send_potato_game_question(user_id, reply_token)
             return
         
@@ -2012,13 +2014,13 @@ def handle_postback(event):
             )
             
             # 記錄互動
-            firebase_manager.save_user_interaction(
+        firebase_manager.save_user_interaction(
                 user_id, display_name, "請求免費分析次數", 
                 "已給予5次分析次數，現已開放免費無限使用", 
                 is_fraud_related=False
-            )
-            return
-        
+        )
+        return
+    
         # 处理赞助
         elif action == 'donate':
             amount = data_params.get('amount', 'small')
@@ -2360,4 +2362,4 @@ if __name__ == "__main__":
         logger.info(f"工作目錄: {os.getcwd()}")
         
     port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port) 

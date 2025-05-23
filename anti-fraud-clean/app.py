@@ -1331,7 +1331,7 @@ def handle_message(event):
                 TextSendMessage(text=f"抱歉，查詢次數時出現錯誤。您可以繼續使用分析功能，我們會盡快修復問題。")
             )
         return
-    
+
     # 檢查是否為首次對話的用戶
     is_first_time = user_id not in first_time_chatters
     if is_first_time:
