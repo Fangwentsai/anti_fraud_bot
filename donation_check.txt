@@ -1,0 +1,5 @@
+# 檢查是否是贊助鏈接，如果是則返回特殊的彩蛋Flex Message
+for domain in DONATION_DOMAINS:
+    if domain in message_to_analyze:
+        logger.info(f"檢測到贊助鏈接: {domain}，返回彩蛋Flex Message")
+        return create_donation_easter_egg_flex_message() 

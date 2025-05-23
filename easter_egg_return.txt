@@ -1,0 +1,2 @@
+                logger.info(f"檢測到贊助鏈接: {domain}，返回彩蛋Flex Message")
+                return create_donation_easter_egg_flex_message() 

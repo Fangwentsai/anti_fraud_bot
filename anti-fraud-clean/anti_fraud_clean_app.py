@@ -1154,7 +1154,7 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
         donation_url = ""
         for domain in DONATION_DOMAINS:  # 改為只檢查贊助網站
             if domain in message_to_analyze:
-                is_donation_link = True
+                logger.info(f"檢測到贊助鏈接: {domain}，返回彩蛋Flex Message"); return create_donation_easter_egg_flex_message()
                 
                 # 提取完整URL，確保包含https://
                 if "http://" in message_to_analyze or "https://" in message_to_analyze:
@@ -1952,6 +1952,7 @@ def handle_message(event):
             fraud_type=None,
             risk_level=None
         )
+        return  # 添加return語句，防止繼續執行後續邏輯
         return  # 添加return語句，防止繼續執行後續邏輯
 
 @handler.add(PostbackEvent)
