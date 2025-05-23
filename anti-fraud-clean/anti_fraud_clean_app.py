@@ -19,6 +19,7 @@ from linebot.models import (
 )
 from firebase_manager import FirebaseManager
 from domain_spoofing_detector import detect_domain_spoofing
+from calendar_weather_service import CalendarWeatherService, get_today_info, get_weather, get_date_info
 from dotenv import load_dotenv
 import time
 
@@ -87,6 +88,9 @@ openai.api_key = os.environ.get('OPENAI_API_KEY', '')
 
 # 初始化Firebase管理器
 firebase_manager = FirebaseManager.get_instance()
+
+# 初始化天氣服務
+weather_service = CalendarWeatherService()
 
 # 用戶遊戲狀態
 user_game_state = {}
@@ -1154,7 +1158,80 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
         donation_url = ""
         for domain in DONATION_DOMAINS:  # 改為只檢查贊助網站
             if domain in message_to_analyze:
-                logger.info(f"檢測到贊助鏈接: {domain}，返回彩蛋Flex Message"); return FlexSendMessage(alt_text="恭喜你，這是我們的小彩蛋��", contents={"type": "bubble", "body": {"type": "box", "layout": "vertical", "contents": [{"type": "text", "text": "恭喜你，這是我們的小彩蛋👑", "weight": "bold", "size": "xl", "color": "#FF6B35", "align": "center", "wrap": True}, {"type": "separator", "margin": "md"}, {"type": "box", "layout": "vertical", "margin": "lg", "contents": [{"type": "text", "text": "🎉", "size": "xxl", "align": "center", "margin": "md"}, {"type": "text", "text": "這個不是詐騙網站，這就是支持土豆(To-dao)的網站，希望大家能用小小心意幫忙鼓勵我，土豆會更有力氣提醒大家防詐騙啦！👏", "size": "md", "color": "#333333", "align": "center", "wrap": True, "margin": "lg"}]}]}, "footer": {"type": "box", "layout": "vertical", "contents": [{"type": "button", "style": "primary", "height": "sm", "action": {"type": "uri", "label": "贊助我們", "uri": "https://buymeacoffee.com/todao_antifruad"}, "color": "#FF8C42"}]}, "styles": {"body": {"backgroundColor": "#FFF8F0"}, "footer": {"backgroundColor": "#FFF8F0"}}})
+                logger.info(f"檢測到贊助鏈接: {domain}，返回彩蛋Flex Message")
+                return FlexSendMessage(
+                    alt_text="恭喜你，這是我們的小彩蛋👑", 
+                    contents={
+                        "type": "bubble", 
+                        "body": {
+                            "type": "box", 
+                            "layout": "vertical", 
+                            "contents": [
+                                {
+                                    "type": "text", 
+                                    "text": "恭喜你，這是我們的小彩蛋👑", 
+                                    "weight": "bold", 
+                                    "size": "xl", 
+                                    "color": "#FF6B35", 
+                                    "align": "center", 
+                                    "wrap": True
+                                }, 
+                                {
+                                    "type": "separator", 
+                                    "margin": "md"
+                                }, 
+                                {
+                                    "type": "box", 
+                                    "layout": "vertical", 
+                                    "margin": "lg", 
+                                    "contents": [
+                                        {
+                                            "type": "text", 
+                                            "text": "🎉", 
+                                            "size": "xxl", 
+                                            "align": "center", 
+                                            "margin": "md"
+                                        }, 
+                                        {
+                                            "type": "text", 
+                                            "text": "這個不是詐騙網站，這就是支持土豆(To-dao)的網站，希望大家能用小小心意幫忙鼓勵我，土豆會更有力氣提醒大家防詐騙啦！👏", 
+                                            "size": "md", 
+                                            "color": "#333333", 
+                                            "align": "center", 
+                                            "wrap": True, 
+                                            "margin": "lg"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }, 
+                        "footer": {
+                            "type": "box", 
+                            "layout": "vertical", 
+                            "contents": [
+                                {
+                                    "type": "button", 
+                                    "style": "primary", 
+                                    "height": "sm", 
+                                    "action": {
+                                        "type": "uri", 
+                                        "label": "贊助我們", 
+                                        "uri": "https://buymeacoffee.com/todao_antifraud"
+                                    }, 
+                                    "color": "#FF8C42"
+                                }
+                            ]
+                        }, 
+                        "styles": {
+                            "body": {
+                                "backgroundColor": "#FFF8F0"
+                            }, 
+                            "footer": {
+                                "backgroundColor": "#FFF8F0"
+                            }
+                        }
+                    }
+                )
                 
                 # 提取完整URL，確保包含https://
                 if "http://" in message_to_analyze or "https://" in message_to_analyze:
@@ -1707,6 +1784,55 @@ def handle_message(event):
                     ])))
             
             firebase_manager.save_user_interaction(user_id, display_name, text_message, "Responded to unknown fraud type query", is_fraud_related=False)
+            return
+
+    # 處理天氣查詢
+    if is_weather_query(text_message):
+        logger.info(f"User {user_id} is querying weather: {text_message}")
+        try:
+            city = extract_city_from_weather_query(text_message)
+            weather_info = get_weather(city, 3)  # 獲取3天天氣預報
+            
+            if is_group_message:
+                mention_message = create_mention_message(weather_info, display_name, user_id)
+                line_bot_api.reply_message(reply_token, mention_message)
+            else:
+                line_bot_api.reply_message(reply_token, TextSendMessage(text=weather_info))
+            
+            firebase_manager.save_user_interaction(user_id, display_name, text_message, f"提供{city}天氣資訊", is_fraud_related=False)
+            return
+        except Exception as e:
+            logger.error(f"處理天氣查詢時發生錯誤: {e}")
+            error_msg = "抱歉，目前無法獲取天氣資訊，請稍後再試。"
+            if is_group_message:
+                mention_message = create_mention_message(error_msg, display_name, user_id)
+                line_bot_api.reply_message(reply_token, mention_message)
+            else:
+                line_bot_api.reply_message(reply_token, TextSendMessage(text=error_msg))
+            return
+
+    # 處理日期查詢
+    if is_date_query(text_message):
+        logger.info(f"User {user_id} is querying date: {text_message}")
+        try:
+            date_info = get_today_info()  # 獲取今天的日期資訊
+            
+            if is_group_message:
+                mention_message = create_mention_message(date_info, display_name, user_id)
+                line_bot_api.reply_message(reply_token, mention_message)
+            else:
+                line_bot_api.reply_message(reply_token, TextSendMessage(text=date_info))
+            
+            firebase_manager.save_user_interaction(user_id, display_name, text_message, "提供日期資訊", is_fraud_related=False)
+            return
+        except Exception as e:
+            logger.error(f"處理日期查詢時發生錯誤: {e}")
+            error_msg = "抱歉，目前無法獲取日期資訊，請稍後再試。"
+            if is_group_message:
+                mention_message = create_mention_message(error_msg, display_name, user_id)
+                line_bot_api.reply_message(reply_token, mention_message)
+            else:
+                line_bot_api.reply_message(reply_token, TextSendMessage(text=error_msg))
             return
 
     # 檢查是否為請求分析的提示語
@@ -2373,74 +2499,56 @@ def contains_url(text):
 
 # 改進should_perform_fraud_analysis函數，更好地處理網址分析
 def should_perform_fraud_analysis(text_message):
-    """判斷是否需要對消息進行詐騙分析"""
-    if not text_message:
-        return False
-        
-    # 1. 先检查是否是次数查询，避免这类消息被分析
-    if any(keyword in text_message.lower() for keyword in ["剩余次数", "剩餘次數", "查詢次數", "查询次数", "還有幾次", "还有几次", "剩下幾次", "剩下几次", "幾次機會", "几次机会", "幾次分析", "几次分析"]):
-        return False
-    
-    # 2. 檢查是否是詢問機器人工作原理或功能的問題（新增）
-    meta_questions = ["判斷.*邏輯", "如何.*分析", "怎麼.*判斷", "原理.*什麼", "怎麼.*運作", "如何.*運作", "工作.*原理", "分析.*方式", "檢測.*方法"]
-    if any(re.search(pattern, text_message) for pattern in meta_questions):
-        logger.info(f"訊息是詢問機器人工作原理，不進行詐騙分析")
-        return False
-        
-    # 3. 直接檢查是否含有URL，如果有優先分析
+    """判斷是否應該進行詐騙分析"""
+    # 檢查是否包含URL
     if contains_url(text_message):
-        logger.info(f"訊息中含有URL，將進行詐騙分析")
         return True
-        
-    # 4. 檢查是否包含常見問候詞和簡短訊息
-    common_greetings = ["你好", "嗨", "哈囉", "嘿", "hi", "hello", "hey", "早安", "午安", "晚安"]
-    if text_message.lower() in common_greetings or (len(text_message) <= 5 and any(greeting in text_message.lower() for greeting in common_greetings)):
-        return False
-        
-    # 5. 檢查是否含有明確的分析請求關鍵詞
-    analysis_keywords = ["分析", "詐騙", "安全", "可疑", "風險", "網站"]
-    if any(keyword in text_message.lower() for keyword in analysis_keywords) and "嗎" in text_message:
-        # 如果同時包含分析關鍵詞和疑問詞，可能是請求分析
-        logger.info(f"訊息包含分析請求關鍵詞和疑問詞，將進行詐騙分析")
-        return True
-        
-    # 6. 檢查是否與已知的網域相關
-    for domain in SHORT_URL_DOMAINS + list(SAFE_DOMAINS.keys()):  # 修復：將字典鍵轉換為列表
-        if domain.lower() in text_message.lower():
-            logger.info(f"訊息包含已知網域 {domain}，將進行詐騙分析")
+    
+    # 檢查是否包含詐騙相關關鍵詞
+    fraud_keywords = ["詐騙", "可疑", "不確定", "這是真的嗎", "幫我看看", "分析", "風險"]
+    for keyword in fraud_keywords:
+        if keyword in text_message:
             return True
     
-    # 7. 檢查是否是功能相關指令
-    if any(keyword in text_message.lower() for keyword in function_inquiry_keywords + potato_game_trigger_keywords) or "詐騙類型" in text_message:
-        return False
-        
-    # 8. 檢查是否是跟踪模式的問句（修改邏輯，排除詢問機器人的問題）
-    if any(pattern in text_message.lower() for pattern in follow_up_patterns):
-        # 如果包含詢問詞（什麼、如何、怎麼等），可能是詢問而非需要分析的內容
-        inquiry_words = ["什麼", "如何", "怎麼", "為什麼", "邏輯", "原理", "方式", "方法"]
-        if any(word in text_message for word in inquiry_words):
-            logger.info(f"訊息包含詢問詞，判斷為詢問而非需要分析的內容")
-            return False
-        return True
-        
-    # 9. 檢查是否是請求分析的明顯特徵
-    analysis_indicators = ["幫我分析", "幫忙看看", "這是不是詐騙", "這是真的嗎", "這可靠嗎", "分析一下", "這樣是詐騙嗎"]
-    if any(indicator in text_message for indicator in analysis_indicators):
-        return True
-        
-    # 10. 檢查是否包含特定詐騙相關關鍵詞
-    # 只有使用者明確表示需要分析，或者文本包含多個詐騙關鍵詞才進行分析
-    fraud_related_keywords = ["詐騙", "被騙", "騙子", "可疑", "轉帳", "匯款", "銀行帳號", "個資", "身份證", "密碼", 
-                            "通知", "中獎", "貸款", "投資", "急需", "幫我處理", "急用", "解除設定", "提款卡", 
-                            "監管帳戶", "解凍", "安全帳戶", "簽證", "保證金", "違法", "洗錢", "警察", "檢察官"]
-                            
-    # 要求至少包含兩個詐騙相關關鍵詞
-    keyword_count = sum(1 for keyword in fraud_related_keywords if keyword in text_message)
-    if keyword_count >= 2:
-        return True
-        
-    # 11. 預設不進行詐騙分析，將訊息作為一般閒聊處理
     return False
+
+def is_weather_query(text):
+    """檢測是否為天氣查詢"""
+    weather_keywords = [
+        "天氣", "氣溫", "下雨", "晴天", "陰天", "多雲", "颱風", "溫度",
+        "今天天氣", "明天天氣", "天氣預報", "會下雨嗎", "熱不熱", "冷不冷",
+        "台北天氣", "高雄天氣", "台中天氣", "台南天氣", "桃園天氣", "新北天氣"
+    ]
+    
+    for keyword in weather_keywords:
+        if keyword in text.lower():
+            return True
+    return False
+
+def is_date_query(text):
+    """檢測是否為日期查詢"""
+    date_keywords = [
+        "今天", "明天", "昨天", "日期", "幾號", "星期", "禮拜", "週",
+        "今天幾號", "現在幾點", "農曆", "國曆", "節氣", "今天星期幾",
+        "今天是什麼日子", "今天幾月幾號", "現在是幾月"
+    ]
+    
+    for keyword in date_keywords:
+        if keyword in text.lower():
+            return True
+    return False
+
+def extract_city_from_weather_query(text):
+    """從天氣查詢中提取城市名稱"""
+    cities = ["台北", "新北", "桃園", "台中", "台南", "高雄", "基隆", "新竹", 
+              "苗栗", "彰化", "南投", "雲林", "嘉義", "屏東", "宜蘭", "花蓮", 
+              "台東", "澎湖", "金門", "連江"]
+    
+    for city in cities:
+        if city in text:
+            return city
+    
+    return "台北"  # 預設城市
 
 if __name__ == "__main__":
     # 確保在服務啟動時重新加載題庫
