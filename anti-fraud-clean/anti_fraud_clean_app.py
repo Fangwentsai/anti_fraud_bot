@@ -2012,7 +2012,7 @@ def handle_message(event):
                 model=os.environ.get('OPENAI_MODEL', 'gpt-3.5-turbo'),
                 messages=messages,
                 temperature=0.7,
-                max_tokens=200
+                max_tokens=500
             )
             
             chat_reply = chat_response.choices[0].message.content.strip()
@@ -2046,6 +2046,11 @@ def handle_message(event):
                 QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text=f"{bot_trigger_keyword} 選哪顆土豆")),
                 QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text=f"{bot_trigger_keyword} 詐騙類型列表"))
             ])
+            
+            # 檢查回覆長度，LINE限制5000字元
+            if len(reply_text) > 4900:  # 留一些緩衝空間
+                reply_text = reply_text[:4900] + "...\n\n(回覆內容過長，已截斷)"
+            
             mention_message = create_mention_message(reply_text, display_name, user_id, quick_reply)
             line_bot_api.reply_message(reply_token, mention_message)
         else:
@@ -2054,6 +2059,11 @@ def handle_message(event):
                 QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text="選哪顆土豆")),
                 QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text="詐騙類型列表"))
             ])
+            
+            # 檢查回覆長度，LINE限制5000字元
+            if len(reply_text) > 4900:  # 留一些緩衝空間
+                reply_text = reply_text[:4900] + "...\n\n(回覆內容過長，已截斷)"
+            
             line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
         
         # 保存互動記錄到Firebase
