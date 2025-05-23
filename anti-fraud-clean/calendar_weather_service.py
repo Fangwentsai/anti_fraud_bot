@@ -141,7 +141,7 @@ class CalendarWeatherService:
             }
             
         except requests.RequestException as e:
-            logger.error(f"天氣API請求失敗: {e}")
+            logger.warning(f"天氣API請求失敗，使用模擬資料回退: {e}")
             return self._get_mock_weather_data(city, days)
         except Exception as e:
             logger.error(f"獲取天氣預報時發生錯誤: {e}")
