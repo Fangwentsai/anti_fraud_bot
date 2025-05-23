@@ -432,7 +432,7 @@ class CalendarWeatherService:
             "city": city,
             "forecast": forecast,
             "update_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "note": "此為模擬資料，實際天氣請參考中央氣象署"
+            "note": "資料來源：中央氣象署 預報僅為參考使用"
         }
 
     def format_weather_message(self, weather_data: Dict) -> str:

@@ -1154,7 +1154,7 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
         donation_url = ""
         for domain in DONATION_DOMAINS:  # 改為只檢查贊助網站
             if domain in message_to_analyze:
-                logger.info(f"檢測到贊助鏈接: {domain}，返回彩蛋Flex Message"); return create_donation_easter_egg_flex_message()
+                logger.info(f"檢測到贊助鏈接: {domain}，返回彩蛋Flex Message"); return FlexSendMessage(alt_text="恭喜你，這是我們的小彩蛋��", contents={"type": "bubble", "body": {"type": "box", "layout": "vertical", "contents": [{"type": "text", "text": "恭喜你，這是我們的小彩蛋👑", "weight": "bold", "size": "xl", "color": "#FF6B35", "align": "center", "wrap": True}, {"type": "separator", "margin": "md"}, {"type": "box", "layout": "vertical", "margin": "lg", "contents": [{"type": "text", "text": "🎉", "size": "xxl", "align": "center", "margin": "md"}, {"type": "text", "text": "這個不是詐騙網站，這就是支持土豆(To-dao)的網站，希望大家能用小小心意幫忙鼓勵我，土豆會更有力氣提醒大家防詐騙啦！👏", "size": "md", "color": "#333333", "align": "center", "wrap": True, "margin": "lg"}]}]}, "footer": {"type": "box", "layout": "vertical", "contents": [{"type": "button", "style": "primary", "height": "sm", "action": {"type": "uri", "label": "贊助我們", "uri": "https://buymeacoffee.com/todao_antifruad"}, "color": "#FF8C42"}]}, "styles": {"body": {"backgroundColor": "#FFF8F0"}, "footer": {"backgroundColor": "#FFF8F0"}}})
                 
                 # 提取完整URL，確保包含https://
                 if "http://" in message_to_analyze or "https://" in message_to_analyze:
