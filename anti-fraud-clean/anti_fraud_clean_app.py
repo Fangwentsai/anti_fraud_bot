@@ -18,11 +18,39 @@ import random
 import datetime  # 導入datetime用於時間比較
 import re
 import time
+import requests
+from urllib.parse import urlparse
 
 # 指定 .env 文件的路徑
 # 假設 anti-fraud-clean 和 linebot-anti-fraud 是同級目錄
 dotenv_path = os.path.join(os.path.dirname(__file__), '..', 'linebot-anti-fraud', '.env')
 load_dotenv(dotenv_path=dotenv_path)
+
+# 短網址服務的域名列表
+SHORT_URL_DOMAINS = [
+    'bit.ly', 'tinyurl.com', 'goo.gl', 'is.gd', 'buff.ly', 
+    'ow.ly', 't.co', 'rebrand.ly', 'cutt.ly', 'shorturl.at',
+    'urls.tw', 'ppt.cc', 'reurl.cc', 'lihi.vip', 'lihi1.com', 
+    'lihi2.cc', 'lihi3.cc', 'tny.im', 'tinyurl.app'
+]
+
+# 台灣常用的可靠網站域名白名單
+SAFE_DOMAINS = [
+    'line.me', 'line.com', 'shopping.friday.tw', 'friday.tw', 'taipei.gov.tw', 
+    'gov.tw', 'edu.tw', 'ntu.edu.tw', 'ntnu.edu.tw', 'ntust.edu.tw', 
+    'taiwanmobile.com', 'fetnet.net', 'cht.com.tw', 'chunghua.com.tw', 
+    'chunghwa.com.tw', 'hinet.net', 'famiport.com.tw', 'wemoscooter.com', 
+    'youbike.com.tw', 'ubike.com.tw', 'ibon.com.tw', 'ezpay.com.tw', 
+    'icstw.com.tw', 'lego.com', 'apple.com', 'microsoft.com', 'google.com', 
+    'facebook.com', 'instagram.com', 'shopee.tw', 'momoshop.com.tw', 
+    'ruten.com.tw', 'pcstore.com.tw', 'pchome.com.tw', 'books.com.tw', 
+    'kingstone.com.tw', 'eslite.com', 'cathaylife.com.tw', 'skyscanner.com.tw', 
+    'booking.com', 'agoda.com', 'klook.com', 'kkday.com', 'iaai.com.tw',
+    'mcdonalds.com.tw', 'foodpanda.com.tw', 'ubereats.com', 'pizzahut.com.tw',
+    'dominos.com.tw', 'post.gov.tw', 'ipost.com.tw', 'family.com.tw',
+    'hilife.com.tw', 'okmart.com.tw', '7-11.com.tw', 'seveneleven.com.tw', 
+    'buymeacoffee.com', 'bokail.com', 'documid.com'
+]
 
 app = Flask(__name__)
 
@@ -54,6 +82,44 @@ CHAT_TIP_PROBABILITY = 0.3 # 閒聊時回覆防詐小知識的機率
 function_inquiry_keywords = ["功能", "幫助", "會什麼", "能做什麼", "使用說明", "你是誰"]
 follow_up_patterns = ["被騙", "詐騙", "可疑", "不確定", "幫我看看", "這是詐騙嗎", "這是真的嗎"]
 potato_game_trigger_keywords = ["選哪顆土豆", "玩遊戲", "土豆遊戲", "選土豆", "選土豆遊戲", "開始遊戲"]
+bot_trigger_keyword = "嗨土豆" # 群組中觸發機器人服務的關鍵詞
+
+def expand_short_url(url):
+    """
+    嘗試展開短網址，返回原始URL和展開後的URL
+    
+    Args:
+        url: 可能的短網址
+    
+    Returns:
+        tuple: (原始URL, 展開後的URL, 是否為短網址, 是否成功展開)
+    """
+    # 檢查是否為短網址
+    parsed_url = urlparse(url)
+    is_short_url = False
+    for domain in SHORT_URL_DOMAINS:
+        if domain in parsed_url.netloc:
+            is_short_url = True
+            break
+    
+    if not is_short_url:
+        return url, url, False, False
+    
+    # 嘗試展開短網址
+    try:
+        session = requests.Session()
+        response = session.head(url, allow_redirects=True, timeout=5)
+        expanded_url = response.url
+        
+        if expanded_url != url:
+            logger.info(f"成功展開短網址: {url} -> {expanded_url}")
+            return url, expanded_url, True, True
+        else:
+            logger.warning(f"URL可能不是短網址或無法展開: {url}")
+            return url, url, True, False
+    except Exception as e:
+        logger.error(f"展開短網址時出錯: {e}")
+        return url, url, True, False
 
 # 定義防詐小知識
 anti_fraud_tips = [
@@ -520,22 +586,37 @@ SAFE_DOMAINS = [
 def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None):
     """使用OpenAI的API檢測詐騙信息"""
     try:
-        #TODO: 隨機產生一個用於儲存防詐評估結果的圖檔名稱
+        # 檢查訊息是否包含URL
+        original_url = None
+        expanded_url = None
+        is_short_url = False
+        url_expanded_successfully = False
         
-        # 先檢查是否有足夠的分析次數 (暫時移除限制，讓用戶免費無限使用)
-        # if user_id:
-        #     remaining_credits = firebase_manager.get_user_analysis_credits(user_id)
-        #     logger.info(f"用户 {user_id} 剩余分析次数: {remaining_credits}")
-        #
-        #     if remaining_credits <= 0:
-        #         return {
-        #             "success": False,
-        #             "message": f"抱歉，您的免費分析次數已用完。請觀看廣告或贊助我們獲取更多分析機會。"
-        #         }
+        url_pattern = re.compile(r'(https?://\S+|www\.\S+)')
+        url_match = url_pattern.search(user_message)
         
+        if url_match:
+            original_url = url_match.group(0)
+            # 確保URL開頭是http://或https://
+            if not original_url.startswith(('http://', 'https://')):
+                original_url = 'https://' + original_url
+                
+            # 展開可能的短網址
+            original_url, expanded_url, is_short_url, url_expanded_successfully = expand_short_url(original_url)
+            
+            # 如果是短網址且成功展開，調整分析訊息
+            if is_short_url and url_expanded_successfully:
+                # 將原始訊息中的短網址替換為展開後的URL，以便於分析
+                analysis_message = user_message.replace(original_url, f"{original_url} (展開後: {expanded_url})")
+                logger.info(f"已展開短網址進行分析: {original_url} -> {expanded_url}")
+            else:
+                analysis_message = user_message
+        else:
+            analysis_message = user_message
+
         # 檢查訊息是否包含白名單中的網址
         for safe_domain in SAFE_DOMAINS:
-            if safe_domain in user_message:
+            if safe_domain in analysis_message:
                 logger.info(f"檢測到白名單中的域名: {safe_domain}")
                 return {
                     "success": True,
@@ -543,27 +624,39 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                     "result": {
                         "risk_level": "低風險",
                         "fraud_type": "非詐騙相關",
-                        "explanation": "這是我們的官方贊助鏈接，完全安全可靠。",
-                        "suggestions": "感謝您的支持！您的贊助將幫助我們提供更好的服務。",
+                        "explanation": f"這個網站是{safe_domain}，是台灣常見的可靠網站，可以安心使用。",
+                        "suggestions": "這是正規網站，不必特別擔心。如有疑慮，建議您直接從官方管道進入該網站。",
                         "is_emerging": False,
-                        "display_name": display_name
+                        "display_name": display_name,
+                        "original_url": original_url,
+                        "expanded_url": expanded_url,
+                        "is_short_url": is_short_url,
+                        "url_expanded_successfully": url_expanded_successfully
                     },
-                    "raw_result": "經過分析，這是官方認可的合法贊助鏈接，完全可信。"
+                    "raw_result": "經過分析，這是已知的可信任網站。"
                 }
             
+        # 如果是短網址但無法展開，提高風險評估
+        special_notes = ""
+        if is_short_url and not url_expanded_successfully:
+            special_notes = "這是個短網址，但我們無法展開查看真正的目的地，這種情況要特別小心。短網址常被詐騙者利用來隱藏真實的惡意網站。除非您非常確定這個連結安全，否則不建議點擊。"
+            logger.warning(f"無法展開的短網址: {original_url}，建議提高警覺")
+        
         openai_prompt = f"""
-        你是一個詐騙風險評估專家，具有豐富的詐騙手法分析經驗。
+        你是一個詐騙風險評估專家，專門為50歲以上的中老年人提供易懂的風險分析。
         請分析以下信息是否包含詐騙相關內容，並按照以下格式輸出結果：
         
         風險等級：（低風險、中風險、高風險）
         詐騙類型：（如果有詐騙風險，請指出具體類型，例如：假網購、假交友、假投資、假貸款、假求職等；如果無風險，填"無"）
-        說明：（請用客觀、直接的語氣說明判斷依據，不要使用「您」「我」等主觀表述，而是使用「這網址看起來有點怪」「點進去可能會被騙輸入資料或錢錢」等更口語化但專業的表述）
-        建議：（針對潛在風險，提供具體可行的建議，使用要點列表如「不要隨便點」「不要輸入個人資料或信用卡」）
+        說明：（請用非常口語化、親切的語氣說明判斷依據，避免使用專業術語，就像在跟長輩解釋一樣。例如不要說「此網站使用混淆技術規避檢測」，而是說「這個網站看起來怪怪的，網址跟正常的不一樣，可能是假冒的」。也不要說「您」或「我」，而是直接說「這網站可能會騙人」「小心不要點這個連結」等）
+        建議：（針對潛在風險，用簡單易懂的語言提供1-3點具體建議，例如「不要點這個連結」「不要提供銀行帳號」「收到這種訊息時，先打電話問問家人」等）
         新興手法：是/否
+        
+        {special_notes}
         
         以下是需要分析的信息：
         ---
-        {user_message}
+        {analysis_message}
         ---
         
         請用繁體中文回答，避免直接使用問候語。直接開始分析。回答應簡潔直接，像是專家給出的風險提醒。
@@ -573,7 +666,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         response = openai.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "你是一個詐騙風險評估專家，請以客觀專業的口吻分析詐騙風險。避免使用「您」「我」等主觀用詞，而是使用更直接的專業表述。提供的建議應該具體實用且直接。"},
+                {"role": "system", "content": "你是一個詐騙風險評估專家，請以50歲以上的長輩能理解的口語化方式分析詐騙風險。避免使用「您」「我」等主觀用詞，而是使用更直接的表述。提供的建議應該具體實用且直接。"},
                 {"role": "user", "content": openai_prompt}
             ],
             temperature=0.2,
@@ -584,16 +677,33 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
             analysis_result = response.choices[0].message.content.strip()
             logger.info(f"風險分析結果: {analysis_result[:100]}...")  # 僅記錄部分結果
             
-            # 減少用戶的分析次數 (暫時移除限制)
-            # if user_id:
-            #     firebase_manager.decrease_user_analysis_credits(user_id)
-            #     logger.info(f"用户 {user_id} 分析次数减少，剩余 {remaining_credits-1} 次")
-            
             # 將結果解析成結構化格式
             parsed_result = parse_fraud_analysis(analysis_result)
             
             # 添加一個使用者可識別的標識
             parsed_result["display_name"] = display_name
+            
+            # 添加URL相關信息
+            parsed_result["original_url"] = original_url
+            parsed_result["expanded_url"] = expanded_url
+            parsed_result["is_short_url"] = is_short_url
+            parsed_result["url_expanded_successfully"] = url_expanded_successfully
+            
+            # 如果是短網址但無法展開，提高風險等級
+            if is_short_url and not url_expanded_successfully:
+                if parsed_result["risk_level"] == "低風險":
+                    parsed_result["risk_level"] = "中風險"
+                    parsed_result["explanation"] = f"{parsed_result['explanation']}\n\n⚠️ 此外，這是一個短網址但無法展開查看真正的目的地，這點也要特別小心。"
+                
+                if "短網址" not in parsed_result["explanation"]:
+                    parsed_result["explanation"] = f"{parsed_result['explanation']}\n\n⚠️ 要注意這是一個短網址(像是縮短過的網址)，無法看到真正要去的網站，這種情況要特別小心。"
+                
+                if "短網址" not in parsed_result["suggestions"]:
+                    parsed_result["suggestions"] = f"{parsed_result['suggestions']}\n• 遇到短網址時，最好先詢問傳送連結的人是什麼內容，或者乾脆不要點擊。"
+            
+            # 如果是短網址且成功展開，在結果中加入說明
+            if is_short_url and url_expanded_successfully:
+                parsed_result["explanation"] = f"{parsed_result['explanation']}\n\n這個連結是短網址，已經幫您展開查看真正的目的地是: {expanded_url}"
             
             # 檢查解析結果，確保所有必要欄位都有值
             if not parsed_result.get("explanation") or parsed_result["explanation"] == "無法解析分析結果。":
@@ -603,7 +713,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                 
                 # 確保理由不為空
                 if not parsed_result["explanation"] or parsed_result["explanation"].strip() == "":
-                    parsed_result["explanation"] = "系統無法提供詳細分析，但請謹慎處理此內容。"
+                    parsed_result["explanation"] = "這個內容看起來有點奇怪，建議不要輕易點擊或提供個人資料。如果不確定，可以請家人幫忙確認一下。"
             
             return {
                 "success": True,
@@ -958,6 +1068,12 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
         explanation = analysis_data.get("explanation", "")
         suggestions = analysis_data.get("suggestions", "")
         
+        # URL相關信息
+        original_url = analysis_data.get("original_url")
+        expanded_url = analysis_data.get("expanded_url")
+        is_short_url = analysis_data.get("is_short_url", False)
+        url_expanded_successfully = analysis_data.get("url_expanded_successfully", False)
+        
         # 解析分析理由和建議（如果是字符串，按行分割；如果已經是列表，直接使用）
         reasons = []
         if isinstance(explanation, str) and explanation.strip():
@@ -1077,34 +1193,77 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
             "margin": "md"
         })
         
-        # 添加剩餘次數提示 (已修改為顯示無限)
-        contents.append({
-            "type": "box",
-            "layout": "horizontal",
-            "contents": [
-                {
-                    "type": "text",
-                    "text": "🎁 剩餘次數",
-                    "size": "md",
-                    "color": "#555555",
-                    "flex": 0
-                },
-                {
-                    "type": "text",
-                    "text": f"{remaining_credits}",
-                    "size": "md",
-                    "color": "#555555",
-                    "align": "end"
-                }
-            ],
-            "margin": "md"
-        })
-        
         # 添加分隔線
         contents.append({
             "type": "separator",
             "margin": "md"
         })
+        
+        # 顯示分析的URL信息
+        if original_url:
+            contents.append({
+                "type": "text",
+                "text": "🌐 檢測的網址",
+                "weight": "bold",
+                "margin": "lg",
+                "size": "md",
+                "color": "#1DB446"
+            })
+            
+            # 顯示原始URL (可能是短網址)
+            url_display = original_url
+            if len(url_display) > 45:
+                url_display = url_display[:42] + "..."
+                
+            contents.append({
+                "type": "text",
+                "text": url_display,
+                "size": "sm",
+                "margin": "md",
+                "color": "#333333",
+                "wrap": True
+            })
+            
+            # 如果是短網址且成功展開，顯示展開後的URL
+            if is_short_url and url_expanded_successfully and expanded_url != original_url:
+                contents.append({
+                    "type": "text",
+                    "text": "👉 展開後的完整網址",
+                    "weight": "bold",
+                    "margin": "md",
+                    "size": "sm",
+                    "color": "#555555"
+                })
+                
+                expanded_url_display = expanded_url
+                if len(expanded_url_display) > 45:
+                    expanded_url_display = expanded_url_display[:42] + "..."
+                    
+                contents.append({
+                    "type": "text",
+                    "text": expanded_url_display,
+                    "size": "sm",
+                    "margin": "sm",
+                    "color": "#333333",
+                    "wrap": True
+                })
+                
+            # 如果是短網址但無法展開，顯示警告
+            elif is_short_url and not url_expanded_successfully:
+                contents.append({
+                    "type": "text",
+                    "text": "⚠️ 這是短網址，但無法查看它會連到哪裡",
+                    "size": "sm",
+                    "margin": "md",
+                    "color": "#E74C3C",
+                    "weight": "bold",
+                    "wrap": True
+                })
+            
+            contents.append({
+                "type": "separator",
+                "margin": "md"
+            })
         
         # 如果是贊助鏈接，添加特殊感謝信息
         if is_donation_link:
@@ -1329,183 +1488,44 @@ def handle_message(event):
     current_time = datetime.datetime.now()
 
     logger.info(f"Received message from {display_name} ({user_id}): {text_message}")
-
-    # 檢查是否為首次對話的用戶
-    is_first_time = user_id not in first_time_chatters
-    if is_first_time:
-        first_time_chatters.add(user_id)
-        logger.info(f"User {user_id} is chatting for the first time")
-
-    # 更新用戶最後聊天時間
-    user_last_chat_time[user_id] = current_time
-
-    # 首先检查用户是否在查询剩余分析次数
-    if any(keyword in text_message.lower() for keyword in ["剩余次数", "剩餘次數", "查詢次數", "查询次数", "還有幾次", "还有几次", "剩下幾次", "剩下几次", "幾次機會", "几次机会", "幾次分析", "几次分析"]):
-        logger.info(f"User {user_id} is querying remaining analysis credits")
-        try:
-            # 获取用户分析次数
-            analysis_credits = firebase_manager.get_user_analysis_credits(user_id)
-            
-            # 准备回复文本
-            response_text = f"您好，{display_name}！\n"
-            
-            if firebase_manager.db:
-                response_text += f"您目前剩餘 {analysis_credits} 次分析機會。"
-                
-                if analysis_credits <= 0:
-                    # 次数不足的情况
-                    response_text += "\n\n您的免費分析次數已用完。您可以透過觀看廣告或小額贊助獲取更多次數。"
-                    
-                    # 构建带按钮的回复
-                    flex_message = FlexSendMessage(
-                        alt_text="分析次數不足",
-                        contents={
-                            "type": "bubble",
-                            "body": {
-                                "type": "box",
-                                "layout": "vertical",
-                                "contents": [
-                                    {
-                                        "type": "text",
-                                        "text": "分析次數不足",
-                                        "weight": "bold",
-                                        "size": "xl"
-                                    },
-                                    {
-                                        "type": "text",
-                                        "text": f"您好，{display_name}！您的免費分析次數已用完。",
-                                        "wrap": True,
-                                        "margin": "md"
-                                    },
-                                    {
-                                        "type": "text",
-                                        "text": "您可以透過觀看廣告或小額贊助獲取更多分析次數。",
-                                        "wrap": True,
-                                        "margin": "md"
-                                    }
-                                ]
-                            },
-                            "footer": {
-                                "type": "box",
-                                "layout": "vertical",
-                                "spacing": "sm",
-                                "contents": [
-                                    {
-                                        "type": "button",
-                                        "style": "primary",
-                                        "action": {
-                                            "type": "postback",
-                                            "label": "觀看廣告獲取次數",
-                                            "data": "action=view_ad&type=unity"
-                                        }
-                                    },
-                                    {
-                                        "type": "button",
-                                        "style": "secondary",
-                                        "action": {
-                                            "type": "postback",
-                                            "label": "NT$50贊助(10次)",
-                                            "data": "action=donate&amount=small"
-                                        }
-                                    }
-                                ]
-                            }
-                        }
-                    )
-                    
-                    line_bot_api.reply_message(reply_token, flex_message)
-                else:
-                    # 次数充足的情况
-                    response_text += f"\n\n每位用戶初始有5次免費分析機會。如需更多次數，可以透過觀看廣告或小額贊助獲取。\n\n觀看一次廣告可獲得1次分析機會，或者每NT$50的贊助可獲得10次分析機會。"
-                    
-                    line_bot_api.reply_message(
-                        reply_token,
-                        TextSendMessage(text=response_text)
-                    )
-            else:
-                # Firebase未连接的情况
-                line_bot_api.reply_message(
-                    reply_token,
-                    TextSendMessage(text="土豆這邊沒有分析次數的限制喔！您可以隨時使用分析功能。")
-                )
-            
-            # 记录互动
-            firebase_manager.save_user_interaction(
-                user_id, display_name, text_message, 
-                f"查詢剩餘分析次數，當前剩餘{analysis_credits}次", 
-                is_fraud_related=False
-            )
-        except Exception as e:
-            logger.error(f"處理次數查詢時出錯: {e}")
-            line_bot_api.reply_message(
-                reply_token,
-                TextSendMessage(text=f"抱歉，查詢次數時出現錯誤。您可以繼續使用分析功能，我們會盡快修復問題。")
-            )
+    
+    # 檢查是否為群組訊息
+    is_group_message = False
+    if hasattr(event.source, "type") and event.source.type in ["group", "room"]:
+        is_group_message = True
+        logger.info(f"這是一則群組訊息 (類型: {event.source.type})")
+    
+    # 檢查是否包含觸發關鍵詞 "嗨土豆"
+    # 如果是群組訊息，則必須包含觸發關鍵詞才回應；如果是私聊，則不需要關鍵詞
+    if is_group_message and bot_trigger_keyword not in text_message:
+        logger.info(f"群組訊息不包含觸發關鍵詞 '{bot_trigger_keyword}'，忽略此訊息")
         return
-
-    # 0. 檢查是否正在等待用戶對某訊息提供澄清
-    pending_state = user_pending_analysis.get(user_id)
-    if pending_state and pending_state.get("waiting_for_clarification"):
-        logger.info(f"User {user_id} is providing clarification for: {pending_state.get('original_message')}")
-        clarification = text_message
-        original_message_to_analyze = pending_state.get("original_message")
-        
-        # 將原始訊息與用戶的澄清合併後進行分析
-        combined_message = f"用戶原始訊息是：\n「{original_message_to_analyze}」\n\n用戶針對此訊息，補充的疑慮或說明是：\n「{clarification}」"
-        logger.info(f"Combined message for analysis for user {user_id}: {combined_message}")
-
-        analysis_result_text = detect_fraud_with_chatgpt(combined_message, display_name, user_id)
-        analysis_data = parse_fraud_analysis(analysis_result_text)
-
-        # 創建並發送Flex Message分析結果
-        flex_message = create_analysis_flex_message(analysis_data, display_name, combined_message, user_id)
-        line_bot_api.reply_message(reply_token, flex_message)
-
-        # 保存互動記錄
-        risk_level = analysis_data.get("risk_level", "不確定")
-        fraud_type = analysis_data.get("fraud_type", "未知")
-        firebase_manager.save_user_interaction(
-            user_id, display_name, 
-            f"Original: {original_message_to_analyze} | Clarification: {clarification}", 
-            analysis_result_text, 
-            is_fraud_related=(risk_level.lower() not in ["無風險", "不確定", "非詐騙相關", "低", "低風險"]),
-            fraud_type=fraud_type, 
-            risk_level=risk_level
-        )
-        
-        if user_id in user_pending_analysis:
-            del user_pending_analysis[user_id]
-        user_last_chat_time[user_id] = current_time
-        return
-
-    # 檢查用戶是否在遊戲中
-    if user_id in user_game_state:
-        logger.info(f"User {user_id} is in potato game state.")
-        # 檢查是否需要重置自動回覆計時器 (例如超過5分鐘沒有互動)
-        # 這段邏輯可以根據實際需求保留或調整
-        # if user_id in user_last_chat_time and (current_time - user_last_chat_time[user_id]) > AUTO_REPLY_RESET_INTERVAL:
-        # logger.info(f"Resetting auto-reply for user {user_id} due to inactivity.")
-        # # 可以在這裡發送一個新的問候語或提示
-        # greeting_message = f"{display_name}您好！又見面了，有什麼可以幫您的嗎？試試看輸入「功能」了解我會做什麼！"
-        # line_bot_api.push_message(user_id, TextSendMessage(text=greeting_message))
-        # firebase_manager.save_user_interaction(user_id, display_name, "Auto-reply reset", greeting_message, is_fraud_related=False)
-
-        # 更新用戶最後聊天時間 (即便只是用戶發訊息，尚未回覆，也更新)
-        user_last_chat_time[user_id] = current_time
-        
-        # 處理功能詢問
-        if any(keyword in text_message.lower() for keyword in function_inquiry_keywords):
+    
+    # 如果是群組訊息且包含觸發關鍵詞，移除關鍵詞以處理實際命令
+    if is_group_message and bot_trigger_keyword in text_message:
+        text_message = text_message.replace(bot_trigger_keyword, "").strip()
+        logger.info(f"移除觸發關鍵詞後的訊息: {text_message}")
+        # 如果移除關鍵詞後訊息為空，則發送功能說明
+        if not text_message:
             reply_text = f"{display_name}您好！我是防詐騙小幫手，我的功能包括：\n\n" \
                         f"1️⃣ 詐騙風險分析：我可以分析您收到的可疑訊息，評估是否為詐騙\n\n" \
                         f"2️⃣ 詐騙類型查詢：您可以輸入「詐騙類型列表」查看各種常見詐騙\n\n" \
                         f"3️⃣ 「選哪顆土豆」小遊戲：通過遊戲學習辨識詐騙訊息\n\n" \
                         f"請選擇您想嘗試的功能："
             
-            quick_reply = QuickReply(items=[
-                QuickReplyButton(action=MessageAction(label="分析可疑訊息", text="請幫我分析這則訊息：")),
-                QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text="選哪顆土豆")),
-                QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text="詐騙類型列表"))
-            ])
+            # 如果在群組中，QuickReply按鈕需要包含觸發關鍵詞
+            if is_group_message:
+                quick_reply = QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="分析可疑訊息", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
+                    QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text=f"{bot_trigger_keyword} 選哪顆土豆")),
+                    QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text=f"{bot_trigger_keyword} 詐騙類型列表"))
+                ])
+            else:
+                quick_reply = QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="分析可疑訊息", text="請幫我分析這則訊息：")),
+                    QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text="選哪顆土豆")),
+                    QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text="詐騙類型列表"))
+                ])
             
             line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
             firebase_manager.save_user_interaction(user_id, display_name, text_message, "回覆功能說明", is_fraud_related=False)
@@ -2239,3 +2259,9 @@ def create_donation_flex_message():
         logger.error(f"創建贊助Flex Message時發生錯誤: {e}")
         # 返回一個簡單的文本消息作為備用
         return TextSendMessage(text="感謝您的使用！如果覺得服務有幫助，歡迎贊助支持我們：https://buymeacoffee.com/todao_antifruad")
+
+# 檢查是否為首次對話的用戶
+is_first_time = user_id not in first_time_chatters
+if is_first_time:
+    first_time_chatters.add(user_id)
+    logger.info(f"User {user_id} is chatting for the first time")
