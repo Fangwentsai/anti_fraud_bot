@@ -2550,17 +2550,173 @@ def extract_city_from_weather_query(text):
     
     return "台北"  # 預設城市
 
+def create_domain_spoofing_flex_message(spoofing_result, display_name, message_to_analyze, user_id=None):
+    """創建網域變形攻擊專用的Flex Message"""
+    try:
+        original_domain = spoofing_result.get('original_domain', '未知網域')
+        spoofed_domain = spoofing_result.get('spoofed_domain', '可疑網域')
+        spoofing_type = spoofing_result.get('spoofing_type', '網域變形')
+        risk_explanation = spoofing_result.get('risk_explanation', '檢測到可疑的網域變形攻擊')
+        
+        # 截斷過長的分析消息
+        if len(message_to_analyze) > 50:
+            short_message = message_to_analyze[:47] + "..."
+        else:
+            short_message = message_to_analyze
+        
+        flex_message = FlexSendMessage(
+            alt_text=f"⚠️ 網域變形攻擊警告！{spoofed_domain} 疑似模仿 {original_domain}",
+            contents={
+                "type": "bubble",
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "🚨 網域變形攻擊警告",
+                            "weight": "bold",
+                            "size": "xl",
+                            "color": "#E74C3C",
+                            "align": "center",
+                            "wrap": True
+                        },
+                        {
+                            "type": "separator",
+                            "margin": "md"
+                        },
+                        {
+                            "type": "box",
+                            "layout": "vertical",
+                            "margin": "lg",
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": f"攻擊類型：{spoofing_type}",
+                                    "size": "md",
+                                    "color": "#E74C3C",
+                                    "weight": "bold",
+                                    "wrap": True
+                                },
+                                {
+                                    "type": "box",
+                                    "layout": "vertical",
+                                    "margin": "md",
+                                    "contents": [
+                                        {
+                                            "type": "text",
+                                            "text": "🎯 可疑網域",
+                                            "size": "sm",
+                                            "color": "#666666",
+                                            "weight": "bold"
+                                        },
+                                        {
+                                            "type": "text",
+                                            "text": spoofed_domain,
+                                            "size": "md",
+                                            "color": "#E74C3C",
+                                            "weight": "bold",
+                                            "wrap": True,
+                                            "margin": "xs"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "box",
+                                    "layout": "vertical",
+                                    "margin": "md",
+                                    "contents": [
+                                        {
+                                            "type": "text",
+                                            "text": "✅ 正牌網域",
+                                            "size": "sm",
+                                            "color": "#666666",
+                                            "weight": "bold"
+                                        },
+                                        {
+                                            "type": "text",
+                                            "text": original_domain,
+                                            "size": "md",
+                                            "color": "#27AE60",
+                                            "weight": "bold",
+                                            "wrap": True,
+                                            "margin": "xs"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "separator",
+                                    "margin": "lg"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "🚨 緊急建議",
+                                    "size": "md",
+                                    "color": "#E74C3C",
+                                    "weight": "bold",
+                                    "margin": "lg"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "🚫 立即停止使用這個網站\n🔒 不要輸入任何個人資料或密碼\n🔍 如需使用正牌網站，請直接搜尋或從書籤進入\n📞 將此可疑網址回報給165反詐騙專線",
+                                    "size": "sm",
+                                    "color": "#333333",
+                                    "wrap": True,
+                                    "margin": "md"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "footer": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "button",
+                            "style": "primary",
+                            "height": "sm",
+                            "action": {
+                                "type": "uri",
+                                "label": "撥打165反詐騙專線",
+                                "uri": "tel:165"
+                            },
+                            "color": "#E74C3C"
+                        },
+                        {
+                            "type": "button",
+                            "style": "secondary",
+                            "height": "sm",
+                            "action": {
+                                "type": "message",
+                                "label": "了解更多防詐騙知識",
+                                "text": "詐騙類型列表"
+                            },
+                            "margin": "sm"
+                        }
+                    ]
+                },
+                "styles": {
+                    "body": {
+                        "backgroundColor": "#FFF5F5"
+                    },
+                    "footer": {
+                        "backgroundColor": "#FFF5F5"
+                    }
+                }
+            }
+        )
+        
+        return flex_message
+        
+    except Exception as e:
+        logger.error(f"創建網域變形攻擊Flex Message時發生錯誤: {e}")
+        # 如果創建失敗，返回簡單的文字訊息
+        return TextSendMessage(text=f"⚠️ 網域變形攻擊警告！\n\n{spoofing_result.get('risk_explanation', '檢測到可疑的網域變形攻擊，請立即停止使用此網站！')}")
+
+# 添加URL分析結果的Flex Message格式函數
 if __name__ == "__main__":
-    # 確保在服務啟動時重新加載題庫
     load_fraud_tactics()
     load_potato_game_questions()
-    
-    # 打印題庫加載結果
-    logger.info(f"服務啟動時載入題庫：potato_game_questions 包含 {len(potato_game_questions)} 道題目")
-    logger.info(f"題庫中有選項的題目數量: {sum(1 for q in potato_game_questions if 'options' in q and q['options'] and 'correct_option' in q)}")
-    if potato_game_questions:
-        logger.info(f"題庫路徑: {os.path.abspath(POTATO_GAME_QUESTIONS_DB)}")
-        logger.info(f"工作目錄: {os.getcwd()}")
-        
     port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port) 
+    app.run(host="0.0.0.0", port=port)
