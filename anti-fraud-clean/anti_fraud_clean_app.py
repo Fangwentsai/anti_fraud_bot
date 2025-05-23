@@ -1541,7 +1541,7 @@ def handle_message(event):
     current_state = user_conversation_state.get(user_id, {})
     current_state["last_time"] = current_time
     
-    # 檢查是否包含觸發關鍵詞 "嗨土豆"或者用戶處於等待分析狀態
+    # 檢查是否包含觸發關鍵詞 "土豆"或者用戶處於等待分析狀態
     waiting_for_analysis = current_state.get("waiting_for_analysis", False)
     
     # 如果是群組訊息，需要檢查是否包含觸發關鍵詞，或者用戶處於等待分析狀態
