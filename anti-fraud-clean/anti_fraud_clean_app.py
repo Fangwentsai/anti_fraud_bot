@@ -41,7 +41,16 @@ def load_safe_domains():
     try:
         with open('safe_domains.json', 'r', encoding='utf-8') as f:
             data = json.load(f)
-            return data['safe_domains'], data['donation_domains']
+            
+            # 扁平化分類的安全網域字典
+            flattened_safe_domains = {}
+            for category, domains in data['safe_domains'].items():
+                if isinstance(domains, dict):
+                    flattened_safe_domains.update(domains)
+                else:
+                    logger.warning(f"類別 '{category}' 的格式不正確: {type(domains)}")
+            
+            return flattened_safe_domains, data['donation_domains']
     except FileNotFoundError:
         print("找不到safe_domains.json文件，使用預設的安全網域列表")
         # 提供基本的預設列表作為備用

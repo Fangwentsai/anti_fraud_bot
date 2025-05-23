@@ -313,11 +313,11 @@
         "i-pass.com.tw": "一卡通票證公司 (含iPASS MONEY)",
         "icash.com.tw": "愛金卡股份有限公司 (icash, icash Pay)",
         "openpoint.com.tw": "OPEN POINT (7-ELEVEN點數)"
+    }
     },
 
     "donation_domains": {
         "https://buymeacoffee.com/todao_antifraud": "土豆(To-dao)的贊助方案啦，喜歡的話請給我們支持喔❤️",
         "buymeacoffee.com/todao_antifraud": "土豆(To-dao)的贊助方案啦，喜歡的話請給我們支持喔❤️"
-    }  
-} 
+    }
 }
