@@ -471,7 +471,7 @@ def parse_fraud_analysis(analysis_result):
                     # 繼續使用文本解析方法
                     logger.info("JSON解析結果不完整，使用額外的文本解析")
                 else:
-    return result
+                    return result
 
             except json.JSONDecodeError as e:
                 # JSON解析失敗，使用文本解析
@@ -820,7 +820,6 @@ def send_potato_game_question(user_id, reply_token):
                         correct_option = 'A'
                     elif i == 1:
                         correct_option = 'B'
-                    else:
                         correct_option = 'C'
                     break
 
@@ -834,61 +833,59 @@ def send_potato_game_question(user_id, reply_token):
                 'correct_option': correct_option,
                 'using_predefined_options': False
             }
-    else:
-        # 如果沒有預設題庫，則回退到從Firebase中獲取
-        logger.warning("使用Firebase資料庫作為備選題目來源")
-        report_data = firebase_manager.get_random_fraud_report_for_game()
+            # 如果沒有預設題庫，則回退到從Firebase中獲取
+            logger.warning("使用Firebase資料庫作為備選題目來源")
+            report_data = firebase_manager.get_random_fraud_report_for_game()
 
-        if not report_data:
-            line_bot_api.reply_message(
-                reply_token,
-                TextSendMessage(text="抱歉，目前題庫裡沒有題目了，稍後再試試吧！")
-            )
-            return
+            if not report_data:
+                line_bot_api.reply_message(
+                    reply_token,
+                    TextSendMessage(text="抱歉，目前題庫裡沒有題目了，稍後再試試吧！")
+                )
+                return
 
-        # 詐騙訊息（假土豆）
-        false_potato_text = report_data['message']
-        fraud_type = report_data['fraud_type']
-        explanation = ""
-        
-        # 創建兩個明顯安全的訊息（真土豆）
-        true_potato_texts = [
-            "提醒您，銀行業務人員絕不會要求您提供網路銀行密碼或是ATM操作。如有任何疑問請撥打官方客服電話查詢，且務必親自撥打，不要使用對方提供的電話號碼。",
-            "購物前請確認網站的安全性，選擇有https和安全認證的官方網站，並透過第三方支付或信用卡付款以獲得交易保障。遇到要求私下交易或要求先付款的賣家請特別小心。",
-            "接到陌生來電宣稱您涉及刑案、洗錢，需要監管帳戶或轉帳操作，請立即掛斷。司法單位不會用電話要求您操作ATM或銀行帳戶。請撥打165反詐騙專線確認。",
-            "網路投資前請查證平台合法性，任何宣稱「保證獲利」、「零風險高報酬」的投資都極可能是詐騙。合法投資管道不會要求您安裝特定APP或加入特定通訊軟體群組。",
-            "保護個人資料安全，不隨意提供身分證字號、銀行帳號等資訊。對方如有要求購買遊戲點數、禮品卡，並要求提供卡號序號，幾乎都是詐騙行為。"
-        ]
-        
-        # 從安全訊息中隨機選擇兩則
-        selected_true_potatoes = random.sample(true_potato_texts, 2)
-        
-        # 打亂三個選項的順序
-        options_display_texts = [false_potato_text] + selected_true_potatoes
-        random.shuffle(options_display_texts)
+            # 詐騙訊息（假土豆）
+            false_potato_text = report_data['message']
+            fraud_type = report_data['fraud_type']
+            explanation = ""
+            
+            # 創建兩個明顯安全的訊息（真土豆）
+            true_potato_texts = [
+                "提醒您，銀行業務人員絕不會要求您提供網路銀行密碼或是ATM操作。如有任何疑問請撥打官方客服電話查詢，且務必親自撥打，不要使用對方提供的電話號碼。",
+                "購物前請確認網站的安全性，選擇有https和安全認證的官方網站，並透過第三方支付或信用卡付款以獲得交易保障。遇到要求私下交易或要求先付款的賣家請特別小心。",
+                "接到陌生來電宣稱您涉及刑案、洗錢，需要監管帳戶或轉帳操作，請立即掛斷。司法單位不會用電話要求您操作ATM或銀行帳戶。請撥打165反詐騙專線確認。",
+                "網路投資前請查證平台合法性，任何宣稱「保證獲利」、「零風險高報酬」的投資都極可能是詐騙。合法投資管道不會要求您安裝特定APP或加入特定通訊軟體群組。",
+                "保護個人資料安全，不隨意提供身分證字號、銀行帳號等資訊。對方如有要求購買遊戲點數、禮品卡，並要求提供卡號序號，幾乎都是詐騙行為。"
+            ]
+            
+            # 從安全訊息中隨機選擇兩則
+            selected_true_potatoes = random.sample(true_potato_texts, 2)
+            
+            # 打亂三個選項的順序
+            options_display_texts = [false_potato_text] + selected_true_potatoes
+            random.shuffle(options_display_texts)
 
-        # 找出詐騙訊息在打亂後的位置
-        correct_option = None
-        for i, text in enumerate(options_display_texts):
-            if text == false_potato_text:
-                if i == 0:
-                    correct_option = 'A'
-                elif i == 1:
-                    correct_option = 'B'
-                else:
-                    correct_option = 'C'
-                break
+            # 找出詐騙訊息在打亂後的位置
+            correct_option = None
+            for i, text in enumerate(options_display_texts):
+                if text == false_potato_text:
+                    if i == 0:
+                        correct_option = 'A'
+                    elif i == 1:
+                        correct_option = 'B'
+                        correct_option = 'C'
+                    break
 
-        user_game_state[user_id] = {
-            'false_potato_original': false_potato_text,
-            'fraud_type_for_explanation': fraud_type,
-            'custom_explanation': explanation,
-            'option_A_text': options_display_texts[0],
-            'option_B_text': options_display_texts[1],
-            'option_C_text': options_display_texts[2],
-            'correct_option': correct_option,
-            'using_predefined_options': False
-        }
+            user_game_state[user_id] = {
+                'false_potato_original': false_potato_text,
+                'fraud_type_for_explanation': fraud_type,
+                'custom_explanation': explanation,
+                'option_A_text': options_display_texts[0],
+                'option_B_text': options_display_texts[1],
+                'option_C_text': options_display_texts[2],
+                'correct_option': correct_option,
+                'using_predefined_options': False
+            }
 
     flex_message_content = BubbleContainer(
         body=BoxComponent(
@@ -964,7 +961,6 @@ def handle_potato_game_answer(user_id, reply_token, data_params):
         chosen_text = game_data['option_B_text']
     elif chosen_option_id == 'C':
         chosen_text = game_data['option_C_text']
-    else:
         line_bot_api.reply_message(reply_token, TextSendMessage(text="選擇出錯了，請重新玩一次哦。"))
         return
 
@@ -973,7 +969,6 @@ def handle_potato_game_answer(user_id, reply_token, data_params):
     # 使用自訂解釋或從通用特徵庫獲取
     if custom_explanation:
         fraud_features = f"⚠️ 詐騙特徵說明：\n{custom_explanation}"
-    else:
         fraud_features = get_fraud_features(fraud_type_for_explanation, false_potato_original_text)
     
     explanation_intro = f"這則訊息屬於【{fraud_type_for_explanation}】類型的詐騙手法。"
@@ -1049,7 +1044,6 @@ def get_fraud_features(fraud_type, fraud_message):
             "4. 通知管道可疑（如簡訊）",
             "5. 要求提供銀行帳號或個資"
         ]
-    else:
         # 通用詐騙特徵
         features = [
             "1. 製造緊急感與恐慌",
@@ -1105,7 +1099,7 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
         # 計算風險等級顏色和圖示
         if "低風險" in risk_level:
             risk_color = "#27AE60"  # 綠色
-        risk_emoji = "✅"
+            risk_emoji = "✅"
         elif "中風險" in risk_level:
             risk_color = "#F39C12"  # 橙色
             risk_emoji = "⚠️"
@@ -1127,7 +1121,6 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
                     url_match = re.search(r'(https?://[^\s]+)', message_to_analyze)
                     if url_match:
                         donation_url = url_match.group(0)
-    else:
                         donation_url = f"https://{domain}"
                 else:
                     donation_url = f"https://{domain}"
@@ -1136,7 +1129,6 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
                 if not donation_url.startswith("https://"):
                     if donation_url.startswith("http://"):
                         donation_url = "https://" + donation_url[7:]
-                    else:
                         donation_url = "https://" + donation_url
                 
                 logger.info(f"找到贊助鏈接: {donation_url}")
@@ -1537,7 +1529,6 @@ def handle_message(event):
         current_state["waiting_for_analysis"] = False  # 分析完後重置狀態
         user_conversation_state[user_id] = current_state
         logger.info(f"用戶 {user_id} 在等待分析狀態下發送了需要分析的內容")
-    else:
         # 其他情況，重置等待分析狀態
         current_state["waiting_for_analysis"] = False
         user_conversation_state[user_id] = current_state
@@ -1836,7 +1827,6 @@ def handle_message(event):
                 line_bot_api.reply_message(reply_token, TextSendMessage(text=error_message))
             
         return
-    else:
         # 使用ChatGPT進行閒聊回應
         logger.info(f"Using chat response for message from {user_id}: {text_message}")
         
@@ -1947,7 +1937,6 @@ def handle_message(event):
             QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text=f"{bot_trigger_keyword} 選哪顆土豆")),
             QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text=f"{bot_trigger_keyword} 詐騙類型列表"))
         ])
-    else:
     quick_reply = QuickReply(items=[
         QuickReplyButton(action=MessageAction(label="分析可疑訊息", text="請幫我分析這則訊息：")),
         QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text="選哪顆土豆")),
@@ -2097,7 +2086,6 @@ def load_potato_game_questions():
                         nested_questions = q.get("questions", [])
                         all_questions.extend(nested_questions)
                         logger.info(f"發現嵌套題目：{len(nested_questions)}題")
-                    else:
                         # 將頂層題目添加到總題庫
                         all_questions.append(q)
             
