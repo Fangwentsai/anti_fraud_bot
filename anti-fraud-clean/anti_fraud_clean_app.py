@@ -37,17 +37,19 @@ SHORT_URL_DOMAINS = [
 
 # 台灣常用的可靠網站域名白名單
 SAFE_DOMAINS = {
-    # 政府機關
+    # === 政府機關 ===
     "gov.tw": "台灣政府機關通用網域",
     "president.gov.tw": "總統府官方網站",
     "ey.gov.tw": "行政院官方網站",
     "mof.gov.tw": "財政部官方網站",
     "moi.gov.tw": "內政部官方網站",
     "moea.gov.tw": "經濟部官方網站",
+    "nstc.gov.tw": "國家科學及技術委員會 (原科技部 most.gov.tw)",
     "most.gov.tw": "科技部官方網站 (現為國家科學及技術委員會 nstc.gov.tw)",
     "mohw.gov.tw": "衛生福利部官方網站",
     "moe.gov.tw": "教育部官方網站",
     "mol.gov.tw": "勞動部官方網站",
+    "moa.gov.tw": "農業部 (原農業委員會 coa.gov.tw)",
     "coa.gov.tw": "農業委員會官方網站 (現為農業部 moa.gov.tw)",
     "motc.gov.tw": "交通部官方網站",
     "mnd.gov.tw": "國防部官方網站",
@@ -58,29 +60,46 @@ SAFE_DOMAINS = {
     "cec.gov.tw": "中央選舉委員會官方網站",
     "cy.gov.tw": "監察院官方網站",
     "judicial.gov.tw": "司法院官方網站",
+    "post.gov.tw": "中華郵政 (含郵務、儲匯、壽險)",
+    "taiwan.net.tw": "交通部觀光署 (台灣觀光資訊網)",
+    "gov.taipei": "台北市政府 (新式網域)",
+    "water.gov.tw": "台灣自來水公司",
+    "ebus.gov.tw": "公路客運即時動態資訊網 (iBus)",
 
-    # 銀行金融
+    # === 銀行金融 (含壽險) ===
     "bot.com.tw": "臺灣銀行",
     "landbank.com.tw": "土地銀行",
     "tcb-bank.com.tw": "合作金庫銀行",
     "hncb.com.tw": "華南銀行",
     "firstbank.com.tw": "第一銀行",
-    "hua-nan.com.tw": "華南銀行 (同hncb.com.tw)",  # 可能是舊網域或特定服務
+    "hua-nan.com.tw": "華南銀行 (同hncb.com.tw)",
     "megabank.com.tw": "兆豐國際商業銀行",
     "ctbcbank.com": "中國信託銀行",
     "fubon.com": "富邦金控/富邦銀行",
     "esunbank.com.tw": "玉山銀行",
     "taishinbank.com.tw": "台新銀行",
     "sinopac.com": "永豐銀行/永豐金控",
-    "cathaybk.com.tw": "國泰世華銀行",  # 修正: cathaybank -> cathaybk (更常見)
+    "cathaybk.com.tw": "國泰世華銀行",
     "skbank.com.tw": "新光銀行",
     "sunnybank.com.tw": "陽信銀行",
     "kgibank.com": "凱基銀行",
     "yuantabank.com.tw": "元大銀行",
     "jihsunbank.com.tw": "日盛銀行 (已併入富邦)",
     "entiebank.com.tw": "安泰銀行",
+    "chb.com.tw": "彰化銀行",
+    "scsb.com.tw": "上海商業儲蓄銀行",
+    "bok.com.tw": "高雄銀行",
+    "citibank.com.tw": "花旗銀行 (台灣, 消費金融業務已併入星展)",
+    "sc.com": "渣打銀行 (國際, 台灣業務 sc.com/tw/)",
+    "hsbc.com.tw": "滙豐銀行 (台灣)",
+    "dbs.com.tw": "星展銀行 (台灣)",
+    "cathaylife.com.tw": "國泰人壽",
+    "fubonlife.com.tw": "富邦人壽",
+    "nanshanlife.com.tw": "南山人壽",
+    "skl.com.tw": "新光人壽",
+    "taiwanlife.com": "台灣人壽",
 
-    # 電商購物
+    # === 電商購物 ===
     "pchome.com.tw": "PChome 線上購物入口",
     "24h.pchome.com.tw": "PChome 24h 購物",
     "shopping.pchome.com.tw": "PChome 商店街",
@@ -100,12 +119,15 @@ SAFE_DOMAINS = {
     "etmall.com.tw": "東森購物網",
     "rakuten.com.tw": "樂天市場 (日本電商台灣站)",
     "gohappy.com.tw": "GoHappy 快樂購物網 (遠東集團旗下, 現多整合至SOGO百貨等)",
+    "lativ.com.tw": "Lativ 米格國際 (服飾電商)",
+    "pxmart.com.tw": "全聯福利中心 (含線上購 PXGo!)",
+    "rt-mart.com.tw": "大潤發 (含線上購)",
 
-    # 新聞媒體
+    # === 新聞媒體 ===
     "udn.com": "聯合新聞網",
     "chinatimes.com": "中時新聞網",
     "ltn.com.tw": "自由時報電子報",
-    "appledaily.com.tw": "蘋果新聞網 (台灣)",  # 注意：可能已停止營運或轉型
+    "appledaily.com.tw": "蘋果新聞網 (台灣, 可能已轉型或不同營運狀態)",
     "tvbs.com.tw": "TVBS 新聞網",
     "cts.com.tw": "華視新聞網",
     "ftv.com.tw": "民視新聞網",
@@ -118,8 +140,9 @@ SAFE_DOMAINS = {
     "rti.org.tw": "中央廣播電臺 (Radio Taiwan International)",
     "pts.org.tw": "公共電視",
     "bcc.com.tw": "中廣新聞網 (中國廣播公司)",
+    "technews.tw": "科技新報 (科技新聞網站)",
 
-    # 科技公司
+    # === 科技公司 ===
     "asus.com": "華碩 (電腦硬體、手機)",
     "acer.com": "宏碁 (電腦硬體)",
     "msi.com": "微星科技 (電腦硬體、電競)",
@@ -134,34 +157,42 @@ SAFE_DOMAINS = {
     "inventec.com": "英業達 (筆電代工、伺服器)",
     "compal.com": "仁寶電腦 (筆電代工)",
     "pegatron.com": "和碩聯合科技 (電子代工)",
-    "technews.tw": "科技新報 (科技新聞網站)",
+    "microsoft.com": "微軟 (軟體、作業系統、雲端服務)",
+    "apple.com": "蘋果公司 (電子產品、軟體服務)",
+    "google.com": "Google (搜尋引擎、網路服務)",
 
-    # 電信業者
-    "cht.com.tw": "中華電信",  # 修正：chunghwa.com.tw -> cht.com.tw (更常用)
+    # === 電信業者 / ISP ===
+    "cht.com.tw": "中華電信",
+    "hinet.net": "HiNet (中華電信網路服務)",
     "taiwanmobile.com": "台灣大哥大",
     "fetnet.net": "遠傳電信",
+    "seed.net.tw": "Seednet (ISP, 遠傳旗下)",
     "aptg.com.tw": "亞太電信 (已被遠傳合併)",
     "gt.com.tw": "Gt智慧生活 (亞太電信旗下品牌, 已被遠傳合併)",
     "so-net.net.tw": "So-net (ISP, 台灣碩網)",
-    "seed.net.tw": "Seednet (ISP, 遠傳旗下)",  # 修正：seednet.net -> seed.net.tw
-    "hinet.net": "HiNet (中華電信網路服務)",
+    "taipower.com.tw": "台灣電力公司",
 
-    # 交通運輸
-    "railway.gov.tw": "臺灣鐵路管理局 (台鐵) 官方網站",
+    # === 交通運輸 ===
+    "railway.gov.tw": "臺灣鐵路管理局 (台鐵) 官方網站 (將公司化為 taiwanrailway.com)",
+    "taiwanrailway.com": "國營臺灣鐵路股份有限公司 (台鐵公司化後網域)",
     "thsrc.com.tw": "台灣高鐵官方網站",
     "taoyuan-airport.com": "桃園國際機場官方網站",
-    "ksf.gov.tw": "交通部航港局 (海運相關)",  # 修正: 假設 KSF 指 Kaohsiung Shipping & Ferry, 但更可能是航港局
-    "klcg.gov.tw": "基隆市政府 (可能包含交通資訊)",
     "trtc.com.tw": "台北捷運公司",
     "krtc.com.tw": "高雄捷運公司",
-    "kmrt.com.tw": "高雄捷運 (同上, 可能是不同網域或特定服務)",
+    "kmrt.com.tw": "高雄捷運",
     "ubus.com.tw": "統聯客運",
-    "ebus.gov.tw": "公路客運即時動態資訊網 (iBus)",
-    "motc.gov.tw": "交通部官方網站 (已列於政府機關)",  # 重複，可刪除或註記
+    "kingbus.com.tw": "國光客運",
+    "china-airlines.com": "中華航空",
+    "evaair.com": "長榮航空",
+    "starlux-airlines.com": "星宇航空",
+    "taipei-bus.com.tw": "大台北公車資訊網",
+    "ksf.gov.tw": "交通部航港局 (海運相關)",
+    "klcg.gov.tw": "基隆市政府 (可能包含交通資訊)",
 
-    # 教育機構
+    # === 教育機構 ===
     "ntu.edu.tw": "台灣大學",
-    "nctu.edu.tw": "陽明交通大學 (原交通大學)",
+    "nycu.edu.tw": "陽明交通大學",
+    "nctu.edu.tw": "交通大學 (現已合併為陽明交通大學 nycu.edu.tw)",
     "nthu.edu.tw": "清華大學",
     "nchu.edu.tw": "中興大學",
     "ncku.edu.tw": "成功大學",
@@ -172,27 +203,60 @@ SAFE_DOMAINS = {
     "ncue.edu.tw": "彰化師範大學",
     "ntust.edu.tw": "台灣科技大學 (台科大)",
     "nkust.edu.tw": "高雄科技大學 (高科大)",
-    "accupass.com": "活動通 (活動票務)",
+    "coursera.org": "Coursera (國際線上課程平台)",
+    "udemy.com": "Udemy (國際線上課程平台)",
+    "khanacademy.org": "可汗學院 (免費線上學習資源)",
 
-    # 生活服務
+    # === 生活服務 / 便利商店 / 速食 / 咖啡茶飲 ===
     "7-eleven.com.tw": "7-ELEVEN 便利商店",
     "family.com.tw": "全家便利商店",
     "hilife.com.tw": "萊爾富便利商店",
     "okmart.com.tw": "OK便利商店",
     "cplife.com.tw": "中保無限+ (保全、生活服務)",
     "dominos.com.tw": "達美樂披薩",
+    "pizzahut.com.tw": "必勝客 Pizza Hut",
     "kfc.com.tw": "肯德基速食",
     "mcdonalds.com.tw": "麥當勞速食",
+    "mos.com.tw": "摩斯漢堡",
     "starbucks.com.tw": "星巴克咖啡",
+    "louisacoffee.co": "路易莎咖啡",
+    "camacafe.com": "cama café 現烘咖啡專門店",
     "85cafe.com": "85度C 咖啡蛋糕烘焙",
     "comebuy.com.tw": "COMEBUY (手搖飲料)",
+    "icoco.com.tw": "CoCo都可 (手搖飲)",
+    "50lan.com": "50嵐 (手搖飲 - 代表性或部分地區網域)",
+    "chingshin.tw": "清心福全 (手搖飲)",
+    "kebuke.com": "可不可紅茶 (手搖飲)",
+    "maculife.com.tw": "麻古茶坊 (手搖飲)",
 
-    # 虛擬資產交易所
+    # === 餐飲集團 / 連鎖餐廳 ===
+    "sushiexpress.com.tw": "爭鮮迴轉壽司/外帶",
+    "mala.com.tw": "馬辣頂級麻辣鴛鴦火鍋 (馬辣集團)",
+    "newmalahotpot.com": "新馬辣經典麻辣鍋 (馬辣集團)",
+    "eatogether.com.tw": "饗賓餐旅集團 (饗食天堂、果然匯、旭集等)",
+    "wowprime.com": "王品集團 (旗下眾多餐飲品牌)",
+    "hilai-foods.com": "漢來美食 (海港自助餐、名人坊等)",
+    "dintaifung.com.tw": "鼎泰豐",
+
+    # === 零售 / 百貨 / 藥妝 / 服飾 / 家居運動 ===
+    "sogo.com.tw": "SOGO 百貨",
+    "skm.com.tw": "新光三越百貨",
+    "feds.com.tw": "遠東百貨",
+    "breezecenter.com": "微風廣場/微風集團",
+    "twglobalmall.com": "環球購物中心",
+    "watsons.com.tw": "屈臣氏",
+    "cosmed.com.tw": "康是美",
+    "uniqlo.com": "UNIQLO (台灣官網通常是 uniqlo.com/tw/)",
+    "muji.com": "無印良品 (台灣官網 muji.com/tw/)",
+    "net-fashion.net": "NET 服飾",
+    "decathlon.tw": "迪卡儂 (運動用品)",
+
+    # === 虛擬資產交易所 ===
     "twex.tw": "TWEX 數位資產交易所",
     "max.maicoin.com": "MaiCoin MAX 數位資產交易所",
     "bitopro.com": "BitoPro 幣託數位資產交易所",
 
-    # 其他知名網站
+    # === 人力銀行 / 房產資訊 ===
     "104.com.tw": "104 人力銀行 (求職)",
     "1111.com.tw": "1111 人力銀行 (求職)",
     "518.com.tw": "518 熊班 (求職，原518人力銀行)",
@@ -201,24 +265,97 @@ SAFE_DOMAINS = {
     "sinyi.com.tw": "信義房屋 (房仲)",
     "cthouse.com.tw": "中信房屋 (房仲)",
     "housefun.com.tw": "好房網 (房地產資訊)",
+
+    # === 論壇 / 社群 / 部落格 ===
     "mobile01.com": "Mobile01 (3C、生活綜合論壇)",
     "ptt.cc": "PTT 批踢踢實業坊 (電子佈告欄系統)",
     "dcard.tw": "Dcard (大學生、年輕族群社群論壇)",
+    "gamer.com.tw": "巴哈姆特電玩資訊站",
     "pixnet.net": "痞客邦 (部落格、社群平台)",
     "blogspot.com": "Blogger (Google 旗下部落格平台)",
     "wordpress.com": "WordPress.com (部落格/網站架設平台)",
     "facebook.com": "Facebook (社群媒體)",
     "instagram.com": "Instagram (圖片影音社群媒體)",
-    "youtube.com": "YouTube (影音分享平台)",
-    "google.com": "Google (搜尋引擎、網路服務)",
-    "microsoft.com": "微軟 (軟體、作業系統、雲端服務)",
-    "apple.com": "蘋果公司 (電子產品、軟體服務)",
+    "line.me": "LINE (通訊軟體, 含LINE Pay, LINE Points)",
+    "jkforum.net": "JKF 捷克論壇 (綜合論壇, 部分內容可能需注意)",
+    "eyny.com": "伊莉討論區 (綜合論壇, 部分內容可能需注意)",
 
-    # 贊助網站 (通常為創作者或專案提供小額贊助的平台)
+    # === 影音娛樂 / 串流 / 電影院 ===
+    "youtube.com": "YouTube (影音分享平台)",
+    "vscinemas.com.tw": "威秀影城",
+    "ambassador.com.tw": "國賓影城",
+    "showtime.com.tw": "秀泰影城",
+    "ani.gamer.com.tw": "動畫瘋 (巴哈姆特)",
+    "linetv.tw": "LINE TV (影音串流)",
+    "catchplay.com": "CatchPlay+ (影音串流平台)",
+    "myvideo.net.tw": "myVideo (影音串流, 台灣大哥大)",
+    "video.friday.tw": "friDay影音 (影音串流, 遠傳電信)",
+    "litv.tv": "LiTV 立視線上影視",
+    "kkbox.com": "KKBOX (音樂串流)",
+    "spotify.com": "Spotify (音樂串流, 國際服務)",
+    "mixerbox.com": "MixerBox (MB3, 音樂相關App)",
+
+    # === 休閒娛樂 / 遊樂園 / 景點 ===
+    "leofoo.com.tw": "六福村主題遊樂園", # 通常網址為 www.leofoo.com.tw/village/
+    "nine.com.tw": "九族文化村", # 通常網址為 www.nine.com.tw
+    "lihpaoresort.com": "麗寶樂園渡假區", # 也可能用 www.lihpaoland.com.tw
+    "lihpaoland.com.tw": "麗寶樂園 (同lihpaoresort.com)",
+    "janfusun.com.tw": "劍湖山世界",
+    "edathemepark.com.tw": "義大遊樂世界", # 義大世界整體 edaworld.com.tw
+    "edaworld.com.tw": "義大世界 (含購物廣場、飯店、樂園)",
+    "farglory-oceanpark.com.tw": "遠雄海洋公園", # 花蓮
+    "ymsnp.gov.tw": "陽明山國家公園", # 國家公園代表
+    "taroko.gov.tw": "太魯閣國家公園", # 國家公園代表
+    "ktnp.gov.tw": "墾丁國家公園", # 國家公園代表
+    "npm.gov.tw": "國立故宮博物院", # 博物館景點
+
+    # === 票務 / 活動 / 學習平台 ===
+    "kktix.com": "KKTIX 售票平台",
+    "tixcraft.com": "拓元售票系統",
+    "ibon.com.tw": "ibon 便利生活站 (含售票)",
+    "famiticket.com.tw": "FamiTicket 全網購票網 (全家)",
+    "ticket.com.tw": "年代售票",
+    "accupass.com": "活動通 (活動票務)",
+    "hahow.in": "Hahow 好學校 (線上課程平台)",
+    "yottau.com.tw": "YOTTA 友讀 (線上課程平台)",
+    "pressplay.cc": "PressPlay Academy (訂閱學習平台)",
+
+    # === 旅遊訂房 / 行程 ===
+    "liontravel.com": "雄獅旅遊",
+    "colatour.com.tw": "可樂旅遊",
+    "eztravel.com.tw": "易遊網",
+    "settour.com.tw": "東南旅遊",
+    "kkday.com": "KKday (旅遊體驗平台)",
+    "klook.com": "Klook (旅遊體驗平台)",
+    "agoda.com": "Agoda (訂房網站)",
+    "booking.com": "Booking.com (訂房網站)",
+    "hotels.com": "Hotels.com (訂房網站)",
+    "trivago.com.tw": "Trivago (飯店比價)",
+    "expedia.com.tw": "Expedia 智遊網 (旅遊預訂)",
+
+    # === 工具 / 服務型 ===
+    "dropbox.com": "Dropbox (雲端儲存)",
+    "evernote.com": "Evernote (筆記軟體)",
+    "zoom.us": "Zoom (視訊會議)",
+    "wetransfer.com": "WeTransfer (大型檔案傳輸)",
+    "speedtest.net": "Speedtest by Ookla (網路測速)",
+    "virustotal.com": "VirusTotal (檔案/網址掃描)",
+
+    # === 支付 / 點數 ===
+    "jkos.com": "街口支付",
+    "easycard.com.tw": "悠遊卡股份有限公司 (含悠遊付)",
+    "i-pass.com.tw": "一卡通票證公司 (含iPASS MONEY)",
+    "icash.com.tw": "愛金卡股份有限公司 (icash, icash Pay)",
+    "openpoint.com.tw": "OPEN POINT (7-ELEVEN點數)",
+
+    # === 贊助網站 ===
     "buymeacoffee.com/todao_antifruad": "Buy Me a Coffee (創作者贊助平台 - ToDAO 防詐專案)",
     "buymeacoffee.com/todao": "Buy Me a Coffee (創作者贊助平台 - ToDAO)",
+    "buymeacoffee.com": "Buy Me a Coffee (創作者贊助平台)",
     "ko-fi.com/todao": "Ko-fi (創作者贊助平台 - ToDAO)",
-    "patreon.com/todao": "Patreon (創作者訂閱贊助平台 - ToDAO)"
+    "ko-fi.com": "Ko-fi (創作者贊助平台)",
+    "patreon.com/todao": "Patreon (創作者訂閱贊助平台 - ToDAO)",
+    "patreon.com": "Patreon (創作者訂閱贊助平台)"
 }
 
 # 單獨定義贊助網站列表
@@ -339,14 +476,10 @@ fraud_types = {
             "2️⃣ 對方自稱長期在國外工作（如軍醫、機長等）且無法見面，但很快發展感情關係，應提高警覺",
             "3️⃣ 拒絕任何以緊急醫療費、運費、稅金等名義要求的金錢往來",
             "4️⃣ 不要聽信需要協助開通外幣帳戶、借用帳戶的說法",
-            "網友見都沒見過卻談及金錢，高度可能是詐騙",
-            "對方自稱長期在國外工作（如軍醫、機長等）且無法見面，但很快發展感情關係，應提高警覺",
-            "拒絕任何以緊急醫療費、運費、稅金等名義要求的金錢往來",
-            "不要聽信需要協助開通外幣帳戶、借用帳戶的說法",
-            "避免協助陌生網友申辦手機門號或提供SIM卡",
-            "對於網友所提供的身份資訊，嘗試多方查證",
-            "有任何疑問，請立即撥打165反詐騙專線諮詢",
-            "多與家人朋友分享交友情況，避免單獨做出財務決定"
+            "5️⃣ 避免協助陌生網友申辦手機門號或提供SIM卡",
+            "6️⃣ 對於網友所提供的身份資訊，嘗試多方查證",
+            "7️⃣ 有任何疑問，請立即撥打165反詐騙專線諮詢",
+            "8️⃣ 多與家人朋友分享交友情況，避免單獨做出財務決定"
         ]
     },
     "假中獎通知詐騙": {
