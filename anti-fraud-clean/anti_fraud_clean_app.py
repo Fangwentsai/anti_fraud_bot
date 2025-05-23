@@ -37,20 +37,62 @@ SHORT_URL_DOMAINS = [
 
 # 台灣常用的可靠網站域名白名單
 SAFE_DOMAINS = [
-    'line.me', 'line.com', 'shopping.friday.tw', 'friday.tw', 'taipei.gov.tw', 
-    'gov.tw', 'edu.tw', 'ntu.edu.tw', 'ntnu.edu.tw', 'ntust.edu.tw', 
-    'taiwanmobile.com', 'fetnet.net', 'cht.com.tw', 'chunghua.com.tw', 
-    'chunghwa.com.tw', 'hinet.net', 'famiport.com.tw', 'wemoscooter.com', 
-    'youbike.com.tw', 'ubike.com.tw', 'ibon.com.tw', 'ezpay.com.tw', 
-    'icstw.com.tw', 'lego.com', 'apple.com', 'microsoft.com', 'google.com', 
-    'facebook.com', 'instagram.com', 'shopee.tw', 'momoshop.com.tw', 
-    'ruten.com.tw', 'pcstore.com.tw', 'pchome.com.tw', 'books.com.tw', 
-    'kingstone.com.tw', 'eslite.com', 'cathaylife.com.tw', 'skyscanner.com.tw', 
-    'booking.com', 'agoda.com', 'klook.com', 'kkday.com', 'iaai.com.tw',
-    'mcdonalds.com.tw', 'foodpanda.com.tw', 'ubereats.com', 'pizzahut.com.tw',
-    'dominos.com.tw', 'post.gov.tw', 'ipost.com.tw', 'family.com.tw',
-    'hilife.com.tw', 'okmart.com.tw', '7-11.com.tw', 'seveneleven.com.tw', 
-    'buymeacoffee.com', 'bokail.com', 'documid.com'
+    # 政府機關
+    "gov.tw", "president.gov.tw", "ey.gov.tw", "mof.gov.tw", "moi.gov.tw",
+    "moea.gov.tw", "most.gov.tw", "mohw.gov.tw", "moe.gov.tw", "mol.gov.tw",
+    "coa.gov.tw", "motc.gov.tw", "mnd.gov.tw", "mac.gov.tw", "ocac.gov.tw",
+    "ndc.gov.tw", "dgpa.gov.tw", "cec.gov.tw", "cy.gov.tw", "judicial.gov.tw",
+    
+    # 銀行金融
+    "bot.com.tw", "landbank.com.tw", "tcb-bank.com.tw", "hncb.com.tw",
+    "firstbank.com.tw", "hua-nan.com.tw", "megabank.com.tw", "ctbcbank.com",
+    "fubon.com", "esunbank.com.tw", "taishinbank.com.tw", "sinopac.com",
+    "cathaybank.com.tw", "skbank.com.tw", "sunnybank.com.tw", "kgibank.com",
+    "yuantabank.com.tw", "jihsunbank.com.tw", "entiebank.com.tw",
+    
+    # 電商購物
+    "pchome.com.tw", "24h.pchome.com.tw", "shopping.pchome.com.tw",
+    "ruten.com.tw", "momoshop.com.tw", "books.com.tw", "eslite.com",
+    "shopee.tw", "yahoo.com.tw", "bid.yahoo.com.tw", "buy.yahoo.com.tw",
+    "carrefour.com.tw", "costco.com.tw", "ikea.com.tw", "hola.com.tw",
+    "friday.tw", "etmall.com.tw", "rakuten.com.tw", "gohappy.com.tw",
+    
+    # 新聞媒體
+    "udn.com", "chinatimes.com", "ltn.com.tw", "appledaily.com.tw",
+    "tvbs.com.tw", "cts.com.tw", "ftv.com.tw", "settv.com.tw",
+    "ettoday.net", "nownews.com", "storm.mg", "thenewslens.com",
+    "cna.com.tw", "rti.org.tw", "pts.org.tw", "bcc.com.tw",
+    
+    # 科技公司
+    "asus.com", "acer.com", "msi.com", "gigabyte.com", "asrock.com",
+    "htc.com", "mediatek.com", "tsmc.com", "foxconn.com", "quanta.com",
+    "wistron.com", "inventec.com", "compal.com", "pegatron.com",
+    
+    # 電信業者
+    "chunghwa.com.tw", "taiwanmobile.com", "fetnet.net", "aptg.com.tw",
+    "gt.com.tw", "so-net.net.tw", "seednet.net", "hinet.net",
+    
+    # 交通運輸
+    "railway.gov.tw", "thsrc.com.tw", "taoyuan-airport.com", "ksf.gov.tw",
+    "klcg.gov.tw", "trtc.com.tw", "krtc.com.tw", "kmrt.com.tw",
+    "ubus.com.tw", "ebus.gov.tw", "motc.gov.tw",
+    
+    # 教育機構
+    "ntu.edu.tw", "nctu.edu.tw", "nthu.edu.tw", "nchu.edu.tw",
+    "ncku.edu.tw", "nsysu.edu.tw", "ncu.edu.tw", "ccu.edu.tw",
+    "ntnu.edu.tw", "ncue.edu.tw", "ntust.edu.tw", "nkust.edu.tw",
+    
+    # 生活服務
+    "7-eleven.com.tw", "family.com.tw", "hilife.com.tw", "okmart.com.tw",
+    "cplife.com.tw", "dominos.com.tw", "kfc.com.tw", "mcdonalds.com.tw",
+    "starbucks.com.tw", "85cafe.com", "comebuy.com.tw",
+    
+    # 其他知名網站
+    "104.com.tw", "1111.com.tw", "518.com.tw", "yes123.com.tw",
+    "591.com.tw", "sinyi.com.tw", "cthouse.com.tw", "housefun.com.tw",
+    "mobile01.com", "ptt.cc", "dcard.tw", "pixnet.net",
+    "blogspot.com", "wordpress.com", "facebook.com", "instagram.com",
+    "youtube.com", "google.com", "microsoft.com", "apple.com"
 ]
 
 app = Flask(__name__)
@@ -1744,6 +1786,7 @@ def handle_message(event):
                     mention_message = create_mention_message(emerging_text, display_name, user_id)
                     line_bot_api.push_message(group_id if group_id else user_id, mention_message)
         else:
+            if not is_group_message:
                 line_bot_api.push_message(user_id, TextSendMessage(text=emerging_text))
         firebase_manager.save_emerging_fraud_report(user_id, display_name, text_message, raw_result)
         is_fraud_related = True if fraud_type != "非詐騙相關" and risk_level not in ["無風險", "低"] else False
