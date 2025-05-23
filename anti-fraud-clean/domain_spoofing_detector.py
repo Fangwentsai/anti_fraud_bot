@@ -248,6 +248,14 @@ def _is_character_insertion(suspicious_domain, safe_domain):
         if suspicious_base == safe_base + '-' + suffix:
             return True
     
+
+    # 3.5. 檢查字母插入 (apple -> apples, google -> googles)
+    # 檢查是否在原網域後加了單個或少數字母
+    if suspicious_base.startswith(safe_base) and len(suspicious_base) > len(safe_base):
+        added_part = suspicious_base[len(safe_base):]
+        # 常見的字母添加（複數形式、常見後綴等）
+        if len(added_part) <= 3 and added_part.isalpha():
+            return True
     # 4. 原有的模式檢測
     insertion_patterns = [
         f"{safe_domain.split('.')[0]}-tw.{'.'.join(safe_domain.split('.')[1:])}",

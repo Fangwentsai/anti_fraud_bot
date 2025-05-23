@@ -19,7 +19,6 @@ from linebot.models import (
 )
 from firebase_manager import FirebaseManager
 from domain_spoofing_detector import detect_domain_spoofing
-from calendar_weather_service import CalendarWeatherService, get_today_info, get_weather, get_date_info
 from dotenv import load_dotenv
 import time
 
@@ -88,9 +87,6 @@ openai.api_key = os.environ.get('OPENAI_API_KEY', '')
 
 # 初始化Firebase管理器
 firebase_manager = FirebaseManager.get_instance()
-
-# 初始化天氣服務
-weather_service = CalendarWeatherService()
 
 # 用戶遊戲狀態
 user_game_state = {}
@@ -693,13 +689,13 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
             logger.warning(f"無法展開的短網址: {original_url}，建議提高警覺")
         
         openai_prompt = f"""
-        你是一個詐騙風險評估專家，專門為用戶提供易懂的風險分析。
+        你是一個詐騙風險評估專家，專門為50歲以上的中老年人提供易懂的風險分析。
         請分析以下信息是否包含詐騙相關內容，並按照以下格式輸出結果：
         
         風險等級：（低風險、中風險、高風險）
         詐騙類型：（如果有詐騙風險，請指出具體類型，例如：假網購、假交友、假投資、假貸款、假求職等；如果無風險，填"無"）
-        說明：（請用親切有禮的語氣說明判斷依據，避免使用專業術語，語言要簡單直白。例如不要說「此網站使用混淆技術規避檢測」，而是說「這個網站看起來怪怪的，網址跟正常的不一樣，可能是假冒的」。請多使用「請」、「謝謝」等禮貌用語，不要太長篇大論）
-        建議：（針對潛在風險，用🚫🔍🌐🛡️💡⚠️等emoji符號代替數字編號，提供2-3點簡單易懂的建議，例如「🚫 請不要點這個連結」「🔍 建議先詢問家人這是什麼」「🛡️ 請不要提供銀行帳號」等，記得要有禮貌）
+        說明：（請用非常口語化、親切的語氣說明判斷依據，避免使用專業術語，就像在跟鄰居阿姨聊天一樣。例如不要說「此網站使用混淆技術規避檢測」，而是說「這個網站看起來怪怪的，網址跟正常的不一樣，可能是假冒的」。語言要簡單直白，不要太長篇大論）
+        建議：（針對潛在風險，用🚫🔍🌐🛡️💡⚠️等emoji符號代替數字編號，提供2-3點簡單易懂的建議，例如「🚫 不要點這個連結」「🔍 先問問家人這是什麼」「🛡️ 不要提供銀行帳號」等）
         新興手法：是/否
         
         {special_notes}
@@ -709,14 +705,14 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         {analysis_message}
         ---
         
-        請用繁體中文回答，避免直接使用問候語。直接開始分析。回答應簡潔直接，但要保持禮貌和尊重。
+        請用繁體中文回答，避免直接使用問候語。直接開始分析。回答應簡潔直接，像是鄰居阿姨給出的貼心提醒。
         """
         
         # 調用OpenAI API (修正為新版API格式)
         response = openai.chat.completions.create(
-            model="gpt-4.1-mini",
+            model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "你是一個詐騙風險評估專家，請以用戶能理解的禮貌方式分析詐騙風險。避免使用「您」「我」等主觀用詞，而是使用更直接的表述。提供的建議應該具體實用且直接，並且一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號。語言要親切有禮，多使用「請」、「謝謝」等禮貌用語。"},
+                {"role": "system", "content": "你是一個詐騙風險評估專家，請以50歲以上的長輩能理解的口語化方式分析詐騙風險。避免使用「您」「我」等主觀用詞，而是使用更直接的表述。提供的建議應該具體實用且直接，並且一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號。語言要像鄰居阿姨在關心提醒一樣親切簡單。"},
                 {"role": "user", "content": openai_prompt}
             ],
             temperature=0.2,
@@ -1158,80 +1154,7 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
         donation_url = ""
         for domain in DONATION_DOMAINS:  # 改為只檢查贊助網站
             if domain in message_to_analyze:
-                logger.info(f"檢測到贊助鏈接: {domain}，返回彩蛋Flex Message")
-                return FlexSendMessage(
-                    alt_text="恭喜你，這是我們的小彩蛋👑", 
-                    contents={
-                        "type": "bubble", 
-                        "body": {
-                            "type": "box", 
-                            "layout": "vertical", 
-                            "contents": [
-                                {
-                                    "type": "text", 
-                                    "text": "恭喜你，這是我們的小彩蛋👑", 
-                                    "weight": "bold", 
-                                    "size": "xl", 
-                                    "color": "#FF6B35", 
-                                    "align": "center", 
-                                    "wrap": True
-                                }, 
-                                {
-                                    "type": "separator", 
-                                    "margin": "md"
-                                }, 
-                                {
-                                    "type": "box", 
-                                    "layout": "vertical", 
-                                    "margin": "lg", 
-                                    "contents": [
-                                        {
-                                            "type": "text", 
-                                            "text": "🎉", 
-                                            "size": "xxl", 
-                                            "align": "center", 
-                                            "margin": "md"
-                                        }, 
-                                        {
-                                            "type": "text", 
-                                            "text": "這個不是詐騙網站，這就是支持土豆(To-dao)的網站，希望大家能用小小心意幫忙鼓勵我，土豆會更有力氣提醒大家防詐騙啦！👏", 
-                                            "size": "md", 
-                                            "color": "#333333", 
-                                            "align": "center", 
-                                            "wrap": True, 
-                                            "margin": "lg"
-                                        }
-                                    ]
-                                }
-                            ]
-                        }, 
-                        "footer": {
-                            "type": "box", 
-                            "layout": "vertical", 
-                            "contents": [
-                                {
-                                    "type": "button", 
-                                    "style": "primary", 
-                                    "height": "sm", 
-                                    "action": {
-                                        "type": "uri", 
-                                        "label": "贊助我們", 
-                                        "uri": "https://buymeacoffee.com/todao_antifraud"
-                                    }, 
-                                    "color": "#FF8C42"
-                                }
-                            ]
-                        }, 
-                        "styles": {
-                            "body": {
-                                "backgroundColor": "#FFF8F0"
-                            }, 
-                            "footer": {
-                                "backgroundColor": "#FFF8F0"
-                            }
-                        }
-                    }
-                )
+                logger.info(f"檢測到贊助鏈接: {domain}，返回彩蛋Flex Message"); return FlexSendMessage(alt_text="恭喜你，這是我們的小彩蛋��", contents={"type": "bubble", "body": {"type": "box", "layout": "vertical", "contents": [{"type": "text", "text": "恭喜你，這是我們的小彩蛋👑", "weight": "bold", "size": "xl", "color": "#FF6B35", "align": "center", "wrap": True}, {"type": "separator", "margin": "md"}, {"type": "box", "layout": "vertical", "margin": "lg", "contents": [{"type": "text", "text": "🎉", "size": "xxl", "align": "center", "margin": "md"}, {"type": "text", "text": "這個不是詐騙網站，這就是支持土豆(To-dao)的網站，希望大家能用小小心意幫忙鼓勵我，土豆會更有力氣提醒大家防詐騙啦！👏", "size": "md", "color": "#333333", "align": "center", "wrap": True, "margin": "lg"}]}]}, "footer": {"type": "box", "layout": "vertical", "contents": [{"type": "button", "style": "primary", "height": "sm", "action": {"type": "uri", "label": "贊助我們", "uri": "https://buymeacoffee.com/todao_antifruad"}, "color": "#FF8C42"}]}, "styles": {"body": {"backgroundColor": "#FFF8F0"}, "footer": {"backgroundColor": "#FFF8F0"}}})
                 
                 # 提取完整URL，確保包含https://
                 if "http://" in message_to_analyze or "https://" in message_to_analyze:
@@ -1786,55 +1709,6 @@ def handle_message(event):
             firebase_manager.save_user_interaction(user_id, display_name, text_message, "Responded to unknown fraud type query", is_fraud_related=False)
             return
 
-    # 處理天氣查詢
-    if is_weather_query(text_message):
-        logger.info(f"User {user_id} is querying weather: {text_message}")
-        try:
-            city = extract_city_from_weather_query(text_message)
-            weather_info = get_weather(city, 3)  # 獲取3天天氣預報
-            
-            if is_group_message:
-                mention_message = create_mention_message(weather_info, display_name, user_id)
-                line_bot_api.reply_message(reply_token, mention_message)
-            else:
-                line_bot_api.reply_message(reply_token, TextSendMessage(text=weather_info))
-            
-            firebase_manager.save_user_interaction(user_id, display_name, text_message, f"提供{city}天氣資訊", is_fraud_related=False)
-            return
-        except Exception as e:
-            logger.error(f"處理天氣查詢時發生錯誤: {e}")
-            error_msg = "抱歉，目前無法獲取天氣資訊，請稍後再試。"
-            if is_group_message:
-                mention_message = create_mention_message(error_msg, display_name, user_id)
-                line_bot_api.reply_message(reply_token, mention_message)
-            else:
-                line_bot_api.reply_message(reply_token, TextSendMessage(text=error_msg))
-            return
-
-    # 處理日期查詢
-    if is_date_query(text_message):
-        logger.info(f"User {user_id} is querying date: {text_message}")
-        try:
-            date_info = get_today_info()  # 獲取今天的日期資訊
-            
-            if is_group_message:
-                mention_message = create_mention_message(date_info, display_name, user_id)
-                line_bot_api.reply_message(reply_token, mention_message)
-            else:
-                line_bot_api.reply_message(reply_token, TextSendMessage(text=date_info))
-            
-            firebase_manager.save_user_interaction(user_id, display_name, text_message, "提供日期資訊", is_fraud_related=False)
-            return
-        except Exception as e:
-            logger.error(f"處理日期查詢時發生錯誤: {e}")
-            error_msg = "抱歉，目前無法獲取日期資訊，請稍後再試。"
-            if is_group_message:
-                mention_message = create_mention_message(error_msg, display_name, user_id)
-                line_bot_api.reply_message(reply_token, mention_message)
-            else:
-                line_bot_api.reply_message(reply_token, TextSendMessage(text=error_msg))
-            return
-
     # 檢查是否為請求分析的提示語
     if any(text_message.strip() == prompt or text_message.strip() == prompt.rstrip("：") for prompt in analysis_prompts):
         logger.info(f"User {user_id} requested message analysis but didn't provide message content")
@@ -1894,7 +1768,7 @@ def handle_message(event):
             if analysis_data.get("is_domain_spoofing", False):
                 spoofing_result = analysis_data.get("spoofing_result", {})
                 flex_message = create_domain_spoofing_flex_message(spoofing_result, display_name, text_message, user_id)
-            else:
+            elif analysis_data.get("is_donation_easter_egg", False):
                 flex_message = create_analysis_flex_message(analysis_data, display_name, text_message, user_id)
             
             # 在群組中增加前綴提及用戶
@@ -1970,7 +1844,7 @@ def handle_message(event):
             # 系統提示消息
             system_message = {
                 "role": "system", 
-                "content": f"你是一位名為「土豆」的AI聊天機器人，專門幫助用戶防範詐騙。你的說話風格要：\n1. 非常有禮貌，經常使用「請」、「謝謝」、「您好」等禮貌用語\n2. 稱呼用戶時請使用他們的暱稱「{display_name}」，不要使用「阿姨」、「叔叔」等稱呼\n3. 用溫暖親切的語氣，但要保持尊重\n4. 當給建議時，一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號\n5. 避免複雜的專業術語，用簡單易懂的話來解釋\n6. 當用戶提到投資、轉帳、可疑訊息時，要特別關心並給出簡單明確的建議\n7. 回應要簡短，不要太長篇大論\n8. 記住要有禮貌，多說「請」、「謝謝」、「不好意思」等用語"
+                "content": "你是一位名為「土豆」的AI聊天機器人，專門幫助50-60歲的阿姨叔叔防範詐騙。你的說話風格要：\n1. 非常簡單易懂，像鄰居阿姨在聊天\n2. 用溫暖親切的語氣，不要太正式\n3. 當給建議時，一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號\n4. 避免複雜的專業術語，用日常生活的話來解釋\n5. 當用戶提到投資、轉帳、可疑訊息時，要特別關心並給出簡單明確的建議\n6. 回應要簡短，不要太長篇大論"
             }
             
             # 如果成功獲取到歷史對話，則使用它們
@@ -2014,7 +1888,7 @@ def handle_message(event):
             
             # 使用更新後的OpenAI API格式
             chat_response = openai.chat.completions.create(
-                model=os.environ.get('OPENAI_MODEL', 'gpt-4.1-mini'),
+                model=os.environ.get('OPENAI_MODEL', 'gpt-3.5-turbo'),
                 messages=messages,
                 temperature=0.7,
                 max_tokens=500
@@ -2306,7 +2180,7 @@ def create_donation_flex_message():
     """創建贊助訊息的Flex Message"""
     try:
         # 確保URL格式正確包含https://
-        donation_url = "https://buymeacoffee.com/todao_antifraud"
+        donation_url = "https://buymeacoffee.com/todao_antifruad"
         logger.info(f"創建贊助Flex Message，使用URL: {donation_url}")
         
         flex_message = FlexSendMessage(
@@ -2327,14 +2201,14 @@ def create_donation_flex_message():
                         },
                         {
                             "type": "text",
-                            "text": "您好！最近詐騙真的好多，幸好有這個小幫手可以幫忙檢查。它就像派在您身邊的小保鑣一樣！👮‍♂️",
+                            "text": "叔叔阿姨，最近詐騙真的好多喔！幸好有這個小幫手可以幫忙檢查。它就像我們派在您身邊的小保鑣一樣！👮‍♂️",
                             "margin": "md",
                             "wrap": True,
                             "size": "md"
                         },
                         {
                             "type": "text",
-                            "text": "不過這個小保鑣也需要補充體力（系統維護費）。如果您覺得它做得不錯，願意請它吃個『乖乖』（讓系統乖乖運作），我們會超級感動的！一點點心意，就能讓它更有力氣保護大家喔！💪",
+                            "text": "不過這個小保鑣也需要補充體力（系統維護費啦～）。如果叔叔阿姨覺得它做得不錯，願意請它吃個『乖乖』（讓系統乖乖運作），我們會超級感動的！一點點心意，就能讓它更有力氣保護大家喔！💪",
                             "margin": "md",
                             "wrap": True,
                             "size": "md"
@@ -2381,7 +2255,7 @@ def create_donation_flex_message():
     except Exception as e:
         logger.error(f"創建贊助Flex Message時發生錯誤: {e}")
         # 返回一個簡單的文本消息作為備用
-        return TextSendMessage(text="感謝您的使用！如果覺得服務有幫助，歡迎贊助支持我們：https://buymeacoffee.com/todao_antifraud")
+        return TextSendMessage(text="感謝您的使用！如果覺得服務有幫助，歡迎贊助支持我們：https://buymeacoffee.com/todao_antifruad")
     logger.info(f"User {user_id} is chatting for the first time")
 
 # 升級為使用LINE官方Text message v2的Mention功能
@@ -2499,224 +2373,86 @@ def contains_url(text):
 
 # 改進should_perform_fraud_analysis函數，更好地處理網址分析
 def should_perform_fraud_analysis(text_message):
-    """判斷是否應該進行詐騙分析"""
-    # 檢查是否包含URL
+    """判斷是否需要對消息進行詐騙分析"""
+    if not text_message:
+        return False
+        
+    # 1. 先检查是否是次数查询，避免这类消息被分析
+    if any(keyword in text_message.lower() for keyword in ["剩余次数", "剩餘次數", "查詢次數", "查询次数", "還有幾次", "还有几次", "剩下幾次", "剩下几次", "幾次機會", "几次机会", "幾次分析", "几次分析"]):
+        return False
+    
+    # 2. 檢查是否是詢問機器人工作原理或功能的問題（新增）
+    meta_questions = ["判斷.*邏輯", "如何.*分析", "怎麼.*判斷", "原理.*什麼", "怎麼.*運作", "如何.*運作", "工作.*原理", "分析.*方式", "檢測.*方法"]
+    if any(re.search(pattern, text_message) for pattern in meta_questions):
+        logger.info(f"訊息是詢問機器人工作原理，不進行詐騙分析")
+        return False
+        
+    # 3. 直接檢查是否含有URL，如果有優先分析
     if contains_url(text_message):
+        logger.info(f"訊息中含有URL，將進行詐騙分析")
         return True
-    
-    # 檢查是否包含詐騙相關關鍵詞
-    fraud_keywords = ["詐騙", "可疑", "不確定", "這是真的嗎", "幫我看看", "分析", "風險"]
-    for keyword in fraud_keywords:
-        if keyword in text_message:
+        
+    # 4. 檢查是否包含常見問候詞和簡短訊息
+    common_greetings = ["你好", "嗨", "哈囉", "嘿", "hi", "hello", "hey", "早安", "午安", "晚安"]
+    if text_message.lower() in common_greetings or (len(text_message) <= 5 and any(greeting in text_message.lower() for greeting in common_greetings)):
+        return False
+        
+    # 5. 檢查是否含有明確的分析請求關鍵詞
+    analysis_keywords = ["分析", "詐騙", "安全", "可疑", "風險", "網站"]
+    if any(keyword in text_message.lower() for keyword in analysis_keywords) and "嗎" in text_message:
+        # 如果同時包含分析關鍵詞和疑問詞，可能是請求分析
+        logger.info(f"訊息包含分析請求關鍵詞和疑問詞，將進行詐騙分析")
+        return True
+        
+    # 6. 檢查是否與已知的網域相關
+    for domain in SHORT_URL_DOMAINS + list(SAFE_DOMAINS.keys()):  # 修復：將字典鍵轉換為列表
+        if domain.lower() in text_message.lower():
+            logger.info(f"訊息包含已知網域 {domain}，將進行詐騙分析")
             return True
     
+    # 7. 檢查是否是功能相關指令
+    if any(keyword in text_message.lower() for keyword in function_inquiry_keywords + potato_game_trigger_keywords) or "詐騙類型" in text_message:
+        return False
+        
+    # 8. 檢查是否是跟踪模式的問句（修改邏輯，排除詢問機器人的問題）
+    if any(pattern in text_message.lower() for pattern in follow_up_patterns):
+        # 如果包含詢問詞（什麼、如何、怎麼等），可能是詢問而非需要分析的內容
+        inquiry_words = ["什麼", "如何", "怎麼", "為什麼", "邏輯", "原理", "方式", "方法"]
+        if any(word in text_message for word in inquiry_words):
+            logger.info(f"訊息包含詢問詞，判斷為詢問而非需要分析的內容")
+            return False
+        return True
+        
+    # 9. 檢查是否是請求分析的明顯特徵
+    analysis_indicators = ["幫我分析", "幫忙看看", "這是不是詐騙", "這是真的嗎", "這可靠嗎", "分析一下", "這樣是詐騙嗎"]
+    if any(indicator in text_message for indicator in analysis_indicators):
+        return True
+        
+    # 10. 檢查是否包含特定詐騙相關關鍵詞
+    # 只有使用者明確表示需要分析，或者文本包含多個詐騙關鍵詞才進行分析
+    fraud_related_keywords = ["詐騙", "被騙", "騙子", "可疑", "轉帳", "匯款", "銀行帳號", "個資", "身份證", "密碼", 
+                            "通知", "中獎", "貸款", "投資", "急需", "幫我處理", "急用", "解除設定", "提款卡", 
+                            "監管帳戶", "解凍", "安全帳戶", "簽證", "保證金", "違法", "洗錢", "警察", "檢察官"]
+                            
+    # 要求至少包含兩個詐騙相關關鍵詞
+    keyword_count = sum(1 for keyword in fraud_related_keywords if keyword in text_message)
+    if keyword_count >= 2:
+        return True
+        
+    # 11. 預設不進行詐騙分析，將訊息作為一般閒聊處理
     return False
 
-def is_weather_query(text):
-    """檢測是否為天氣查詢"""
-    weather_keywords = [
-        "天氣", "氣溫", "下雨", "晴天", "陰天", "多雲", "颱風", "溫度",
-        "今天天氣", "明天天氣", "天氣預報", "會下雨嗎", "熱不熱", "冷不冷",
-        "台北天氣", "高雄天氣", "台中天氣", "台南天氣", "桃園天氣", "新北天氣"
-    ]
-    
-    for keyword in weather_keywords:
-        if keyword in text.lower():
-            return True
-    return False
-
-def is_date_query(text):
-    """檢測是否為日期查詢"""
-    date_keywords = [
-        "今天", "明天", "昨天", "日期", "幾號", "星期", "禮拜", "週",
-        "今天幾號", "現在幾點", "農曆", "國曆", "節氣", "今天星期幾",
-        "今天是什麼日子", "今天幾月幾號", "現在是幾月"
-    ]
-    
-    for keyword in date_keywords:
-        if keyword in text.lower():
-            return True
-    return False
-
-def extract_city_from_weather_query(text):
-    """從天氣查詢中提取城市名稱"""
-    cities = ["台北", "新北", "桃園", "台中", "台南", "高雄", "基隆", "新竹", 
-              "苗栗", "彰化", "南投", "雲林", "嘉義", "屏東", "宜蘭", "花蓮", 
-              "台東", "澎湖", "金門", "連江"]
-    
-    for city in cities:
-        if city in text:
-            return city
-    
-    return "台北"  # 預設城市
-
-def create_domain_spoofing_flex_message(spoofing_result, display_name, message_to_analyze, user_id=None):
-    """創建網域變形攻擊專用的Flex Message"""
-    try:
-        original_domain = spoofing_result.get('original_domain', '未知網域')
-        spoofed_domain = spoofing_result.get('spoofed_domain', '可疑網域')
-        spoofing_type = spoofing_result.get('spoofing_type', '網域變形')
-        risk_explanation = spoofing_result.get('risk_explanation', '檢測到可疑的網域變形攻擊')
-        
-        # 截斷過長的分析消息
-        if len(message_to_analyze) > 50:
-            short_message = message_to_analyze[:47] + "..."
-        else:
-            short_message = message_to_analyze
-        
-        flex_message = FlexSendMessage(
-            alt_text=f"⚠️ 網域變形攻擊警告！{spoofed_domain} 疑似模仿 {original_domain}",
-            contents={
-                "type": "bubble",
-                "body": {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "🚨 網域變形攻擊警告",
-                            "weight": "bold",
-                            "size": "xl",
-                            "color": "#E74C3C",
-                            "align": "center",
-                            "wrap": True
-                        },
-                        {
-                            "type": "separator",
-                            "margin": "md"
-                        },
-                        {
-                            "type": "box",
-                            "layout": "vertical",
-                            "margin": "lg",
-                            "contents": [
-                                {
-                                    "type": "text",
-                                    "text": f"攻擊類型：{spoofing_type}",
-                                    "size": "md",
-                                    "color": "#E74C3C",
-                                    "weight": "bold",
-                                    "wrap": True
-                                },
-                                {
-                                    "type": "box",
-                                    "layout": "vertical",
-                                    "margin": "md",
-                                    "contents": [
-                                        {
-                                            "type": "text",
-                                            "text": "🎯 可疑網域",
-                                            "size": "sm",
-                                            "color": "#666666",
-                                            "weight": "bold"
-                                        },
-                                        {
-                                            "type": "text",
-                                            "text": spoofed_domain,
-                                            "size": "md",
-                                            "color": "#E74C3C",
-                                            "weight": "bold",
-                                            "wrap": True,
-                                            "margin": "xs"
-                                        }
-                                    ]
-                                },
-                                {
-                                    "type": "box",
-                                    "layout": "vertical",
-                                    "margin": "md",
-                                    "contents": [
-                                        {
-                                            "type": "text",
-                                            "text": "✅ 正牌網域",
-                                            "size": "sm",
-                                            "color": "#666666",
-                                            "weight": "bold"
-                                        },
-                                        {
-                                            "type": "text",
-                                            "text": original_domain,
-                                            "size": "md",
-                                            "color": "#27AE60",
-                                            "weight": "bold",
-                                            "wrap": True,
-                                            "margin": "xs"
-                                        }
-                                    ]
-                                },
-                                {
-                                    "type": "separator",
-                                    "margin": "lg"
-                                },
-                                {
-                                    "type": "text",
-                                    "text": "🚨 緊急建議",
-                                    "size": "md",
-                                    "color": "#E74C3C",
-                                    "weight": "bold",
-                                    "margin": "lg"
-                                },
-                                {
-                                    "type": "text",
-                                    "text": "🚫 立即停止使用這個網站\n🔒 不要輸入任何個人資料或密碼\n🔍 如需使用正牌網站，請直接搜尋或從書籤進入\n📞 將此可疑網址回報給165反詐騙專線",
-                                    "size": "sm",
-                                    "color": "#333333",
-                                    "wrap": True,
-                                    "margin": "md"
-                                }
-                            ]
-                        }
-                    ]
-                },
-                "footer": {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "button",
-                            "style": "primary",
-                            "height": "sm",
-                            "action": {
-                                "type": "uri",
-                                "label": "撥打165反詐騙專線",
-                                "uri": "tel:165"
-                            },
-                            "color": "#E74C3C"
-                        },
-                        {
-                            "type": "button",
-                            "style": "secondary",
-                            "height": "sm",
-                            "action": {
-                                "type": "message",
-                                "label": "了解更多防詐騙知識",
-                                "text": "詐騙類型列表"
-                            },
-                            "margin": "sm"
-                        }
-                    ]
-                },
-                "styles": {
-                    "body": {
-                        "backgroundColor": "#FFF5F5"
-                    },
-                    "footer": {
-                        "backgroundColor": "#FFF5F5"
-                    }
-                }
-            }
-        )
-        
-        return flex_message
-        
-    except Exception as e:
-        logger.error(f"創建網域變形攻擊Flex Message時發生錯誤: {e}")
-        # 如果創建失敗，返回簡單的文字訊息
-        return TextSendMessage(text=f"⚠️ 網域變形攻擊警告！\n\n{spoofing_result.get('risk_explanation', '檢測到可疑的網域變形攻擊，請立即停止使用此網站！')}")
-
-# 添加URL分析結果的Flex Message格式函數
 if __name__ == "__main__":
+    # 確保在服務啟動時重新加載題庫
     load_fraud_tactics()
     load_potato_game_questions()
+    
+    # 打印題庫加載結果
+    logger.info(f"服務啟動時載入題庫：potato_game_questions 包含 {len(potato_game_questions)} 道題目")
+    logger.info(f"題庫中有選項的題目數量: {sum(1 for q in potato_game_questions if 'options' in q and q['options'] and 'correct_option' in q)}")
+    if potato_game_questions:
+        logger.info(f"題庫路徑: {os.path.abspath(POTATO_GAME_QUESTIONS_DB)}")
+        logger.info(f"工作目錄: {os.getcwd()}")
+        
     port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port) 
