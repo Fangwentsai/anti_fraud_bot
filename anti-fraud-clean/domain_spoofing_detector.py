@@ -46,6 +46,10 @@ def detect_domain_spoofing(url_or_message, safe_domains):
             if domain.startswith('www.'):
                 domain = domain[4:]
             
+            # 首先檢查是否本身就是白名單網域
+            if domain in [safe_domain.lower() for safe_domain in safe_domains.keys()]:
+                continue  # 這是正常的白名單網域，跳過
+            
             # 檢查每個白名單網域
             for safe_domain in safe_domains.keys():
                 safe_domain_lower = safe_domain.lower()
@@ -56,6 +60,10 @@ def detect_domain_spoofing(url_or_message, safe_domains):
                 
                 # 跳過合法的子網域（例如 mail.google.com, maps.google.com）
                 if domain.endswith('.' + safe_domain_lower):
+                    continue
+                
+                # 跳過已知的合法變體（避免誤報）
+                if _is_legitimate_variant(domain, safe_domain_lower, safe_domains):
                     continue
                 
                 # 檢測各種變形手法
@@ -98,8 +106,47 @@ def detect_domain_spoofing(url_or_message, safe_domains):
     
     return {'is_spoofed': False}
 
+def _is_legitimate_variant(domain, safe_domain, all_safe_domains):
+    """檢查是否為合法的網域變體，避免誤報"""
+    # 將所有安全網域轉為小寫列表
+    safe_domain_list = [d.lower() for d in all_safe_domains.keys()]
+    
+    # 如果檢測的網域本身就在白名單中，則為合法
+    if domain in safe_domain_list:
+        return True
+    
+    # 已知的合法網域對（避免互相誤報）
+    legitimate_pairs = [
+        ('google.com', 'google.com.tw'),
+        ('pchome.com.tw', 'ithome.com.tw'),  # 這兩個是不同的合法網站
+        ('shopee.tw', 'shopee.com'),
+        ('yahoo.com', 'yahoo.com.tw'),
+        ('microsoft.com', 'office.com'),
+        ('facebook.com', 'instagram.com'),  # 同公司但不同服務
+    ]
+    
+    # 檢查是否為已知的合法對
+    for pair in legitimate_pairs:
+        if (domain == pair[0] and safe_domain == pair[1]) or (domain == pair[1] and safe_domain == pair[0]):
+            return True
+    
+    # 檢查是否為同一網站的不同頂級域名
+    domain_parts = domain.split('.')
+    safe_parts = safe_domain.split('.')
+    
+    if len(domain_parts) >= 2 and len(safe_parts) >= 2:
+        # 比較主要網域名稱（去除頂級域名）
+        domain_main = '.'.join(domain_parts[:-1])
+        safe_main = '.'.join(safe_parts[:-1])
+        
+        # 如果主要部分相同，可能是合法的地區變體
+        if domain_main == safe_main:
+            return True
+    
+    return False
+
 def _is_character_substitution(suspicious_domain, safe_domain):
-    """檢測字元替換攻擊"""
+    """檢測字元替換攻擊 - 改進版"""
     # 計算編輯距離（Levenshtein distance）
     def levenshtein_distance(s1, s2):
         if len(s1) < len(s2):
@@ -120,21 +167,94 @@ def _is_character_substitution(suspicious_domain, safe_domain):
         
         return previous_row[-1]
     
-    # 如果編輯距離很小且長度相近，可能是字元替換
+    # 改進的相似度檢測
     distance = levenshtein_distance(suspicious_domain, safe_domain)
     length_diff = abs(len(suspicious_domain) - len(safe_domain))
+    max_length = max(len(suspicious_domain), len(safe_domain))
     
-    return distance <= 2 and length_diff <= 1
+    # 動態調整閾值：較短的網域允許較少的差異
+    if max_length <= 10:
+        max_distance = 1
+    elif max_length <= 15:
+        max_distance = 2
+    else:
+        max_distance = 3
+    
+    # 檢查是否為字元替換攻擊
+    if distance <= max_distance and length_diff <= 1:
+        # 額外檢查：避免誤判完全不相關的網域
+        # 計算最長公共子序列
+        def lcs_length(s1, s2):
+            m, n = len(s1), len(s2)
+            dp = [[0] * (n + 1) for _ in range(m + 1)]
+            
+            for i in range(1, m + 1):
+                for j in range(1, n + 1):
+                    if s1[i-1] == s2[j-1]:
+                        dp[i][j] = dp[i-1][j-1] + 1
+                    else:
+                        dp[i][j] = max(dp[i-1][j], dp[i][j-1])
+            
+            return dp[m][n]
+        
+        lcs_len = lcs_length(suspicious_domain, safe_domain)
+        similarity_ratio = lcs_len / max_length
+        
+        # 要求至少70%的字元相似度
+        return similarity_ratio >= 0.7
+    
+    return False
 
 def _is_character_insertion(suspicious_domain, safe_domain):
-    """檢測字元插入攻擊"""
-    # 常見的插入模式
+    """檢測字元插入攻擊 - 改進版"""
+    # 移除 www. 前綴
+    if suspicious_domain.startswith('www.'):
+        suspicious_domain = suspicious_domain[4:]
+    if safe_domain.startswith('www.'):
+        safe_domain = safe_domain[4:]
+    
+    # 分解網域名稱
+    safe_parts = safe_domain.split('.')
+    suspicious_parts = suspicious_domain.split('.')
+    
+    # 檢查基礎網域名稱的插入攻擊
+    safe_base = safe_parts[0]  # 例如 google, pchome, cht
+    suspicious_base = suspicious_parts[0]  # 例如 google-search, pchome-24h, cht-tw
+    
+    # 1. 檢查連字符插入 (google -> google-search, pchome -> pchome-24h)
+    if '-' in suspicious_base and safe_base in suspicious_base:
+        # 移除連字符後檢查是否包含原始網域
+        base_without_dash = suspicious_base.replace('-', '')
+        if safe_base in base_without_dash:
+            return True
+        
+        # 檢查連字符前的部分是否與安全網域匹配
+        dash_parts = suspicious_base.split('-')
+        if dash_parts[0] == safe_base:
+            return True
+    
+    # 2. 檢查數字插入 (pchome -> pchome24h)
+    import re
+    # 移除數字後檢查
+    base_without_numbers = re.sub(r'\d+', '', suspicious_base)
+    if base_without_numbers == safe_base:
+        return True
+    
+    # 3. 檢查常見後綴插入
+    common_suffixes = ['search', 'official', 'secure', 'login', 'bank', 'pay', 'tw', 'taiwan', '24h', 'shop', 'store']
+    for suffix in common_suffixes:
+        if suspicious_base == safe_base + suffix:
+            return True
+        if suspicious_base == safe_base + '-' + suffix:
+            return True
+    
+    # 4. 原有的模式檢測
     insertion_patterns = [
-        f"{safe_domain.split('.')[0]}-tw.{'.'.join(safe_domain.split('.')[1:])}",  # google.com -> google-tw.com
-        f"{safe_domain.split('.')[0]}-taiwan.{'.'.join(safe_domain.split('.')[1:])}",  # google.com -> google-taiwan.com
-        f"{safe_domain}.tw",  # google.com -> google.com.tw
-        f"tw.{safe_domain}",  # google.com -> tw.google.com
-        f"taiwan.{safe_domain}",  # google.com -> taiwan.google.com
+        f"{safe_domain.split('.')[0]}-tw.{'.'.join(safe_domain.split('.')[1:])}",
+        f"{safe_domain.split('.')[0]}-taiwan.{'.'.join(safe_domain.split('.')[1:])}",
+        f"{safe_domain}.tw",
+        f"tw.{safe_domain}",
+        f"taiwan.{safe_domain}",
     ]
     
     return suspicious_domain in insertion_patterns
@@ -159,30 +279,50 @@ def _is_domain_suffix_spoofing(suspicious_domain, safe_domain):
     return False
 
 def _is_homograph_attack(suspicious_domain, safe_domain):
-    """檢測同音字或相似字元攻擊"""
-    # 常見的字元替換對應
+    """檢測同音字或相似字元攻擊 - 改進版"""
+    # 擴展的字元替換對應表
     homograph_map = {
-        'o': ['0', 'ο', 'о'],  # 英文o, 數字0, 希臘字母omicron, 俄文o
-        'a': ['а', 'α'],  # 英文a, 俄文a, 希臘字母alpha
-        'e': ['е', 'ε'],  # 英文e, 俄文e, 希臘字母epsilon
-        'i': ['1', 'l', 'і', 'ι'],  # 英文i, 數字1, 英文l, 俄文i, 希臘字母iota
-        'l': ['1', 'i', 'ι'],  # 英文l, 數字1, 英文i, 希臘字母iota
-        'n': ['η'],  # 英文n, 希臘字母eta
-        'p': ['ρ'],  # 英文p, 希臘字母rho
-        'c': ['с'],  # 英文c, 俄文c
-        'x': ['х'],  # 英文x, 俄文x
+        'o': ['0', 'ο', 'о', 'ø', 'ö', 'ò', 'ó', 'ô', 'õ'],  # 英文o及各種變形
+        'a': ['а', 'α', 'à', 'á', 'â', 'ã', 'ä', 'å', '@'],  # 英文a及各種變形
+        'e': ['е', 'ε', 'è', 'é', 'ê', 'ë', '3'],  # 英文e及各種變形
+        'i': ['1', 'l', 'і', 'ι', 'ì', 'í', 'î', 'ï', '!', '|'],  # 英文i及各種變形
+        'l': ['1', 'i', 'ι', '|', 'ł'],  # 英文l及各種變形
+        'n': ['η', 'ñ'],  # 英文n及各種變形
+        'p': ['ρ'],  # 英文p及各種變形
+        'c': ['с', 'ç', '©'],  # 英文c及各種變形
+        'x': ['х', '×'],  # 英文x及各種變形
+        'u': ['υ', 'ù', 'ú', 'û', 'ü'],  # 英文u及各種變形
+        's': ['$', '5', 'ş'],  # 英文s及各種變形
+        'g': ['9', 'ğ'],  # 英文g及各種變形
+        't': ['7', 'ţ'],  # 英文t及各種變形
+        'b': ['6', 'β'],  # 英文b及各種變形
+        'd': ['ð'],  # 英文d及各種變形
+        'f': ['ƒ'],  # 英文f及各種變形
+        'h': ['ħ'],  # 英文h及各種變形
+        'k': ['κ'],  # 英文k及各種變形
+        'm': ['μ'],  # 英文m及各種變形
+        'r': ['ρ', 'ř'],  # 英文r及各種變形
+        'v': ['ν'],  # 英文v及各種變形
+        'w': ['ω'],  # 英文w及各種變形
+        'y': ['ý', 'ÿ'],  # 英文y及各種變形
+        'z': ['ζ', 'ž'],  # 英文z及各種變形
     }
     
-    # 生成可能的同音字變形
-    def generate_homograph_variants(domain):
-        variants = [domain]
-        for char, replacements in homograph_map.items():
-            new_variants = []
-            for variant in variants:
-                for replacement in replacements:
-                    new_variants.append(variant.replace(char, replacement))
-            variants.extend(new_variants)
-        return variants
+    # 檢查每個字元是否被替換
+    if len(suspicious_domain) != len(safe_domain):
+        return False
     
-    safe_variants = generate_homograph_variants(safe_domain)
-    return suspicious_domain in safe_variants 
+    substitution_count = 0
+    for i, (sus_char, safe_char) in enumerate(zip(suspicious_domain, safe_domain)):
+        if sus_char != safe_char:
+            # 檢查是否為已知的相似字元替換
+            if safe_char.lower() in homograph_map:
+                if sus_char in homograph_map[safe_char.lower()]:
+                    substitution_count += 1
+                else:
+                    return False  # 不是已知的相似字元替換
+            else:
+                return False  # 字元不在替換表中
+    
+    # 如果有1-3個字元被替換，認為是相似字元攻擊
+    return 1 <= substitution_count <= 3 
