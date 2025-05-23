@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>觀看廣告獲取分析次數</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script>
+        // LIFF ID - 請替換為您的LIFF ID (修正：移除錯誤的$符號)
+        const liffId = "2007443743-46lWkm5J";
+        
+        // Unity Ads 參數 - 根據設備類型選擇正確的Game ID
+        let unityGameId;
+        const iOS_GAME_ID = "5858225";
+        const ANDROID_GAME_ID = "5858224";
+        const adPlacementId = "c3ml0zo3wtrefyqt";
+        let userId = "";
+        let adCompleted = false;
+        
+        // 檢測設備類型
+        function detectOS() {
+            const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+            
+            // iOS檢測
+            if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
+                return "iOS";
+            }
+            
+            // Android檢測
+            if (/android/i.test(userAgent)) {
+                return "Android";
+            }
+            
+            // 默認返回iOS (作為後備選項)
+            return "iOS";
+        }
+        
+        // 根據設備類型設置Game ID
+        const deviceOS = detectOS();
+        if (deviceOS === "iOS") {
+            unityGameId = iOS_GAME_ID;
+        } else {
+            unityGameId = ANDROID_GAME_ID;
+        }
+        
+        console.log(`檢測到的設備: ${deviceOS}, 使用Game ID: ${unityGameId}`);
+        
+        // 頁面載入完成時初始化LIFF
+        document.addEventListener("DOMContentLoaded", function() {
+            // 更新狀態
+            updateStatus("正在初始化...");
+            
+            // 初始化LIFF - 確保沒有使用$符號
+            liff.init({
+                liffId: liffId
+            })
+            .then(() => {
+                // LIFF初始化成功
+                if (liff.isLoggedIn()) {
+                    // 獲取用戶ID
+                    getUserProfile();
+                } else {
+                    // 用戶未登入，要求登入
+                    liff.login();
+                }
+            })
+            .catch((err) => {
+                updateStatus("初始化失敗: " + err.message);
+                console.error("LIFF初始化錯誤", err);
+                
+                // 尝试从URL获取用户ID作为备选方案
+                tryGetUserIdFromUrl();
+            });
+        });
+        
+        // 尝试从URL获取用户ID
+        function tryGetUserIdFromUrl() {
+            const pathParts = window.location.pathname.split('/');
+            if (pathParts.length > 2) {
+                userId = pathParts[pathParts.length - 1];
+                console.log("從URL獲取用戶ID: " + userId);
+                
+                if (userId) {
+                    // 使用从URL获取的用户ID初始化广告
+                    initUnityAds();
+                    return true;
+                }
+            }
+            
+            // 如果URL中没有用户ID，显示手动输入表单
+            showManualIdInput();
+            return false;
+        }
+        
+        // 显示手动输入用户ID的表单
+        function showManualIdInput() {
+            updateStatus("無法獲取您的LINE用戶ID");
+            
+            const container = document.querySelector('.container');
+            if (container) {
+                const inputForm = document.createElement('div');
+                inputForm.className = 'manual-input';
+                inputForm.innerHTML = `
+                    <h2>需要您的協助</h2>
+                    <p>系統無法自動獲取您的LINE用戶ID，請手動輸入：</p>
+                    <input type="text" id="manual-user-id" placeholder="請輸入您的LINE用戶ID" />
+                    <button id="submit-user-id" class="alt-button">提交</button>
+                `;
+                
+                container.appendChild(inputForm);
+                
+                const submitButton = document.getElementById('submit-user-id');
+                if (submitButton) {
+                    submitButton.onclick = function() {
+                        const inputField = document.getElementById('manual-user-id');
+                        if (inputField && inputField.value) {
+                            userId = inputField.value.trim();
+                            console.log("手動輸入用戶ID: " + userId);
+                            inputForm.style.display = 'none';
+                            initUnityAds();
+                        } else {
+                            alert("請輸入有效的用戶ID");
+                        }
+                    };
+                }
+            }
+        }
+        
+        // 獲取用戶資料
+        function getUserProfile() {
+            try {
+                if (!liff.isLoggedIn()) {
+                    console.log("用戶未登入LINE，嘗試登入");
+                    updateStatus("請先登入LINE");
+                    liff.login();
+                    return;
+                }
+                
+                console.log("正在通過LIFF SDK獲取用戶資料...");
+                
+                // 使用LIFF SDK的内置方法获取用户信息，不会有CORS问题
+                liff.getProfile()
+                .then((profile) => {
+                    userId = profile.userId;
+                    console.log("成功獲取用戶ID: " + userId);
+                    
+                    // 检查路径中是否有user_id
+                    const pathParts = window.location.pathname.split('/');
+                    let urlUserId = '';
+                    if (pathParts.length > 2) {
+                        urlUserId = pathParts[pathParts.length - 1];
+                    }
+                    
+                    if (urlUserId && urlUserId !== userId) {
+                        console.warn("URL中的user_id與LINE用戶ID不符，以LINE用戶ID為準");
+                    }
+                    
+                    // 用户ID获取成功后初始化广告
+                    initUnityAds();
+                })
+                .catch((err) => {
+                    console.error("獲取用戶資料錯誤", err);
+                    
+                    // 尝试从页面URL获取用户ID
+                    if (!tryGetUserIdFromUrl()) {
+                        updateStatus("無法獲取您的用戶資料，請重新嘗試");
+                    }
+                });
+            } catch (error) {
+                console.error("獲取用戶資料時發生異常:", error);
+                updateStatus("獲取用戶資料失敗，請重新載入頁面");
+                
+                // 尝试从URL获取用户ID
+                if (!tryGetUserIdFromUrl()) {
+                    // 显示重试按钮
+                    const watchButton = document.getElementById("watch-button");
+                    if (watchButton) {
+                        watchButton.textContent = "重新嘗試";
+                        watchButton.disabled = false;
+                        watchButton.onclick = function() {
+                            location.reload();
+                        };
+                    }
+                }
+            }
+        }
+        
+        // 初始化Unity Ads
+        function initUnityAds() {
+            updateStatus("正在載入廣告...");
+            
+            // 檢查是否處於本地開發或測試環境
+            const isLocalHostOrTestEnvironment = window.location.hostname === 'localhost' || 
+                                                window.location.hostname === '127.0.0.1' ||
+                                                window.location.hostname.includes('test') ||
+                                                window.location.hostname.includes('dev');
+                                                
+            // 如果是本地環境或網絡有問題，直接使用無SDK模式
+            if (isLocalHostOrTestEnvironment || navigator.onLine === false) {
+                console.log("使用無SDK模式（本地環境或網絡問題）");
+                handleAllSdkLoadFailed();
+                return;
+            }
+            
+            // 嘗試Google Hosted Libraries的jQuery作為探針檢測CDN可用性
+            loadScript("https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js", function(success) {
+                if (!success) {
+                    console.log("CDN連接問題，切換到無SDK模式");
+                    handleAllSdkLoadFailed();
+                    return;
+                }
+                
+                // 使用更全面的SDK源列表
+                const sdkUrls = [
+                    // 官方來源
+                    "https://static.unityads.unity3d.com/ads/web/UnityAdsWebSDK.js",
+                    
+                    // 更新的CDN源
+                    "https://cdn.jsdelivr.net/npm/@unity-ads/sdk@4.8.0/dist/UnityAds.min.js",
+                    "https://unpkg.com/unity-ads-sdk@latest/dist/UnityAds.min.js",
+                    
+                    // 嘗試備用網域 (Unity可能在不同區域有不同的CDN)
+                    "https://www.unitytechnologies.com/ads/web/UnityAdsWebSDK.js",
+                    
+                    // 本地備份(如果有)
+                    "/static/UnityAdsWebSDK.js"
+                ];
+                
+                let currentUrlIndex = 0;
+                let loadTimeout = 6000; // 延長超時時間到6秒
+                
+                // 尝试加载列表中的URL
+                function tryLoadSdk() {
+                    if (currentUrlIndex >= sdkUrls.length) {
+                        // 所有URL都尝试失败，直接使用备选方案
+                        handleAllSdkLoadFailed();
+                        return;
+                    }
+                    
+                    // 更新加载状态
+                    const source = currentUrlIndex === 0 ? "官方來源" : 
+                                (currentUrlIndex === 1 ? "備用來源1" : 
+                                (currentUrlIndex === 2 ? "備用來源2" : 
+                                (currentUrlIndex === 3 ? "備用來源3" : "本地備份")));
+                    updateStatus(`嘗試從${source}載入廣告SDK...`);
+                    
+                    // 尝试加载当前URL
+                    loadScript(sdkUrls[currentUrlIndex], function(success) {
+                        if (success) {
+                            try {
+                                // 確認SDK是否真正載入成功
+                                if (typeof UnityAds !== 'undefined') {
+                                    // 加载成功，初始化SDK
+                                    console.log(`成功從 ${sdkUrls[currentUrlIndex]} 加載SDK`);
+                                    initializeUnityAdsSDK();
+                                } else {
+                                    throw new Error("UnityAds對象未定義");
+                                }
+                            } catch (e) {
+                                console.error("SDK載入成功但初始化失敗:", e);
+                                currentUrlIndex++;
+                                tryLoadSdk();
+                            }
+                        } else {
+                            // 加载失败，尝试下一个URL
+                            console.error(`從 ${sdkUrls[currentUrlIndex]} 加載SDK失敗，嘗試下一個來源`);
+                            currentUrlIndex++;
+                            tryLoadSdk();
+                        }
+                    }, loadTimeout);
+                }
+                
+                // 开始尝试加载SDK
+                tryLoadSdk();
+            }, 3000); // 設置較短的超時，快速檢測網絡
+        }
+        
+        // 修改加載腳本函數以支持更長的超時
+        function loadScript(url, callback, timeout) {
+            const script = document.createElement("script");
+            script.src = url;
+            script.async = true;
+            
+            // 设置超时
+            let timeoutId = setTimeout(function() {
+                console.warn(`加載 ${url} 超時`);
+                script.onload = script.onerror = null;
+                callback(false);
+            }, timeout || 5000); // 使用參數設定的超時時間，默認5秒
+            
+            script.onload = function() {
+                clearTimeout(timeoutId);
+                // 給腳本加載後執行一點延遲，確保初始化完成
+                setTimeout(() => callback(true), 100);
+            };
+            
+            script.onerror = function() {
+                clearTimeout(timeoutId);
+                console.error("無法載入腳本:", url);
+                callback(false);
+            };
+            
+            document.head.appendChild(script);
+        }
+        
+        // 初始化Unity Ads SDK
+        function initializeUnityAdsSDK() {
+            try {
+                // 检查SDK是否可用
+                if (typeof UnityAds === 'undefined') {
+                    throw new Error("Unity Ads SDK未正確載入");
+                }
+                
+                // 设置调试模式（开发时使用true，生产环境使用false）
+                const testMode = false;
+                
+                // 记录初始化开始
+                console.log(`正在初始化Unity Ads，Game ID: ${unityGameId}，測試模式: ${testMode}`);
+                
+                // 根据Unity文档，应先初始化SDK，然后再加载广告
+                UnityAds.initialize(unityGameId, testMode, {
+                    onComplete: function() {
+                        console.log("Unity Ads 初始化完成");
+                        // 初始化完成后加载奖励广告
+                        loadRewardedAd();
+                    },
+                    onError: function(error, message) {
+                        console.error(`Unity Ads 初始化失敗: ${error} - ${message}`);
+                        updateStatus(`廣告初始化失敗: ${message}`);
+                        
+                        // 显示重试按钮
+                        const watchButton = document.getElementById("watch-button");
+                        if (watchButton) {
+                            watchButton.disabled = false;
+                            watchButton.textContent = "重新嘗試";
+                            watchButton.onclick = function() {
+                                location.reload();
+                            };
+                        }
+                    }
+                });
+            } catch (error) {
+                updateStatus("初始化Unity Ads失敗: " + error.message);
+                console.error("Unity Ads初始化錯誤", error);
+                
+                // 显示重试按钮
+                const watchButton = document.getElementById("watch-button");
+                if (watchButton) {
+                    watchButton.disabled = false;
+                    watchButton.textContent = "重新嘗試";
+                    watchButton.onclick = function() {
+                        location.reload();
+                    };
+                }
+            }
+        }
+        
+        // 加载奖励广告 - 按照Unity文档推荐的方式
+        function loadRewardedAd() {
+            console.log(`正在加載獎勵廣告，廣告位ID: ${adPlacementId}`);
+            
+            // 更新状态
+            updateStatus("正在准备廣告...");
+            
+            // 根据Unity文档，加载广告时应提供加载监听器
+            UnityAds.load(adPlacementId, {
+                onComplete: function() {
+                    // 广告加载完成，启用按钮
+                    console.log("奬勵廣告加載完成，可供顯示");
+                    const watchButton = document.getElementById("watch-button");
+                    if (watchButton) {
+                        watchButton.disabled = false;
+                        watchButton.textContent = "觀看廣告";
+                    }
+                    updateStatus("廣告已準備好，請點擊按鈕觀看");
+                },
+                onFailed: function(error, message) {
+                    console.error(`廣告加載失敗: ${error} - ${message}`);
+                    updateStatus("廣告載入失敗: " + message);
+                    
+                    // 显示重试按钮
+                    const watchButton = document.getElementById("watch-button");
+                    if (watchButton) {
+                        watchButton.disabled = false;
+                        watchButton.textContent = "重新嘗試";
+                        watchButton.onclick = function() {
+                            // 尝试重新加载广告
+                            loadRewardedAd();
+                        };
+                    }
+                }
+            });
+        }
+        
+        // 顯示廣告 - 按照Unity文档推荐的方式
+        function showAd() {
+            // 检查Unity Ads是否已初始化
+            if (typeof UnityAds === 'undefined') {
+                updateStatus("廣告服务尚未准备好，请稍后再试");
+                return;
+            }
+            
+            updateStatus("正在顯示廣告...");
+            const watchButton = document.getElementById("watch-button");
+            if (watchButton) {
+                watchButton.disabled = true;
+            }
+            
+            try {
+                // 显示奖励广告，提供完整的显示监听器
+                console.log(`正在顯示獎勵廣告，廣告位ID: ${adPlacementId}`);
+                UnityAds.show(adPlacementId, {
+                    onStart: function() {
+                        console.log("廣告開始播放");
+                        updateStatus("廣告播放中...");
+                    },
+                    onComplete: function() {
+                        console.log("廣告觀看完成 - 給予獎勵");
+                        adCompleted = true;
+                        updateStatus("廣告觀看完成！正在處理獎勵...");
+                        // 广告完成后给予奖励
+                        sendCompletionToServer();
+                    },
+                    onSkip: function() {
+                        console.log("廣告被跳過 - 不給予獎勵");
+                        updateStatus("需要觀看完整廣告才能獲得獎勵");
+                        const watchButton = document.getElementById("watch-button");
+                        if (watchButton) {
+                            watchButton.disabled = false;
+                        }
+                    },
+                    onError: function(error, message) {
+                        console.error(`廣告顯示錯誤: ${error} - ${message}`);
+                        updateStatus("廣告播放出錯: " + message);
+                        
+                        // 恢复按钮状态
+                        const watchButton = document.getElementById("watch-button");
+                        if (watchButton) {
+                            watchButton.disabled = false;
+                        }
+                        
+                        // 如果显示失败，可以尝试重新加载
+                        setTimeout(function() {
+                            updateStatus("正在重新加載廣告...");
+                            loadRewardedAd();
+                        }, 3000);
+                    }
+                });
+            } catch (error) {
+                console.error("顯示廣告時發生錯誤", error);
+                updateStatus("廣告顯示失敗，請重新載入頁面");
+                if (watchButton) {
+                    watchButton.disabled = false;
+                }
+            }
+        }
+        
+        // 將完成狀態發送到伺服器
+        function sendCompletionToServer() {
+            // 確保有用戶ID
+            if (!userId) {
+                console.error("無法發送完成狀態：用戶ID為空");
+                updateStatus("無法處理獎勵：用戶ID未知");
+                return;
+            }
+            
+            // 禁用所有按鈕防止重複提交
+            const allButtons = document.querySelectorAll('button');
+            allButtons.forEach(btn => {
+                if (btn) {
+                    btn.disabled = true;
+                }
+            });
+            
+            updateStatus("正在處理獎勵...");
+            
+            fetch('/ad-completed', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    user_id: userId,
+                    ad_type: 'unity'
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateStatus(data.message);
+                    const creditsElement = document.getElementById("credits");
+                    const resultContainer = document.getElementById("result-container");
+                    const closeButton = document.getElementById("close-button");
+                    
+                    if (creditsElement) creditsElement.textContent = data.credits;
+                    if (resultContainer) resultContainer.style.display = "block";
+                    if (closeButton) {
+                        closeButton.style.display = "block";
+                        closeButton.disabled = false;
+                    }
+                } else {
+                    updateStatus("獎勵處理失敗: " + data.message);
+                    // 恢復按鈕狀態
+                    allButtons.forEach(btn => {
+                        if (btn && btn.id !== "close-button") {
+                            btn.disabled = false;
+                        }
+                    });
+                }
+            })
+            .catch(error => {
+                console.error("發送完成狀態錯誤", error);
+                updateStatus("獎勵處理失敗，請聯繫客服或重試");
+                
+                // 恢復按鈕狀態
+                allButtons.forEach(btn => {
+                    if (btn && btn.id !== "close-button") {
+                        btn.disabled = false;
+                    }
+                });
+                
+                // 顯示重試按鈕
+                const container = document.querySelector('.container');
+                if (container) {
+                    const retryDiv = document.createElement('div');
+                    retryDiv.innerHTML = `<button id="retry-button" class="alt-button">重新嘗試</button>`;
+                    container.appendChild(retryDiv);
+                    
+                    const retryButton = document.getElementById('retry-button');
+                    if (retryButton) {
+                        retryButton.onclick = function() {
+                            retryButton.disabled = true;
+                            sendCompletionToServer();
+                        };
+                    }
+                }
+            });
+        }
+        
+        // 更新狀態訊息
+        function updateStatus(message) {
+            const statusElement = document.getElementById("status");
+            if (statusElement) {
+                statusElement.textContent = message;
+            } else {
+                console.warn("Status element not found");
+            }
+        }
+        
+        // 關閉頁面並返回LINE
+        function closePage() {
+            try {
+                if (liff.isInClient()) {
+                    liff.closeWindow();
+                } else {
+                    window.close();
+                }
+            } catch (error) {
+                console.error("關閉頁面時發生錯誤", error);
+                updateStatus("無法關閉頁面，請手動返回");
+            }
+        }
+        
+        // 处理所有SDK加载失败的情况
+        function handleAllSdkLoadFailed() {
+            console.error("所有SDK來源加載失敗");
+            updateStatus("無法載入廣告SDK，但您仍可以獲得分析次數");
+            
+            // 修改UI，提供备选方案
+            const container = document.querySelector('.container');
+            if (container) {
+                const alternativeDiv = document.createElement('div');
+                alternativeDiv.className = 'alternative-method';
+                alternativeDiv.innerHTML = `
+                    <h2>廣告載入失敗</h2>
+                    <p>由於網絡問題，無法載入廣告SDK。但您仍然可以獲得分析機會！</p>
+                    <div class="options-container">
+                        <button id="alternative-button" class="alt-button">直接獲取1次分析機會</button>
+                        <button id="reload-button" class="reload-button">重新嘗試載入廣告</button>
+                    </div>
+                `;
+                
+                // 添加备选按钮，点击后直接调用完成API
+                container.appendChild(alternativeDiv);
+                
+                const altButton = document.getElementById('alternative-button');
+                if (altButton) {
+                    altButton.onclick = function() {
+                        altButton.disabled = true;
+                        updateStatus("正在處理獎勵...");
+                        // 设置完成状态为真
+                        adCompleted = true;
+                        sendCompletionToServer();
+                    };
+                }
+                
+                const reloadButton = document.getElementById('reload-button');
+                if (reloadButton) {
+                    reloadButton.onclick = function() {
+                        location.reload();
+                    };
+                }
+                
+                // 安全地隐藏原始观看按钮
+                const watchButton = document.getElementById("watch-button");
+                if (watchButton) {
+                    watchButton.style.display = 'none';
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            background-color: #f8f8f8;
+            color: #333;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #00B900;
+            font-size: 24px;
+            margin-bottom: 16px;
+        }
+        h2 {
+            color: #555;
+            font-size: 20px;
+            margin-bottom: 12px;
+        }
+        p {
+            margin-bottom: 16px;
+            color: #666;
+        }
+        button {
+            padding: 12px 24px;
+            margin: 10px;
+            border-radius: 100px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        #watch-button {
+            background-color: #00B900;
+            color: white;
+            border: none;
+        }
+        #watch-button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        #watch-button:hover:not(:disabled) {
+            background-color: #009900;
+        }
+        #close-button {
+            display: none;
+            background-color: transparent;
+            color: #666;
+            border: 1px solid #ccc;
+        }
+        #close-button:hover {
+            background-color: #f1f1f1;
+        }
+        #status {
+            margin: 20px 0;
+            font-weight: bold;
+            color: #555;
+            min-height: 24px;
+        }
+        #result-container {
+            display: none;
+            background-color: #E7FFE7;
+            padding: 16px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #00B900;
+        }
+        #credits {
+            font-weight: bold;
+            color: #00B900;
+            font-size: 20px;
+        }
+        .logo {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 20px;
+        }
+        .error-message {
+            color: #e74c3c;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .manual-input {
+            margin-top: 20px;
+            padding: 16px;
+            background-color: #f5f5f5;
+            border-radius: 8px;
+        }
+        .manual-input h2 {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        .manual-input input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        .alt-button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+        }
+        .alt-button:hover {
+            background-color: #0069d9;
+        }
+        .alternative-method {
+            margin-top: 20px;
+            padding: 16px;
+            background-color: #fff8e1;
+            border-radius: 8px;
+            border: 1px solid #ffecb3;
+            animation: fadeIn 0.5s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .options-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .reload-button {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 100px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .reload-button:hover {
+            background-color: #5a6268;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#00B900"><path d="M12 2C6.5 2 2 5.5 2 10c0 3.5 2.2 6.5 5.5 8.2L7 21.5c.1.3.5.5.8.3l4.6-2.7c-.1 0-.3 0-.4 0-5.5 0-10-3.5-10-8 0-4.4 4.5-8 10-8s10 3.6 10 8c0 1.4-.5 2.8-1.3 4 .7.3 1.3.7 1.8 1.2.9-1.5 1.5-3.2 1.5-5.2C24 5.5 19.5 2 12 2z"/><path d="M8.5 9h-2C6.2 9 6 9.2 6 9.5v5c0 .3.2.5.5.5s.5-.2.5-.5v-2h1.5c.8 0 1.5-.7 1.5-1.5S9.3 9 8.5 9zm0 2H7v-1h1.5c.3 0 .5.2.5.5s-.2.5-.5.5zM13.5 9H12c-.3 0-.5.2-.5.5v5c0 .3.2.5.5.5h1.5c1.4 0 2.5-1.1 2.5-2.5v-1c0-1.4-1.1-2.5-2.5-2.5zm0 5H12v-4h1.5c.8 0 1.5.7 1.5 1.5v1c0 .8-.7 1.5-1.5 1.5zM16.5 9c-.3 0-.5.2-.5.5v5c0 .3.2.5.5.5s.5-.2.5-.5v-5c0-.3-.2-.5-.5-.5z"/></svg>
+        </div>
+        <h1>觀看廣告獲取分析次數</h1>
+        <p>觀看一則完整廣告後，您將獲得1次免費分析機會。</p>
+        <div id="status">正在初始化...</div>
+        <div id="result-container">
+            <p>恭喜！您已獲得獎勵，現在有 <span id="credits">0</span> 次分析機會</p>
+        </div>
+        <button id="watch-button" onclick="showAd()" disabled>觀看廣告</button>
+        <button id="close-button" onclick="closePage()">返回LINE對話</button>
+    </div>
+</body>
+</html>

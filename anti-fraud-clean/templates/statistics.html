@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>防詐騙統計數據</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            background-color: #f5f5f5;
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+        }
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .card-header {
+            background-color: #0d6efd;
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            font-weight: bold;
+        }
+        .total-count {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #0d6efd;
+        }
+        .chart-container {
+            height: 300px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <h1 class="text-center mb-5">防詐騙統計數據</h1>
+        
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">詐騙報告總數</div>
+                    <div class="card-body text-center">
+                        <div class="total-count">{{ stats.total_reports }}</div>
+                        <p class="text-muted">已分析的詐騙相關訊息數量</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">按風險等級分布</div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="riskLevelChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">最常見詐騙類型</div>
+                    <div class="card-body">
+                        <ul class="list-group">
+                            {% for fraud_type, count in stats.fraud_types.items() %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                {{ fraud_type }}
+                                <span class="badge bg-primary rounded-pill">{{ count }}</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">詐騙類型分布</div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="fraudTypeChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 風險等級分布圖表
+        const riskCtx = document.getElementById('riskLevelChart').getContext('2d');
+        const riskLevelChart = new Chart(riskCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['高風險', '中風險', '低風險'],
+                datasets: [{
+                    data: [
+                        {{ stats.risk_levels.get('高', 0) }}, 
+                        {{ stats.risk_levels.get('中', 0) }}, 
+                        {{ stats.risk_levels.get('低', 0) }}
+                    ],
+                    backgroundColor: [
+                        '#dc3545',  // 高風險 - 紅色
+                        '#ffc107',  // 中風險 - 黃色
+                        '#28a745'   // 低風險 - 綠色
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+        
+        // 詐騙類型分布圖表
+        const fraudCtx = document.getElementById('fraudTypeChart').getContext('2d');
+        const fraudTypeChart = new Chart(fraudCtx, {
+            type: 'bar',
+            data: {
+                labels: [
+                    {% for fraud_type in stats.fraud_types.keys() %}
+                        "{{ fraud_type }}"{% if not loop.last %},{% endif %}
+                    {% endfor %}
+                ],
+                datasets: [{
+                    label: '詐騙案例數量',
+                    data: [
+                        {% for count in stats.fraud_types.values() %}
+                            {{ count }}{% if not loop.last %},{% endif %}
+                        {% endfor %}
+                    ],
+                    backgroundColor: '#0d6efd'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            precision: 0
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 
