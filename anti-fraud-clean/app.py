@@ -394,40 +394,16 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
             else:
                 logger.info(f"用戶 {user_id} 文檔不存在或無法獲取")
                 
-            analysis_credits = firebase_manager.get_user_analysis_credits(user_id)
-            logger.info(f"用戶 {user_id} 當前分析次數：{analysis_credits}")
+            # 不再檢查用戶分析次數，現為無限次數模式
+            logger.info(f"用戶 {user_id} 可以無限次使用分析功能")
             
-            if analysis_credits <= 0:
-                # 用戶沒有足夠的分析次數，返回提示信息
-                logger.info(f"用戶 {user_id} 分析次數不足，提示觀看廣告")
-                return f"""
-風險等級：分析受限
-詐騙類型：無法評估
-說明：您的免費分析次數已用完。您需要觀看廣告或進行小額贊助以獲取更多分析次數。
-建議：請點擊下方的「觀看廣告」按鈕獲取免費分析次數，或選擇小額贊助支持我們的服務。
-
-每次觀看廣告可獲得1次分析機會，或者每NT$50的贊助可獲得10次分析機會。
-"""
-            
-            # 減少用戶的分析次數
-            decrease_result = firebase_manager.decrease_user_analysis_credits(user_id)
-            logger.info(f"用戶 {user_id} 減少分析次數操作結果：{decrease_result}，剩餘 {analysis_credits-1} 次")
-            
-            # 如果用戶次數減少後剩餘不多，額外發送提醒
-            if analysis_credits - 1 <= 1:
-                try:
-                    # 在分析結果後額外發送次數不足提醒
-                    reminder_message = f"提醒：您的分析次數剩餘不多（僅剩 {analysis_credits-1} 次）。請考慮觀看廣告或進行小額贊助以獲取更多分析次數。"
-                    logger.info(f"將在分析後額外發送次數提醒給用戶 {user_id}")
-                    
-                    # 使用非同步方式發送，避免阻塞主流程
-                    # 注意：這裡不要立即發送，而是在外部代碼中處理
-                    firebase_manager.set_user_state(user_id, {
-                        'needs_credits_reminder': True,
-                        'remaining_credits': analysis_credits-1
-                    })
-                except Exception as e:
-                    logger.error(f"設置次數提醒狀態失敗: {e}")
+            # 以下是舊的分析次數檢查代碼，已經不再使用
+            # 如果需要重新啟用功能，可以取消下方註釋並注釋上方的無限次數模式
+            # analysis_credits = firebase_manager.get_user_analysis_credits(user_id)
+            # if analysis_credits <= 0:
+            #     return "您的免費分析次數已用完" 相關提示
+            # decrease_result = firebase_manager.decrease_user_analysis_credits(user_id)
+            # if analysis_credits - 1 <= 1: 設置提醒
         except Exception as e:
             logger.error(f"檢查用戶 {user_id} 分析次數時出錯：{e}")
             # 即使出錯，也繼續分析，避免影響用戶體驗
@@ -850,6 +826,8 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
     
     # 檢查是否為用戶次數不足的情況
     if "您的免費分析次數已用完" in explanation:
+        # 以下註釋掉的代碼是關於分析次數不足的提示，暫時停用
+        """
         bubble = BubbleContainer(
             header=BoxComponent(
                 layout='vertical',
@@ -929,6 +907,41 @@ def create_analysis_flex_message(analysis_data, display_name, message_to_analyze
         )
         
         return FlexSendMessage(alt_text='分析次數不足', contents=bubble)
+        """
+        # 替換為簡單消息告知用戶現在免費無限使用
+        bubble = BubbleContainer(
+            header=BoxComponent(
+                layout='vertical',
+                contents=[
+                    TextComponent(
+                        text="公告",
+                        weight='bold',
+                        size='xl',
+                        color='#ffffff'
+                    )
+                ],
+                background_color='#27AE60'
+            ),
+            body=BoxComponent(
+                layout='vertical',
+                contents=[
+                    TextComponent(
+                        text="系統更新通知",
+                        wrap=True,
+                        weight='bold',
+                        size='md',
+                        margin='md'
+                    ),
+                    TextComponent(
+                        text="我們已經開放免費無限使用分析功能！無需觀看廣告或支付任何費用。",
+                        wrap=True,
+                        size='sm',
+                        margin='md'
+                    )
+                ]
+            )
+        )
+        return FlexSendMessage(alt_text='系統更新通知', contents=bubble)
     
     # 根據風險等級設置顏色
     if risk_level in ["高", "高風險"]:
