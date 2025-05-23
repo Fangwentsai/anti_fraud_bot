@@ -1560,7 +1560,7 @@ def handle_message(event):
             line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
         
         firebase_manager.save_user_interaction(user_id, display_name, text_message, "回覆功能說明", is_fraud_related=False)
-            return
+        return
 
     # 處理「選哪顆土豆」遊戲觸發
     if any(keyword in text_message.lower() for keyword in potato_game_trigger_keywords):
@@ -1586,7 +1586,7 @@ def handle_message(event):
             if is_group_message:
                 quick_reply_items.append(QuickReplyButton(action=MessageAction(label=f_type, text=f"{bot_trigger_keyword} 什麼是{f_type}")))
             else:
-            quick_reply_items.append(QuickReplyButton(action=MessageAction(label=f_type, text=f"什麼是{f_type}")))
+                quick_reply_items.append(QuickReplyButton(action=MessageAction(label=f_type, text=f"什麼是{f_type}")))
 
         # 在群組中回覆時前綴用戶名稱
         if is_group_message:
@@ -1688,11 +1688,11 @@ def handle_message(event):
             mention_message = create_mention_message(selected_reply, display_name, user_id, quick_reply)
             line_bot_api.reply_message(reply_token, mention_message)
         else:
-        quick_reply = QuickReply(items=[
+            quick_reply = QuickReply(items=[
             QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text="選哪顆土豆")),
             QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text="詐騙類型列表"))
         ])
-            line_bot_api.reply_message(reply_token, TextSendMessage(text=selected_reply, quick_reply=quick_reply))
+        line_bot_api.reply_message(reply_token, TextSendMessage(text=selected_reply, quick_reply=quick_reply))
         
         firebase_manager.save_user_interaction(user_id, display_name, text_message, "Responded to analysis request prompt", is_fraud_related=False)
         return
@@ -1765,7 +1765,7 @@ def handle_message(event):
         suggestions = analysis_data.get("suggestions", "請隨時保持警惕。")
         is_emerging = analysis_data.get("is_emerging", False)
 
-        # 創建並發送Flex Message分析結果
+        if analysis_result and analysis_result.get("success", False):
             flex_message = create_analysis_flex_message(analysis_data, display_name, text_message, user_id)
             
             # 在群組中增加前綴提及用戶
