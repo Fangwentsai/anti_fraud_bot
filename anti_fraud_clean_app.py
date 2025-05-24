@@ -1496,13 +1496,48 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     
     if flask_env == 'production':
-        # 生產環境：不啟動 Flask 開發伺服器，只提示使用 Gunicorn
-        logger.info("生產環境檢測到，應該使用 Gunicorn 啟動")
-        logger.info(f"正確的啟動命令：gunicorn --bind 0.0.0.0:{port} anti_fraud_clean_app:app")
-        logger.warning("⚠️ 如果您看到這個訊息，表示正在直接執行 Python 檔案")
-        logger.warning("⚠️ 在生產環境中請使用 Gunicorn 啟動，而不是直接執行 Python 檔案")
-        # 在生產環境中不啟動 Flask 開發伺服器
-        exit(1)
+        # 生產環境：強制使用 Gunicorn
+        logger.info("🚀 生產環境檢測到，強制啟動 Gunicorn...")
+        
+        import subprocess
+        import sys
+        import os
+        
+        # 構建 Gunicorn 命令
+        gunicorn_cmd = [
+            "gunicorn",
+            "--bind", f"0.0.0.0:{port}",
+            "--workers", "2",
+            "--timeout", "30",
+            "--access-logfile", "-",
+            "--error-logfile", "-",
+            "--log-level", "info",
+            "anti_fraud_clean_app:app"
+        ]
+        
+        logger.info(f"🎯 執行 Gunicorn 命令: {' '.join(gunicorn_cmd)}")
+        
+        try:
+            # 使用 exec 替換當前進程
+            os.execvp("gunicorn", gunicorn_cmd)
+        except FileNotFoundError:
+            logger.error("❌ 找不到 Gunicorn，嘗試使用 python -m gunicorn")
+            try:
+                gunicorn_cmd = [
+                    sys.executable, "-m", "gunicorn",
+                    "--bind", f"0.0.0.0:{port}",
+                    "--workers", "2", 
+                    "--timeout", "30",
+                    "--access-logfile", "-",
+                    "--error-logfile", "-",
+                    "--log-level", "info",
+                    "anti_fraud_clean_app:app"
+                ]
+                os.execv(sys.executable, gunicorn_cmd)
+            except Exception as e:
+                logger.error(f"❌ Gunicorn 啟動失敗: {e}")
+                logger.error("⚠️ 降級使用 Flask 開發伺服器（不建議在生產環境使用）")
+                app.run(host="0.0.0.0", port=port, debug=False)
     else:
         # 開發環境：使用 Flask 開發伺服器
         logger.info("開發環境：使用 Flask 開發伺服器")
