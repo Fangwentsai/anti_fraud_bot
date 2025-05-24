@@ -40,7 +40,31 @@ class WeatherService:
             "週幾", "禮拜", "星期", "幾月", "幾日", "今日", "現在時間", "目前時間"
         ]
         
-        # 支援的城市和對應代碼
+        # 支援的城市和對應的標準名稱 (F-C0032-001 API使用)
+        self.city_mapping = {
+            "台北": "臺北市",
+            "新北": "新北市", 
+            "桃園": "桃園市",
+            "台中": "臺中市",
+            "台南": "臺南市",
+            "高雄": "高雄市",
+            "基隆": "基隆市",
+            "新竹": "新竹市",
+            "苗栗": "苗栗縣",
+            "彰化": "彰化縣",
+            "南投": "南投縣",
+            "雲林": "雲林縣",
+            "嘉義": "嘉義縣",
+            "屏東": "屏東縣",
+            "宜蘭": "宜蘭縣",
+            "花蓮": "花蓮縣",
+            "台東": "臺東縣",
+            "澎湖": "澎湖縣",
+            "金門": "金門縣",
+            "連江": "連江縣"
+        }
+        
+        # 支援的城市和對應代碼 (保留給其他API使用)
         self.city_codes = {
             "台北": "F-D0047-061",
             "新北": "F-D0047-069", 
@@ -91,11 +115,11 @@ class WeatherService:
     def get_weather_forecast(self, city: str = "台北", days: int = 3) -> Dict:
         """獲取指定城市的天氣預報"""
         try:
-            if city not in self.city_codes:
+            if city not in self.city_mapping:
                 return {
                     "success": False,
                     "error": f"不支援的城市: {city}",
-                    "supported_cities": list(self.city_codes.keys())
+                    "supported_cities": list(self.city_mapping.keys())
                 }
             
             if not self.cwb_api_key:
@@ -103,13 +127,16 @@ class WeatherService:
                 logger.warning("未設定中央氣象署API金鑰，使用模擬資料")
                 return self._get_mock_weather_data(city, days)
             
-            # 呼叫中央氣象署API
-            city_code = self.city_codes[city]
-            url = f"{self.cwb_base_url}/{city_code}"
+            # 使用F-C0032-001 API (一般天氣預報-今明36小時天氣預報)
+            url = f"{self.cwb_base_url}/F-C0032-001"
+            
+            # 使用標準城市名稱
+            standard_city_name = self.city_mapping[city]
             
             params = {
                 "Authorization": self.cwb_api_key,
-                "format": "JSON"
+                "format": "JSON",
+                "locationName": standard_city_name
             }
             
             response = requests.get(url, params=params, timeout=10)
@@ -118,7 +145,7 @@ class WeatherService:
             data = response.json()
             
             # 解析天氣資料
-            weather_data = self._parse_weather_data(data, city, days)
+            weather_data = self._parse_cwb_weather_data(data, city, days)
             
             return {
                 "success": True,
@@ -138,33 +165,92 @@ class WeatherService:
                 "error": str(e)
             }
 
-    def _parse_weather_data(self, data: Dict, city: str, days: int) -> List[Dict]:
-        """解析中央氣象署天氣資料"""
+    def _parse_cwb_weather_data(self, data: Dict, city: str, days: int) -> List[Dict]:
+        """解析中央氣象署F-C0032-001天氣資料"""
         try:
-            # 這裡需要根據實際的API回應格式來解析
-            # 以下是簡化的解析邏輯
             forecast = []
             
-            # 模擬解析邏輯（實際需要根據API文件調整）
-            for i in range(days):
-                date = get_taipei_time() + timedelta(days=i)
+            # 檢查API回應結構
+            if not data.get("success") or not data.get("records"):
+                logger.warning("中央氣象署API回應格式異常，使用模擬資料")
+                return self._get_mock_weather_data(city, days)["forecast"]
+            
+            locations = data["records"]["location"]
+            target_location = None
+            
+            # 使用標準城市名稱尋找目標城市
+            standard_city_name = self.city_mapping.get(city, city)
+            
+            for location in locations:
+                if location["locationName"] == standard_city_name:
+                    target_location = location
+                    break
+            
+            if not target_location:
+                logger.warning(f"找不到城市 {city} ({standard_city_name}) 的天氣資料，使用模擬資料")
+                return self._get_mock_weather_data(city, days)["forecast"]
+            
+            # 解析天氣元素
+            weather_elements = target_location["weatherElement"]
+            
+            # 建立時間段對應的天氣資料
+            time_periods = {}
+            
+            for element in weather_elements:
+                element_name = element["elementName"]
+                
+                for time_data in element["time"]:
+                    start_time = time_data["startTime"]
+                    end_time = time_data["endTime"]
+                    
+                    # 使用開始時間作為key
+                    if start_time not in time_periods:
+                        time_periods[start_time] = {
+                            "start_time": start_time,
+                            "end_time": end_time
+                        }
+                    
+                    # 根據元素類型解析資料
+                    if element_name == "Wx":  # 天氣現象
+                        time_periods[start_time]["weather"] = time_data["parameter"]["parameterName"]
+                    elif element_name == "PoP":  # 降雨機率
+                        time_periods[start_time]["rain_probability"] = f"{time_data['parameter']['parameterName']}%"
+                    elif element_name == "MinT":  # 最低溫度
+                        time_periods[start_time]["min_temp"] = time_data["parameter"]["parameterName"]
+                    elif element_name == "MaxT":  # 最高溫度
+                        time_periods[start_time]["max_temp"] = time_data["parameter"]["parameterName"]
+                    elif element_name == "CI":  # 舒適度
+                        time_periods[start_time]["comfort"] = time_data["parameter"]["parameterName"]
+            
+            # 轉換為我們的格式
+            sorted_times = sorted(time_periods.keys())
+            
+            for i, time_key in enumerate(sorted_times[:days]):
+                period_data = time_periods[time_key]
+                
+                # 解析日期
+                from datetime import datetime
+                start_dt = datetime.fromisoformat(period_data["start_time"].replace("Z", "+00:00"))
+                taipei_dt = start_dt.astimezone(TAIPEI_TZ)
+                
                 forecast.append({
-                    "date": date.strftime("%Y-%m-%d"),
-                    "weekday": self._get_chinese_weekday(date.weekday()),
-                    "weather": "多雲時晴",
+                    "date": taipei_dt.strftime("%Y-%m-%d"),
+                    "weekday": self._get_chinese_weekday(taipei_dt.weekday()),
+                    "weather": period_data.get("weather", "多雲"),
                     "temperature": {
-                        "high": 28 - i,
-                        "low": 22 - i
+                        "high": int(period_data.get("max_temp", "25")),
+                        "low": int(period_data.get("min_temp", "18"))
                     },
-                    "humidity": f"{70 + i * 5}%",
-                    "rain_probability": f"{30 + i * 10}%",
-                    "description": "舒適宜人的天氣"
+                    "humidity": "65%",  # F-C0032-001 沒有濕度資料
+                    "rain_probability": period_data.get("rain_probability", "30%"),
+                    "description": period_data.get("comfort", "舒適"),
+                    "time_period": f"{taipei_dt.strftime('%H:%M')} - {datetime.fromisoformat(period_data['end_time'].replace('Z', '+00:00')).astimezone(TAIPEI_TZ).strftime('%H:%M')}"
                 })
                 
             return forecast
             
         except Exception as e:
-            logger.error(f"解析天氣資料時發生錯誤: {e}")
+            logger.error(f"解析中央氣象署天氣資料時發生錯誤: {e}")
             return self._get_mock_weather_data(city, days)["forecast"]
 
     def _get_mock_weather_data(self, city: str, days: int) -> Dict:
