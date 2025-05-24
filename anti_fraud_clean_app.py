@@ -30,7 +30,8 @@ from weather_service import handle_weather_query, is_weather_related
 from flex_message_service import (
     create_analysis_flex_message, create_domain_spoofing_flex_message,
     create_donation_flex_message, create_weather_flex_message,
-    create_fraud_types_flex_message, create_fraud_detail_flex_message
+    create_fraud_types_flex_message, create_fraud_detail_flex_message,
+    FlexMessageService
 )
 from game_service import (
     start_potato_game, handle_potato_game_answer, is_game_trigger, get_user_game_state
@@ -1517,6 +1518,8 @@ def _is_legitimate_subdomain(subdomain_part):
     
     return True
 
+# 初始化FlexMessageService
+flex_message_service = FlexMessageService()
 
 if __name__ == '__main__':
     # 檢查環境變數
