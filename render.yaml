@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: anti-fraud-linebot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python anti_fraud_clean_app.py
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: FLASK_ENV
+        value: production
+      - key: LINE_CHANNEL_ACCESS_TOKEN
+        sync: false
+      - key: LINE_CHANNEL_SECRET
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: FIREBASE_CREDENTIALS
+        sync: false 

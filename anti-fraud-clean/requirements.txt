@@ -1,6 +1,0 @@
-line-bot-sdk
-flask
-gunicorn
-python-dotenv
-openai>=1.0.0
-firebase-admin 
