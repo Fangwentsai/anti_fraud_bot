@@ -351,7 +351,10 @@ class GameService:
         message_lower = message.lower().strip()
         
         # 檢查是否包含遊戲觸發關鍵詞
-        game_keywords = ["玩土豆", "選土豆", "土豆遊戲", "玩遊戲"]
+        game_keywords = [
+            "選哪顆土豆", "玩土豆", "選土豆", "土豆遊戲", 
+            "玩遊戲", "選土豆遊戲", "開始遊戲"
+        ]
         
         for keyword in game_keywords:
             if keyword in message_lower:
