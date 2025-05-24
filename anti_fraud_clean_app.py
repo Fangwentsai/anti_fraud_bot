@@ -796,26 +796,23 @@ if handler:
 
         # 檢查用戶詢問詐騙類型清單
         if any(keyword in cleaned_message for keyword in ["詐騙類型列表", "詐騙類型", "詐騙手法", "詐騙種類", "常見詐騙"]):
-            fraud_list = "🚨 **常見詐騙類型一覽** 🚨\n\n"
-            for fraud_type, info in fraud_types.items():
-                # 獲取description字段，如果info是字典而非字符串
-                if isinstance(info, dict) and "description" in info:
-                    description = info["description"]
-                else:
-                    description = str(info)
+            logger.info(f"檢測到詐騙類型列表查詢: {cleaned_message}")
+            
+            try:
+                from fraud_knowledge import load_fraud_tactics
+                fraud_tactics = load_fraud_tactics()
                 
-                # 截斷過長的描述
-                short_description = description[:50] + "..." if len(description) > 50 else description
-                fraud_list += f"🔸 **{fraud_type}**\n   {short_description}\n\n"
-            
-            fraud_list += "💡 如需詳細了解某個詐騙類型，請直接輸入該詐騙名稱！\n\n"
-            fraud_list += "⚠️ 如果收到可疑訊息，請直接傳給我分析喔！"
-            
-            # 截斷過長的訊息
-            if len(fraud_list) > LINE_MESSAGE_SAFE_LENGTH:
-                fraud_list = fraud_list[:LINE_MESSAGE_SAFE_LENGTH] + "\n\n(更多資訊請分別查詢各詐騙類型)"
-            
-            line_bot_api.reply_message(reply_token, TextSendMessage(text=fraud_list))
+                if fraud_tactics:
+                    # 創建詐騙類型列表Flex訊息
+                    fraud_types_flex = create_fraud_types_flex_message(fraud_tactics, display_name)
+                    line_bot_api.reply_message(reply_token, fraud_types_flex)
+                else:
+                    error_text = "抱歉，詐騙類型資料載入失敗。\n\n💡 您可以：\n• 直接傳送可疑訊息給我分析\n• 說「防詐騙測試」進行知識測驗"
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
+            except Exception as e:
+                logger.error(f"處理詐騙類型查詢時發生錯誤: {e}")
+                error_text = "抱歉，詐騙類型查詢功能暫時無法使用。\n\n💡 您可以：\n• 直接傳送可疑訊息給我分析\n• 說「防詐騙測試」進行知識測驗"
+                line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
             return
 
         # 檢查是否詢問特定詐騙類型
@@ -852,7 +849,7 @@ if handler:
                 return
 
         # 處理詐騙類型列表查詢 - 使用Flex Message
-        if any(keyword in cleaned_message for keyword in ["詐騙類型列表"]):
+        if any(keyword in cleaned_message for keyword in ["詐騙類型列表", "詐騙類型", "詐騙手法", "詐騙種類", "常見詐騙"]):
             logger.info(f"檢測到詐騙類型列表查詢: {cleaned_message}")
             
             try:
@@ -870,30 +867,6 @@ if handler:
                 logger.error(f"處理詐騙類型查詢時發生錯誤: {e}")
                 error_text = "抱歉，詐騙類型查詢功能暫時無法使用。\n\n💡 您可以：\n• 直接傳送可疑訊息給我分析\n• 說「防詐騙測試」進行知識測驗"
                 line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
-            return
-
-        # 檢查用戶詢問詐騙類型清單 (文字版本)
-        if any(keyword in cleaned_message for keyword in ["詐騙類型", "詐騙手法", "詐騙種類", "常見詐騙"]):
-            fraud_list = "🚨 **常見詐騙類型一覽** 🚨\n\n"
-            for fraud_type, info in fraud_types.items():
-                # 獲取description字段，如果info是字典而非字符串
-                if isinstance(info, dict) and "description" in info:
-                    description = info["description"]
-                else:
-                    description = str(info)
-                
-                # 截斷過長的描述
-                short_description = description[:50] + "..." if len(description) > 50 else description
-                fraud_list += f"🔸 **{fraud_type}**\n   {short_description}\n\n"
-            
-            fraud_list += "💡 如需詳細了解某個詐騙類型，請直接輸入該詐騙名稱！\n\n"
-            fraud_list += "⚠️ 如果收到可疑訊息，請直接傳給我分析喔！"
-            
-            # 截斷過長的訊息
-            if len(fraud_list) > LINE_MESSAGE_SAFE_LENGTH:
-                fraud_list = fraud_list[:LINE_MESSAGE_SAFE_LENGTH] + "\n\n(更多資訊請分別查詢各詐騙類型)"
-            
-            line_bot_api.reply_message(reply_token, TextSendMessage(text=fraud_list))
             return
 
         # 檢查是否為分析請求但沒有內容

@@ -10,7 +10,8 @@ import random
 from typing import Dict, List, Optional, Any
 from linebot.models import (
     FlexSendMessage, BubbleContainer, BoxComponent, TextComponent, 
-    SeparatorComponent, ButtonComponent, URIAction, PostbackAction, MessageAction
+    SeparatorComponent, ButtonComponent, URIAction, PostbackAction, MessageAction,
+    MessageEvent, TextMessage, TextSendMessage, PostbackEvent, QuickReply, QuickReplyButton
 )
 
 logger = logging.getLogger(__name__)
@@ -615,56 +616,145 @@ def create_fraud_types_flex_message(fraud_tactics: Dict, display_name: str = "�
     """創建詐騙類型列表Flex Message"""
     
     # 創建詐騙類型按鈕列表
-    type_buttons = []
-    for fraud_type, info in list(fraud_tactics.items())[:8]:  # 限制最多8個按鈕
-        # 簡化按鈕，只顯示類型名稱
-        type_buttons.append(
-            ButtonComponent(
-                style="secondary",
-                height="sm",
-                action=MessageAction(
-                    label=f"📋 {fraud_type}",
-                    text=f"什麼是{fraud_type}"
-                ),
-                color="#E8F4FD"
+    type_contents = []
+    
+    # 將詐騙類型分成多個分類，每個分類一個區塊
+    categories = {
+        "網路詐騙": ["網路購物詐騙", "釣魚網站詐騙", "假投資詐騙", "網路交友詐騙"],
+        "個人資料詐騙": ["假冒身份詐騙", "個資盜用詐騙", "社交工程詐騙"],
+        "金融詐騙": ["假銀行詐騙", "ATM解除分期詐騙", "假貸款詐騙"],
+        "其他詐騙": ["假招工詐騙", "假中獎詐騙", "假政府詐騙", "假親友詐騙"]
+    }
+    
+    # 創建分類標題和按鈕
+    for category, types in categories.items():
+        # 添加分類標題
+        type_contents.append(
+            TextComponent(
+                text=f"⭐ {category}",
+                weight="bold",
+                size="md",
+                color="#1DB446",
+                margin="lg"
             )
         )
+        
+        # 創建當前分類的按鈕盒子
+        buttons_box = BoxComponent(
+            layout="horizontal",
+            margin="md",
+            flex=0,
+            spacing="sm",
+            contents=[]
+        )
+        
+        # 將當前分類的詐騙類型添加到按鈕盒子
+        row_buttons = []
+        for fraud_type in types:
+            if fraud_type in fraud_tactics:
+                row_buttons.append(
+                    ButtonComponent(
+                        style="secondary",
+                        height="sm",
+                        action=MessageAction(
+                            label=f"{fraud_type}",
+                            text=f"土豆 什麼是{fraud_type}"
+                        ),
+                        color="#E8F4FD",
+                        flex=1
+                    )
+                )
+                
+                # 每兩個按鈕一行
+                if len(row_buttons) == 2:
+                    buttons_box = BoxComponent(
+                        layout="horizontal",
+                        margin="md",
+                        flex=0,
+                        spacing="sm",
+                        contents=row_buttons
+                    )
+                    type_contents.append(buttons_box)
+                    row_buttons = []
+            
+            # 如果只有一個按鈕，也要添加
+            if row_buttons:
+                buttons_box = BoxComponent(
+                    layout="horizontal",
+                    margin="md",
+                    flex=0,
+                    spacing="sm",
+                    contents=row_buttons
+                )
+                type_contents.append(buttons_box)
+    
+    # 添加分隔線
+    type_contents.append(
+        SeparatorComponent(
+            margin="xxl"
+        )
+    )
+    
+    # 添加其他詐騙類型說明
+    type_contents.append(
+        TextComponent(
+            text="👉 點選詐騙類型查看詳細說明",
+            size="sm",
+            color="#666666",
+            margin="md"
+        )
+    )
     
     bubble = BubbleContainer(
-        size="kilo",
+        size="giga",
         header=BoxComponent(
             layout="vertical",
             contents=[
                 TextComponent(
-                    text=f"📚 {display_name}，這裡是常見詐騙類型",
+                    text="📚 常見詐騙類型一覽",
                     weight="bold",
-                    size="lg",
-                    color="#1DB446"
+                    size="xl",
+                    color="#ffffff"
                 ),
                 TextComponent(
-                    text="點選下方按鈕了解詳細資訊",
+                    text="點選類型了解詳細資訊",
                     size="sm",
-                    color="#666666",
+                    color="#ffffff",
                     margin="sm"
                 )
             ],
-            background_color="#F0F8FF",
+            background_color="#3498DB",
             padding_all="lg"
         ),
         body=BoxComponent(
             layout="vertical",
-            spacing="sm",
+            spacing="md",
             padding_all="lg",
-            contents=type_buttons
+            contents=type_contents
         ),
         footer=BoxComponent(
-            layout="vertical",
+            layout="horizontal",
+            spacing="sm",
             contents=[
-                TextComponent(
-                    text="💡 有可疑訊息隨時傳給我分析！",
-                    size="xs",
-                    color="#999999",
-                    align="center"
+                ButtonComponent(
+                    style="primary",
+                    color="#2980B9",
+                    action=MessageAction(
+                        label="🔍 檢查詐騙",
+                        text="土豆 請幫我分析這則訊息："
+                    ),
+                    height="sm",
+                    flex=1
+                ),
+                ButtonComponent(
+                    style="primary",
+                    color="#27AE60",
+                    action=PostbackAction(
+                        label="🏠 回到首頁",
+                        data="action=show_main_menu"
+                    ),
+                    height="sm",
+                    flex=1
                 )
             ],
             padding_all="sm"
