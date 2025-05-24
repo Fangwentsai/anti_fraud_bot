@@ -15,7 +15,7 @@ OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
 OPENAI_MODEL = os.environ.get('OPENAI_MODEL', 'gpt-4.1-mini')
 
 # ===== 機器人行為配置 =====
-BOT_TRIGGER_KEYWORD = "土豆"  # 群組中觸發機器人服務的關鍵詞
+BOT_TRIGGER_KEYWORD = "防詐騙助手"  # 群組中觸發機器人服務的關鍵詞
 CHAT_TIP_PROBABILITY = 0.3  # 閒聊時回覆防詐小知識的機率
 DONATION_SHOW_PROBABILITY = 0.15  # 顯示贊助信息的機率
 
@@ -29,9 +29,9 @@ FOLLOW_UP_PATTERNS = [
     "這是詐騙嗎", "這是真的嗎"
 ]
 
-POTATO_GAME_TRIGGER_KEYWORDS = [
-    "選哪顆土豆", "玩遊戲", "土豆遊戲", "選土豆", 
-    "選土豆遊戲", "開始遊戲"
+FRAUD_PREVENTION_GAME_TRIGGER_KEYWORDS = [
+    "防詐騙測試", "防詐騙測驗", "詐騙識別測試", "防詐測試", 
+    "反詐測試", "測試防詐能力", "詐騙檢測測試", "開始測試"
 ]
 
 ANALYSIS_PROMPTS = [
@@ -56,7 +56,7 @@ META_QUESTION_KEYWORDS = [
 # ===== OpenAI 系統提示詞 =====
 FRAUD_ANALYSIS_SYSTEM_PROMPT = """你是一個詐騙風險評估專家，請以50歲以上的長輩能理解的口語化方式分析詐騙風險。避免使用「您」「我」等主觀用詞，而是使用更直接的表述。提供的建議應該具體實用且直接，並且一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號。語言要像鄰居阿姨在關心提醒一樣親切簡單。"""
 
-CHAT_SYSTEM_PROMPT = """你是一位名為「土豆」的AI聊天機器人，專門幫助50-60歲的阿姨叔叔防範詐騙。你的說話風格要：
+CHAT_SYSTEM_PROMPT = """你是一位名為「防詐騙助手」的AI聊天機器人，專門幫助50-60歲的阿姨叔叔防範詐騙。你的說話風格要：
 1. 非常簡單易懂，像鄰居阿姨在聊天
 2. 用溫暖親切的語氣，不要太正式
 3. 當給建議時，一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號
@@ -66,7 +66,7 @@ CHAT_SYSTEM_PROMPT = """你是一位名為「土豆」的AI聊天機器人，專
 
 # ===== 檔案路徑配置 =====
 SAFE_DOMAINS_FILE = 'safe_domains.json'
-POTATO_GAME_QUESTIONS_FILE = 'potato_game_questions.json'
+FRAUD_PREVENTION_GAME_QUESTIONS_FILE = 'fraud_detection_questions.json'
 FRAUD_TACTICS_FILE = 'fraud_tactics.json'
 
 # ===== API 配置 =====
@@ -94,7 +94,7 @@ WEATHER_KEYWORDS = [
 
 # 遊戲觸發關鍵詞
 GAME_TRIGGER_KEYWORDS = [
-    "玩土豆", "選土豆", "土豆遊戲", "玩遊戲", "選哪顆土豆"
+    "防詐騙測試", "防詐騙測驗", "詐騙識別測試", "防詐測試", "反詐測試"
 ]
 
 # 檢查必要的環境變數
