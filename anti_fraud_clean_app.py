@@ -513,7 +513,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                 "message": "AI分析服務暫時不可用，請稍後再試"
             }
         
-        response = openai_client.chat.completions.create(
+        chat_response = openai_client.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[
                 {"role": "system", "content": "你是一位名為「防詐騙助手」的AI聊天機器人，專門幫助50-60歲的阿姨叔叔防範詐騙。你的說話風格要：\n1. 非常簡單易懂，像鄰居阿姨在聊天\n2. 用溫暖親切的語氣，不要太正式\n3. 當給建議時，一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號\n4. 避免複雜的專業術語，用日常生活的話來解釋\n5. 當用戶提到投資、轉帳、可疑訊息時，要特別關心並給出簡單明確的建議\n6. 回應要簡短，不要太長篇大論"},
@@ -523,8 +523,8 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
             max_tokens=1000
         )
         
-        if response and response.choices:
-            analysis_result = response.choices[0].message.content.strip()
+        if chat_response and chat_response.choices:
+            analysis_result = chat_response.choices[0].message.content.strip()
             logger.info(f"風險分析結果: {analysis_result[:100]}...")  # 僅記錄部分結果
             
             # 將結果解析成結構化格式
@@ -640,3 +640,416 @@ if handler:
         if is_group_message and bot_trigger_keyword not in text_message and not waiting_for_analysis:
             logger.info(f"群組訊息不包含觸發關鍵詞 '{bot_trigger_keyword}'，也不在等待分析狀態，忽略此訊息")
             return
+
+        # 在群組中移除觸發關鍵詞，以便後續處理
+        cleaned_message = text_message
+        if is_group_message and bot_trigger_keyword in text_message:
+            cleaned_message = text_message.replace(bot_trigger_keyword, "").strip()
+            logger.info(f"移除觸發關鍵詞後的訊息: {cleaned_message}")
+
+        # 檢查是否為空訊息（移除觸發詞後）
+        if not cleaned_message.strip():
+            # 發送功能介紹
+            reply_text = f"您好！我是防詐騙小幫手，我的功能包括：\\n\\n" \
+                        f"1️⃣ 詐騙風險分析：我可以分析您收到的可疑訊息，評估是否為詐騙\\n\\n" \
+                        f"2️⃣ 詐騙類型查詢：您可以輸入「詐騙類型列表」查看各種常見詐騙\\n\\n" \
+                        f"3️⃣ 「防詐騙測試」小遊戲：通過遊戲學習辨識詐騙訊息\\n\\n" \
+                        f"請選擇您想嘗試的功能："
+                
+            # 如果在群組中，QuickReply按鈕需要包含觸發關鍵詞
+            if is_group_message:
+                quick_reply = QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="分析可疑訊息", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
+                    QuickReplyButton(action=MessageAction(label="防詐騙能力測試", text=f"{bot_trigger_keyword} 防詐騙測試")),
+                    QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text=f"{bot_trigger_keyword} 詐騙類型列表"))
+                ])
+                # 在群組中使用mention功能
+                mention_text = f"@{display_name} {reply_text}"
+                if len(mention_text) <= LINE_MESSAGE_MAX_LENGTH:
+                    reply_text = mention_text
+            else:
+                quick_reply = QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="分析可疑訊息", text="請幫我分析這則訊息：")),
+                    QuickReplyButton(action=MessageAction(label="防詐騙測試", text="防詐騙測試")),
+                    QuickReplyButton(action=MessageAction(label="詐騙類型查詢", text="詐騙類型列表"))
+                ])
+            
+            line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
+            return
+
+        # 處理遊戲觸發 - 移到詐騙檢測前面
+        if is_game_trigger(cleaned_message):
+            logger.info(f"檢測到防詐騙測試觸發: {cleaned_message}")
+            flex_message, error_message = start_potato_game(user_id)
+            
+            if flex_message:
+                line_bot_api.reply_message(reply_token, flex_message)
+            else:
+                line_bot_api.reply_message(reply_token, TextSendMessage(text=error_message))
+            return
+
+        # 檢查用戶詢問詐騙類型清單
+        if any(keyword in cleaned_message for keyword in ["詐騙類型", "詐騙手法", "詐騙種類", "常見詐騙"]):
+            fraud_list = "🚨 **常見詐騙類型一覽** 🚨\\n\\n"
+            for fraud_type, description in fraud_types.items():
+                fraud_list += f"🔸 **{fraud_type}**\\n   {description[:50]}...\\n\\n"
+            
+            fraud_list += "💡 如需詳細了解某個詐騙類型，請直接輸入該詐騙名稱！\\n\\n"
+            fraud_list += "⚠️ 如果收到可疑訊息，請直接傳給我分析喔！"
+            
+            # 截斷過長的訊息
+            if len(fraud_list) > LINE_MESSAGE_SAFE_LENGTH:
+                fraud_list = fraud_list[:LINE_MESSAGE_SAFE_LENGTH] + "\\n\\n(更多資訊請分別查詢各詐騙類型)"
+            
+            line_bot_api.reply_message(reply_token, TextSendMessage(text=fraud_list))
+            return
+
+        # 檢查是否詢問特定詐騙類型
+        for fraud_type, description in fraud_types.items():
+            if fraud_type in cleaned_message:
+                response_text = f"🚨 **{fraud_type}詳細說明** 🚨\\n\\n"
+                response_text += f"📋 **說明**：{description}\\n\\n"
+                response_text += "💡 **防範建議**：\\n"
+                response_text += "🛡️ 遇到任何要求提供個人資料或金錢的情況，請先暫停並諮詢家人\\n"
+                response_text += "🔍 對於可疑訊息，可以傳給我幫您分析\\n"
+                response_text += "📞 如有疑慮，請撥打165反詐騙專線\\n\\n"
+                response_text += f"如果您收到疑似{fraud_type}的訊息，歡迎直接傳給我分析！"
+                
+                line_bot_api.reply_message(reply_token, TextSendMessage(text=response_text))
+                return
+
+        # 執行詐騙分析
+        if should_perform_fraud_analysis(cleaned_message, user_id):
+            logger.info(f"開始詐騙分析: {cleaned_message[:50]}...")
+            
+            # 分析前先發送等待訊息（在重要分析時）
+            should_send_wait = len(cleaned_message) > 100 or any(url_word in cleaned_message.lower() for url_word in ['http', 'www', '.com', '.tw'])
+            if should_send_wait:
+                wait_message = "🔍 正在分析中，請稍候..."
+                line_bot_api.reply_message(reply_token, TextSendMessage(text=wait_message))
+            
+            analysis_result = detect_fraud_with_chatgpt(cleaned_message, display_name, user_id)
+            
+            if analysis_result["success"]:
+                # 記錄到Firebase
+                try:
+                    firebase_manager.log_fraud_detection(
+                        user_id=user_id,
+                        message=cleaned_message,
+                        result=analysis_result["result"],
+                        display_name=display_name
+                    )
+                except Exception as e:
+                    logger.error(f"記錄到Firebase時發生錯誤: {e}")
+                
+                # 檢查是否為網域變形攻擊
+                if analysis_result["result"].get("is_domain_spoofing", False):
+                    spoofing_result = analysis_result["result"]["spoofing_result"]
+                    flex_message = create_domain_spoofing_flex_message(spoofing_result, display_name)
+                    
+                    if should_send_wait:
+                        # 使用push message發送結果（因為已經用過reply了）
+                        line_bot_api.push_message(user_id, flex_message)
+                    else:
+                        line_bot_api.reply_message(reply_token, flex_message)
+                else:
+                    # 一般詐騙分析結果
+                    flex_message = create_analysis_flex_message(analysis_result["result"], display_name)
+                    
+                    if should_send_wait:
+                        # 使用push message發送結果（因為已經用過reply了）
+                        line_bot_api.push_message(user_id, flex_message)
+                    else:
+                        line_bot_api.reply_message(reply_token, flex_message)
+                
+                # 隨機顯示贊助信息
+                if random.random() < DONATION_SHOW_PROBABILITY:
+                    try:
+                        donation_flex = create_donation_flex_message()
+                        line_bot_api.push_message(user_id, donation_flex)
+                    except Exception as e:
+                        logger.error(f"發送贊助訊息時發生錯誤: {e}")
+            else:
+                error_message = f"抱歉，分析過程中遇到問題：{analysis_result['message']}\\n\\n如果是緊急情況，建議您：\\n🚫 暫時不要點擊任何連結\\n📞 撥打165反詐騙專線諮詢\\n👨‍👩‍👧‍👦 請家人朋友幫忙確認"
+                
+                if should_send_wait:
+                    line_bot_api.push_message(user_id, TextSendMessage(text=error_message))
+                else:
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text=error_message))
+            
+            return
+
+        # 檢查是否詢問功能
+        if any(keyword in cleaned_message for keyword in function_inquiry_keywords):
+            reply_text = f"您好 {display_name}！我是防詐騙機器人「防詐騙助手」，能幫您：\\n🔍 分析可疑訊息\\n🎯 測試您的防詐騙能力\\n📚 查詢各類詐騙手法"
+            
+            if is_group_message:
+                quick_reply = QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="開始分析", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
+                    QuickReplyButton(action=MessageAction(label="防詐騙測試", text=f"{bot_trigger_keyword} 防詐騙測試")),
+                    QuickReplyButton(action=MessageAction(label="查看詐騙類型", text=f"{bot_trigger_keyword} 詐騙類型列表"))
+                ])
+            else:
+                quick_reply = QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="開始分析", text="請幫我分析這則訊息：")),
+                    QuickReplyButton(action=MessageAction(label="防詐騙測試", text="防詐騙測試")),
+                    QuickReplyButton(action=MessageAction(label="查看詐騙類型", text="詐騙類型列表"))
+                ])
+            
+            line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
+            return
+
+        # 處理天氣查詢
+        if is_weather_related(cleaned_message):
+            logger.info(f"檢測到天氣查詢: {cleaned_message}")
+            weather_result = handle_weather_query(cleaned_message)
+            
+            if weather_result["success"]:
+                # 創建天氣Flex訊息
+                weather_flex = create_weather_flex_message(weather_result["data"])
+                line_bot_api.reply_message(reply_token, weather_flex)
+            else:
+                # 發送錯誤訊息
+                error_text = f"抱歉，{weather_result['message']}\\n\\n💡 您可以試著這樣問：\\n• 今天天氣如何\\n• 台北天氣\\n• 明天會下雨嗎"
+                line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
+            return
+
+        # 一般聊天回應
+        logger.info(f"進入一般聊天模式: {cleaned_message}")
+        try:
+            chat_response = openai_client.chat.completions.create(
+                model=OPENAI_MODEL,
+                messages=[
+                 {"role": "system", "content": "你是一位名為「防詐騙助手」的AI聊天機器人，專門幫助50-60歲的阿姨叔叔防範詐騙。你的說話風格要：\\n1. 非常簡單易懂，像鄰居阿姨在聊天\\n2. 用溫暖親切的語氣，不要太正式\\n3. 當給建議時，一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號\\n4. 避免複雜的專業術語，用日常生活的話來解釋\\n5. 當用戶提到投資、轉帳、可疑訊息時，要特別關心並給出簡單明確的建議\\n6. 回應要簡短，不要太長篇大論"},
+                 {"role": "user", "content": cleaned_message}
+                ],
+                temperature=CHAT_TEMPERATURE,
+                max_tokens=CHAT_MAX_TOKENS
+            )
+            
+            if chat_response and chat_response.choices:
+                chat_reply = chat_response.choices[0].message.content.strip()
+                
+                # 隨機添加防詐小知識
+                if random.random() < CHAT_TIP_PROBABILITY:
+                    tips = get_anti_fraud_tips()
+                    if tips:
+                        random_tip = random.choice(tips)
+                        chat_reply += f"\\n\\n💡 小提醒：{random_tip}"
+                
+                # 確保回覆不會太長
+                if len(chat_reply) > LINE_MESSAGE_SAFE_LENGTH:
+                    chat_reply = chat_reply[:LINE_MESSAGE_SAFE_LENGTH] + "..."
+                
+                introduction = f"\\n\\n我是防詐騙機器人「防詐騙助手」，能幫您：\\n🔍 分析可疑訊息\\n🎯 測試您的防詐騙能力\\n📚 查詢各類詐騙手法"
+                
+                # 如果是首次聊天，添加自我介紹
+                if user_id not in first_time_chatters:
+                    first_time_chatters.add(user_id)
+                    if len(chat_reply + introduction) <= LINE_MESSAGE_SAFE_LENGTH:
+                        chat_reply += introduction
+                
+                line_bot_api.reply_message(reply_token, TextSendMessage(text=chat_reply))
+            else:
+                fallback_message = "我現在有點忙，不過如果您有可疑訊息需要分析，我隨時可以幫忙喔！ 😊"
+                line_bot_api.reply_message(reply_token, TextSendMessage(text=fallback_message))
+                
+        except Exception as e:
+            logger.exception(f"生成聊天回應時發生錯誤: {e}")
+            fallback_message = "不好意思，我現在有點狀況，不過如果您有可疑訊息需要分析，我隨時可以幫忙！ 😊"
+            line_bot_api.reply_message(reply_token, TextSendMessage(text=fallback_message))
+
+    @handler.add(PostbackEvent)
+    def handle_postback(event):
+        """處理PostbackEvent（按鈕點擊事件）"""
+        user_id = event.source.user_id
+        postback_data = event.postback.data
+        reply_token = event.reply_token
+        
+        profile = get_user_profile(user_id)
+        display_name = profile.display_name if profile else "未知用戶"
+        
+        logger.info(f"Received postback from {display_name} ({user_id}): {postback_data}")
+        
+        try:
+            # 解析postback數據
+            if postback_data.startswith('action='):
+                parts = postback_data.split('&')
+                action_part = parts[0]
+                action = action_part.split('=')[1]
+                
+                # 提取其他參數
+                params = {}
+                for part in parts[1:]:
+                    if '=' in part:
+                        key, value = part.split('=', 1)
+                        params[key] = value
+                
+                logger.info(f"解析的動作: {action}, 參數: {params}")
+                
+                if action == 'start_potato_game':
+                    # 開始防詐騙測試
+                    flex_message, error_message = start_potato_game(user_id)
+                    
+                    if flex_message:
+                        line_bot_api.reply_message(reply_token, flex_message)
+                    else:
+                        line_bot_api.reply_message(reply_token, TextSendMessage(text=error_message))
+                        
+                elif action == 'potato_game_answer':
+                    # 处理防詐騙測試答案 - 修复action名称不匹配问题
+                    answer_index = int(params.get('answer', 0))
+                    is_correct, result_flex = handle_potato_game_answer(user_id, answer_index)
+                    line_bot_api.reply_message(reply_token, result_flex)
+                    
+                elif action == 'fraud_stats':
+                    # 顯示詐騙統計（未來功能）
+                    stats_message = "📊 詐騙統計功能開發中，敬請期待！\\n\\n目前可用功能：\\n🔍 詐騙訊息分析\\n🎯 防詐騙測試\\n📚 詐騙類型查詢"
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text=stats_message))
+                    
+                else:
+                    logger.warning(f"未知的postback動作: {action}")
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text="抱歉，我不太明白您想要做什麼，請重新嘗試！"))
+            else:
+                logger.warning(f"無法解析的postback數據: {postback_data}")
+                line_bot_api.reply_message(reply_token, TextSendMessage(text="抱歉，我不太明白您想要做什麼，請重新嘗試！"))
+                
+        except Exception as e:
+            logger.exception(f"處理postback事件時發生錯誤: {e}")
+            line_bot_api.reply_message(reply_token, TextSendMessage(text="抱歉，處理您的請求時發生錯誤，請稍後再試！"))
+
+else:
+    logger.warning("LINE Bot handler 未初始化，無法處理訊息事件")
+
+def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
+    """判斷是否應該進行詐騙分析"""
+    message_lower = message.lower().strip()
+    
+    # 如果訊息太短，可能不需要分析
+    if len(message_lower) < 3:
+        return False
+    
+    # 排除明確的問候語
+    greetings = ["你好", "哈囉", "嗨", "hi", "hello", "早安", "午安", "晚安", "再見", "謝謝", "感謝"]
+    if any(greeting in message_lower for greeting in greetings) and len(message_lower) < 10:
+        return False
+    
+    # 排除功能查詢
+    if any(keyword in message_lower for keyword in function_inquiry_keywords):
+        return False
+    
+    # 排除詐騙類型查詢
+    if any(keyword in message_lower for keyword in ["詐騙類型", "詐騙手法", "詐騙種類", "常見詐騙"]):
+        return False
+    
+    # 排除防詐騙測試觸發
+    if is_game_trigger(message):
+        return False
+    
+    # 排除天氣查詢
+    if is_weather_related(message):
+        return False
+    
+    # 排除一般遊戲討論（而非真正的遊戲觸發）
+    game_chat_patterns = ["遊戲推薦", "遊戲好玩", "什麼遊戲", "遊戲有趣"]
+    if any(pattern in message_lower for pattern in game_chat_patterns):
+        return False
+    
+    # 檢查URL存在（最高優先級）
+    import re
+    url_pattern = re.compile(r'https?://[^\\s]+|www\\.[^\\s]+|[a-zA-Z0-9][a-zA-Z0-9-]*\\.[a-zA-Z]{2,}(?:\\.[a-zA-Z]{2,})?')
+    if url_pattern.search(message):
+        logger.info("檢測到URL，觸發詐騙分析")
+        return True
+    
+    # 檢查明確的分析請求
+    explicit_analysis_requests = [
+        "幫我分析", "分析這", "這是詐騙嗎", "這可靠嗎", "這是真的嗎", 
+        "這安全嗎", "可以相信嗎", "有問題嗎", "是騙人的嗎"
+    ]
+    if any(request in message_lower for request in explicit_analysis_requests):
+        logger.info("檢測到明確分析請求")
+        return True
+    
+    # 檢查分析關鍵詞+疑問詞的組合
+    analysis_keywords = ["分析", "詐騙", "安全", "可疑", "風險", "網站", "連結", "投資", "賺錢"]
+    question_words = ["嗎", "呢", "吧", "?", "？"]
+    
+    has_analysis_keyword = any(keyword in message_lower for keyword in analysis_keywords)
+    has_question_word = any(word in message_lower for word in question_words)
+    
+    if has_analysis_keyword and has_question_word:
+        logger.info("檢測到分析關鍵詞+疑問詞組合")
+        return True
+    
+    # 檢查多個詐騙關鍵詞
+    fraud_keywords = ["詐騙", "被騙", "轉帳", "匯款", "投資", "賺錢", "兼職", "工作", "銀行", "帳號", "密碼", "個資", "中獎", "免費", "限時", "急"]
+    fraud_count = sum(1 for keyword in fraud_keywords if keyword in message_lower)
+    
+    if fraud_count >= 2:
+        logger.info(f"檢測到 {fraud_count} 個詐騙關鍵詞")
+        return True
+    
+    return False
+
+# 修正self引用問題
+def _is_legitimate_subdomain(subdomain_part):
+    """檢查子網域部分是否合法"""
+    # 合法的子網域特徵
+    if not subdomain_part or len(subdomain_part) > 20:  # 太長的子網域可疑
+        return False
+    
+    # 常見的合法子網域前綴
+    legitimate_prefixes = [
+        'www', 'mail', 'email', 'webmail', 'smtp', 'pop', 'imap',
+        'ftp', 'sftp', 'api', 'app', 'mobile', 'm', 'wap',
+        'admin', 'secure', 'ssl', 'login', 'auth', 'account',
+        'shop', 'store', 'buy', 'order', 'cart', 'checkout',
+        'news', 'blog', 'forum', 'support', 'help', 'service',
+        'event', 'events', 'promo', 'promotion', 'campaign',
+        'member', 'members', 'user', 'users', 'profile',
+        'search', 'find', 'discover', 'explore',
+        'download', 'upload', 'file', 'files', 'doc', 'docs',
+        'img', 'image', 'images', 'pic', 'pics', 'photo', 'photos',
+        'video', 'videos', 'media', 'cdn', 'static', 'assets',
+        'dev', 'test', 'staging', 'beta', 'alpha', 'demo',
+        'tw', 'taiwan', 'hk', 'hongkong', 'cn', 'china',
+        'en', 'english', 'zh', 'chinese'
+    ]
+    
+    # 檢查是否為已知的合法前綴
+    if subdomain_part.lower() in legitimate_prefixes:
+        return True
+    
+    # 檢查是否包含可疑字元或模式
+    suspicious_patterns = [
+        '-tw-', '-official-', '-secure-', '-login-', '-bank-',
+        'phishing', 'fake', 'scam', 'fraud', 'malware'
+    ]
+    
+    for pattern in suspicious_patterns:
+        if pattern in subdomain_part.lower():
+            return False
+    
+    # 檢查是否只包含字母、數字和連字符
+    import re
+    if not re.match(r'^[a-zA-Z0-9-]+$', subdomain_part):
+        return False
+    
+    # 不能以連字符開始或結束
+    if subdomain_part.startswith('-') or subdomain_part.endswith('-'):
+        return False
+    
+    return True
+
+
+if __name__ == '__main__':
+    # 檢查環境變數
+    validate_environment()
+    
+    # 取得端口號（Render 會提供 PORT 環境變數）
+    port = int(os.environ.get('PORT', 5000))
+    
+    # 啟動 Flask 應用
+    logger.info(f"啟動防詐騙機器人服務，端口: {port}")
+    app.run(host='0.0.0.0', port=port, debug=False)
