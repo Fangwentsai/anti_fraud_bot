@@ -12,7 +12,7 @@ LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET', '')
 
 # ===== OpenAI 配置 =====
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
-OPENAI_MODEL = os.environ.get('OPENAI_MODEL', 'gpt-3.5-turbo')
+OPENAI_MODEL = os.environ.get('OPENAI_MODEL', 'gpt-4.1-mini')
 
 # ===== 機器人行為配置 =====
 BOT_TRIGGER_KEYWORD = "土豆"  # 群組中觸發機器人服務的關鍵詞

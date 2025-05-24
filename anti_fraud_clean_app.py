@@ -109,10 +109,18 @@ else:
     handler = None
     logger.warning("LINE Bot API 初始化失敗：缺少必要的環境變數")
 
-# OpenAI設定 - 使用新版本的客戶端初始化
+# OpenAI設定 - 使用新版本的客戶端初始化，添加錯誤處理
 if OPENAI_API_KEY:
-    openai_client = OpenAI(api_key=OPENAI_API_KEY)
-    logger.info("OpenAI API 初始化成功")
+    try:
+        openai_client = OpenAI(
+            api_key=OPENAI_API_KEY,
+            timeout=30.0,  # 設置超時
+            max_retries=3   # 設置重試次數
+        )
+        logger.info("OpenAI API 初始化成功")
+    except Exception as e:
+        logger.error(f"OpenAI API 初始化失敗: {e}")
+        openai_client = None
 else:
     openai_client = None
     logger.warning("OpenAI API 初始化失敗：缺少 API 金鑰")
@@ -578,8 +586,15 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         """
         
         # 調用OpenAI API (修正為新版API格式)
+        if not openai_client:
+            logger.error("OpenAI客戶端未初始化，無法進行分析")
+            return {
+                "success": False,
+                "message": "AI分析服務暫時不可用，請稍後再試"
+            }
+        
         response = openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4.1-mini",
             messages=[
                 {"role": "system", "content": "你是一個詐騙風險評估專家，請以50歲以上的長輩能理解的口語化方式分析詐騙風險。避免使用「您」「我」等主觀用詞，而是使用更直接的表述。提供的建議應該具體實用且直接，並且一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號。語言要像鄰居阿姨在關心提醒一樣親切簡單。"},
                 {"role": "user", "content": openai_prompt}
@@ -1057,9 +1072,14 @@ if handler:
                 
                 logger.info(f"使用記憶功能，總共提供 {len(messages)} 條消息給ChatGPT")
                 
+                # 檢查OpenAI客戶端是否可用
+                if not openai_client:
+                    logger.warning("OpenAI客戶端未初始化，使用預設回應")
+                    raise Exception("OpenAI客戶端不可用")
+                
                 # 使用更新後的OpenAI API格式
                 chat_response = openai_client.chat.completions.create(
-                    model=os.environ.get('OPENAI_MODEL', 'gpt-3.5-turbo'),
+                    model=os.environ.get('OPENAI_MODEL', 'gpt-4.1-mini'),
                     messages=messages,
                     temperature=0.7,
                     max_tokens=500
@@ -1419,8 +1439,8 @@ def create_mention_message(text, display_name, user_id, quick_reply=None):
     except Exception as e:
         logger.error(f"創建mention消息時發生錯誤: {e}")
         # 降級到傳統@格式
-        text_with_mention = f"@{display_name} {text}"
-        return TextSendMessage(text=text_with_mention, quick_reply=quick_reply)
+    text_with_mention = f"@{display_name} {text}"
+    return TextSendMessage(text=text_with_mention, quick_reply=quick_reply)
 
 # 創建一個專門用於@所有人的mention功能
 def create_mention_all_message(text, quick_reply=None):
@@ -1469,7 +1489,7 @@ def create_mention_all_message(text, quick_reply=None):
         return TextSendMessage(text=text_with_mention, quick_reply=quick_reply)
 
 # 創建一個全局字典來跟踪用戶狀態
-user_conversation_state = {}  # 格式: {user_id: {"last_time": timestamp, "waiting_for_analysis": True/False}}
+user_conversation_state = {}  # 格式: {user_id: {"last_time": timestamp, "waiting_for_analysis": True/False}} 
 
 # 改進contains_url函數，使其更準確地識別URL
 def contains_url(text):
