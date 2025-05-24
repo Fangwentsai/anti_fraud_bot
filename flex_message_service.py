@@ -589,12 +589,33 @@ class FlexMessageService:
         else:
             return "🌤️"
 
-    def create_fraud_detail_flex_message(self, fraud_type: str, fraud_info: Dict, display_name: str = "朋友") -> FlexSendMessage:
-        """創建詐騙類型詳細信息的Flex Message"""
+    def create_fraud_detail_flex_message(self, fraud_type: str, fraud_info: Dict, display_name: str = "朋友", page: int = 1) -> FlexSendMessage:
+        """創建詐騙類型詳細信息的Flex Message
+        
+        Args:
+            fraud_type: 詐騙類型名稱
+            fraud_info: 詐騙類型信息
+            display_name: 用戶顯示名稱
+            page: 當前頁碼，默認為第1頁
+        """
         
         # 記錄收到的詐騙類型信息
-        logger.info(f"創建詐騙類型詳情 Flex Message: {fraud_type}")
+        logger.info(f"創建詐騙類型詳情 Flex Message: {fraud_type}, 頁碼: {page}")
         logger.info(f"詐騙類型信息: {fraud_info}")
+        
+        # 處理嵌套的詐騙類型數據結構
+        # 檢查是否存在子類型並提取第一個子類型的數據
+        sub_type_data = None
+        if not fraud_info.get("常見話術") and not fraud_info.get("詐騙流程"):
+            # 如果頂層沒有常見話術和詐騙流程，嘗試提取第一個子類型的數據
+            for sub_type, sub_data in fraud_info.items():
+                if isinstance(sub_data, dict):
+                    sub_type_data = sub_data
+                    break
+        
+        # 如果找到子類型數據，使用它作為主要數據
+        if sub_type_data:
+            fraud_info = sub_type_data
         
         # 獲取詐騙類型信息
         description = fraud_info.get("description", "無相關說明")
@@ -612,6 +633,23 @@ class FlexMessageService:
         case_description = real_case.get("案例描述", "")
         loss_amount = real_case.get("損失金額", "")
         
+        # 分頁邏輯 - 內容按頁分配
+        # 計算總頁數（最少1頁，最多4頁）
+        total_pages = 1
+        
+        # 根據內容量決定頁數
+        if (common_tactics and len(common_tactics) > 0) or (fraud_process and len(fraud_process) > 0):
+            total_pages += 1
+        
+        if case_description or (warning_signals and len(warning_signals) > 0):
+            total_pages += 1
+            
+        if prevention_tips and len(prevention_tips) > 0:
+            total_pages += 1
+        
+        # 確保頁碼合法
+        page = max(1, min(page, total_pages))
+        
         # 根據風險等級選擇顏色
         header_color = "#3498DB"  # 默認藍色
         if risk_level == "極高":
@@ -626,191 +664,250 @@ class FlexMessageService:
         # 創建詳情頁的內容
         body_contents = []
         
-        # 添加詐騙類型描述
-        if description and description != "無相關說明":
-            body_contents.append(
-                TextComponent(
-                    text=description,
-                    wrap=True,
-                    size="md",
-                    margin="md"
-                )
+        # 創建頁碼指示器
+        body_contents.append(
+            TextComponent(
+                text=f"第 {page} 頁 / 共 {total_pages} 頁",
+                size="xs",
+                color="#888888",
+                align="center"
             )
-            
-            body_contents.append(SeparatorComponent(margin="lg"))
+        )
         
-        # 添加常見話術區塊
-        if common_tactics and len(common_tactics) > 0:
-            body_contents.append(
-                TextComponent(
-                    text="📝 常見話術",
-                    weight="bold",
-                    size="md",
-                    margin="lg",
-                    color="#1f76de"
-                )
-            )
-            
-            tactics_text = ""
-            for i, tactic in enumerate(common_tactics[:10]):  # 限制顯示10個話術
-                tactics_text += f"• {tactic}\n"
-            
-            body_contents.append(
-                TextComponent(
-                    text=tactics_text.strip(),
-                    wrap=True,
-                    size="sm",
-                    margin="md"
-                )
-            )
-            
-            if len(common_tactics) > 10:
+        body_contents.append(SeparatorComponent(margin="sm"))
+        
+        # 根據當前頁碼顯示不同內容
+        if page == 1:
+            # 第1頁：顯示詐騙類型基本介紹
+            # 添加詐騙類型描述
+            if description and description != "無相關說明":
                 body_contents.append(
                     TextComponent(
-                        text="...以及更多其他話術",
-                        size="xs",
-                        color="#888888",
-                        margin="sm"
+                        text=description,
+                        wrap=True,
+                        size="md",
+                        margin="md"
                     )
                 )
-            
-            body_contents.append(SeparatorComponent(margin="lg"))
-        
-        # 添加詐騙流程區塊
-        if fraud_process and len(fraud_process) > 0:
-            body_contents.append(
-                TextComponent(
-                    text="🔄 詐騙流程",
-                    weight="bold",
-                    size="md",
-                    margin="lg",
-                    color="#1f76de"
-                )
-            )
-            
-            process_text = ""
-            for i, step in enumerate(fraud_process):
-                process_text += f"{i+1}. {step}\n"
-            
-            body_contents.append(
-                TextComponent(
-                    text=process_text.strip(),
-                    wrap=True,
-                    size="sm",
-                    margin="md"
-                )
-            )
-            
-            body_contents.append(SeparatorComponent(margin="lg"))
-        
-        # 添加真實案例區塊
-        if case_description:
-            body_contents.append(
-                TextComponent(
-                    text="📰 真實案例",
-                    weight="bold",
-                    size="md",
-                    margin="lg",
-                    color="#1f76de"
-                )
-            )
-            
-            body_contents.append(
-                TextComponent(
-                    text=case_description,
-                    wrap=True,
-                    size="sm",
-                    margin="md"
-                )
-            )
-            
-            if loss_amount:
+            else:
+                # 如果沒有描述，則顯示默認內容
                 body_contents.append(
                     TextComponent(
-                        text=f"損失金額: {loss_amount}",
-                        size="sm",
-                        color="#E74C3C",
+                        text=f"這是一種常見的{fraud_type}，請注意以下特徵和防範方法。",
+                        wrap=True,
+                        size="md",
+                        margin="md"
+                    )
+                )
+        
+        elif page == 2:
+            # 第2頁：顯示常見話術和詐騙流程
+            # 添加常見話術區塊
+            if common_tactics and len(common_tactics) > 0:
+                body_contents.append(
+                    TextComponent(
+                        text="📝 常見話術",
                         weight="bold",
-                        margin="sm"
+                        size="md",
+                        margin="lg",
+                        color="#1f76de"
+                    )
+                )
+                
+                tactics_text = ""
+                for i, tactic in enumerate(common_tactics):  # 顯示全部話術
+                    tactics_text += f"• {tactic}\n"
+                
+                body_contents.append(
+                    TextComponent(
+                        text=tactics_text.strip(),
+                        wrap=True,
+                        size="sm",
+                        margin="md"
+                    )
+                )
+                
+                body_contents.append(SeparatorComponent(margin="lg"))
+            
+            # 添加詐騙流程區塊
+            if fraud_process and len(fraud_process) > 0:
+                body_contents.append(
+                    TextComponent(
+                        text="🔄 詐騙流程",
+                        weight="bold",
+                        size="md",
+                        margin="lg",
+                        color="#1f76de"
+                    )
+                )
+                
+                process_text = ""
+                for i, step in enumerate(fraud_process):
+                    process_text += f"{i+1}. {step}\n"
+                
+                body_contents.append(
+                    TextComponent(
+                        text=process_text.strip(),
+                        wrap=True,
+                        size="sm",
+                        margin="md"
                     )
                 )
             
-            body_contents.append(SeparatorComponent(margin="lg"))
+        elif page == 3:
+            # 第3頁：顯示真實案例和警示信號
+            # 添加真實案例區塊
+            if case_description:
+                body_contents.append(
+                    TextComponent(
+                        text="📰 真實案例",
+                        weight="bold",
+                        size="md",
+                        margin="lg",
+                        color="#1f76de"
+                    )
+                )
+                
+                body_contents.append(
+                    TextComponent(
+                        text=case_description,
+                        wrap=True,
+                        size="sm",
+                        margin="md"
+                    )
+                )
+                
+                if loss_amount:
+                    body_contents.append(
+                        TextComponent(
+                            text=f"損失金額: {loss_amount}",
+                            size="sm",
+                            color="#E74C3C",
+                            weight="bold",
+                            margin="sm"
+                        )
+                    )
+                
+                body_contents.append(SeparatorComponent(margin="lg"))
+            
+            # 添加警示信號區塊
+            if warning_signals and len(warning_signals) > 0:
+                body_contents.append(
+                    TextComponent(
+                        text="⚠️ 警示信號",
+                        weight="bold",
+                        size="md",
+                        margin="lg",
+                        color="#E74C3C"
+                    )
+                )
+                
+                signals_text = ""
+                for signal in warning_signals:  # 顯示全部警示信號
+                    signals_text += f"• {signal}\n"
+                
+                body_contents.append(
+                    TextComponent(
+                        text=signals_text.strip(),
+                        wrap=True,
+                        size="sm",
+                        margin="md"
+                    )
+                )
+            
+        elif page == 4:
+            # 第4頁：顯示防詐技巧
+            # 添加防詐技巧區塊
+            if prevention_tips and len(prevention_tips) > 0:
+                body_contents.append(
+                    TextComponent(
+                        text="🛡️ 防詐技巧",
+                        weight="bold",
+                        size="md",
+                        margin="lg",
+                        color="#2ECC71"
+                    )
+                )
+                
+                tips_text = ""
+                for tip in prevention_tips:  # 顯示全部防詐技巧
+                    tips_text += f"• {tip}\n"
+                
+                body_contents.append(
+                    TextComponent(
+                        text=tips_text.strip(),
+                        wrap=True,
+                        size="sm",
+                        margin="md"
+                    )
+                )
+                
+                body_contents.append(
+                    TextComponent(
+                        text="📞 如有任何疑問，請撥打165反詐騙專線",
+                        size="sm",
+                        color="#888888",
+                        margin="lg",
+                        align="center"
+                    )
+                )
         
-        # 添加警示信號區塊
-        if warning_signals and len(warning_signals) > 0:
-            body_contents.append(
-                TextComponent(
-                    text="⚠️ 警示信號",
-                    weight="bold",
-                    size="md",
-                    margin="lg",
-                    color="#E74C3C"
+        # 創建頁面導航按鈕
+        footer_contents = []
+        
+        # 根據當前頁碼和總頁數設置導航按鈕
+        if page > 1:
+            # 不是第一頁，顯示「上一頁」按鈕
+            footer_contents.append(
+                ButtonComponent(
+                    style="secondary",
+                    action=MessageAction(
+                        label="⬅️ 上一頁",
+                        text=f"土豆 什麼是{fraud_type} 第{page-1}頁"
+                    ),
+                    color="#95a5a6",
+                    height="sm"
                 )
             )
-            
-            signals_text = ""
-            for signal in warning_signals[:8]:  # 限制顯示8個警示信號
-                signals_text += f"• {signal}\n"
-            
-            body_contents.append(
-                TextComponent(
-                    text=signals_text.strip(),
-                    wrap=True,
-                    size="sm",
+        
+        if page < total_pages:
+            # 不是最後一頁，顯示「下一頁」按鈕
+            footer_contents.append(
+                ButtonComponent(
+                    style="primary",
+                    action=MessageAction(
+                        label="下一頁 ➡️",
+                        text=f"土豆 什麼是{fraud_type} 第{page+1}頁"
+                    ),
+                    color="#3498DB",
+                    height="sm"
+                )
+            )
+        
+        # 如果是最後一頁，添加「看其他分類」和「回到首頁」按鈕
+        if page == total_pages:
+            footer_contents.extend([
+                ButtonComponent(
+                    style="primary",
+                    action=MessageAction(
+                        label="👀 看其他分類",
+                        text="土豆 詐騙類型"
+                    ),
+                    color="#3498DB",
+                    height="sm",
+                    margin="md"
+                ),
+                ButtonComponent(
+                    style="secondary",
+                    action=MessageAction(
+                        label="🏠 回到首頁",
+                        text="土豆"
+                    ),
+                    color="#95a5a6",
+                    height="sm",
                     margin="md"
                 )
-            )
-            
-            body_contents.append(SeparatorComponent(margin="lg"))
-        
-        # 添加防詐技巧區塊
-        if prevention_tips and len(prevention_tips) > 0:
-            body_contents.append(
-                TextComponent(
-                    text="🛡️ 防詐技巧",
-                    weight="bold",
-                    size="md",
-                    margin="lg",
-                    color="#2ECC71"
-                )
-            )
-            
-            tips_text = ""
-            for tip in prevention_tips[:5]:  # 限制顯示5個防詐技巧
-                tips_text += f"• {tip}\n"
-            
-            body_contents.append(
-                TextComponent(
-                    text=tips_text.strip(),
-                    wrap=True,
-                    size="sm",
-                    margin="md"
-                )
-            )
-        
-        # 創建底部按鈕
-        footer_contents = [
-            ButtonComponent(
-                style="primary",
-                action=MessageAction(
-                    label="👀 看其他分類",
-                    text="土豆 詐騙類型"
-                ),
-                color="#3498DB",
-                height="sm"
-            ),
-            ButtonComponent(
-                style="secondary",
-                action=MessageAction(
-                    label="🏠 回到首頁",
-                    text="土豆"
-                ),
-                color="#95a5a6",
-                height="sm",
-                margin="md"
-            )
-        ]
+            ])
         
         # 創建詐騙詳情Flex Message
         bubble = BubbleContainer(
@@ -847,7 +944,7 @@ class FlexMessageService:
             )
         )
         
-        return FlexSendMessage(alt_text=f"{fraud_type}詳細說明", contents=bubble)
+        return FlexSendMessage(alt_text=f"{fraud_type}詳細說明 第{page}頁", contents=bubble)
 
     def create_fraud_types_flex_message(self, fraud_tactics: Dict, display_name: str = "朋友") -> FlexSendMessage:
         """創建詐騙類型列表Flex Message"""
@@ -951,9 +1048,16 @@ def create_weather_flex_message(weather_data: Dict, user_name: str = "朋友") -
     """創建天氣預報的 Flex Message"""
     return flex_message_service.create_weather_flex_message(weather_data, user_name)
 
-def create_fraud_detail_flex_message(fraud_type: str, fraud_info: Dict, display_name: str = "朋友") -> FlexSendMessage:
-    """創建詐騙類型詳細信息的Flex Message"""
-    return flex_message_service.create_fraud_detail_flex_message(fraud_type, fraud_info, display_name)
+def create_fraud_detail_flex_message(fraud_type: str, fraud_info: Dict, display_name: str = "朋友", page: int = 1) -> FlexSendMessage:
+    """創建詐騙類型詳細信息的Flex Message
+    
+    Args:
+        fraud_type: 詐騙類型名稱
+        fraud_info: 詐騙類型信息
+        display_name: 用戶顯示名稱
+        page: 當前頁碼，默認為第1頁
+    """
+    return flex_message_service.create_fraud_detail_flex_message(fraud_type, fraud_info, display_name, page)
 
 def create_fraud_types_flex_message(fraud_tactics: Dict, display_name: str = "朋友") -> FlexSendMessage:
     """創建詐騙類型列表Flex Message"""

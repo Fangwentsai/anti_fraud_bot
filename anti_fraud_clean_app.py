@@ -822,8 +822,12 @@ if handler:
                 logger.info(f"檢測到特定詐騙類型查詢: {fraud_type}")
                 
                 try:
+                    # 檢查是否包含頁碼請求
+                    page_match = re.search(r'第(\d+)頁', cleaned_message)
+                    page = int(page_match.group(1)) if page_match else 1
+                    
                     # 使用Flex Message顯示詐騙類型詳細信息
-                    fraud_detail_flex = create_fraud_detail_flex_message(fraud_type, info, display_name)
+                    fraud_detail_flex = create_fraud_detail_flex_message(fraud_type, info, display_name, page)
                     line_bot_api.reply_message(reply_token, fraud_detail_flex)
                 except Exception as e:
                     logger.error(f"創建詐騙類型詳細信息Flex Message失敗: {e}")
