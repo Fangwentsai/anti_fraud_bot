@@ -135,10 +135,9 @@ class FlexMessageService:
                                           message_to_analyze: str, user_id: Optional[str] = None) -> FlexSendMessage:
         """創建網域變形攻擊警告的 Flex Message"""
         
-        suspicious_domain = spoofing_result.get("suspicious_domain", "未知網域")
-        legitimate_domain = spoofing_result.get("legitimate_domain", "未知網域")
-        attack_type = spoofing_result.get("attack_type", "未知攻擊")
-        similarity_score = spoofing_result.get("similarity_score", 0)
+        suspicious_domain = spoofing_result.get("spoofed_domain", "未知網域")
+        legitimate_domain = spoofing_result.get("original_domain", "未知網域")
+        attack_type = spoofing_result.get("spoofing_type", "未知攻擊")
         
         # 從safe_domains.json獲取正版網站的描述
         try:
@@ -159,10 +158,18 @@ class FlexMessageService:
         except Exception as e:
             legitimate_description = "正版網站"
         
+        # 確保描述不為空
+        if not legitimate_description or legitimate_description.strip() == "":
+            legitimate_description = "正版網站"
+        
         # 生成可疑網域的說明
         suspicious_explanation = self._generate_suspicious_domain_explanation(
             suspicious_domain, legitimate_domain, attack_type
         )
+        
+        # 確保說明不為空
+        if not suspicious_explanation or suspicious_explanation.strip() == "":
+            suspicious_explanation = "這是一個可疑的假冒網域"
         
         bubble = BubbleContainer(
             direction='ltr',
@@ -233,12 +240,6 @@ class FlexMessageService:
                         color=self.colors["success"],
                         wrap=True,
                         margin='xs'
-                    ),
-                    TextComponent(
-                        text=f"相似度：{similarity_score:.1%}",
-                        size='xs',
-                        color=self.colors["secondary"],
-                        margin='sm'
                     ),
                     SeparatorComponent(margin='md'),
                     TextComponent(

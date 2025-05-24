@@ -264,7 +264,6 @@ def _is_character_insertion(suspicious_domain, safe_domain):
         if suspicious_base == safe_base + '-' + suffix:
             return True
     
-
     # 3.5. 檢查字母插入 (apple -> apples, google -> googles)
     # 檢查是否在原網域後加了單個或少數字母
     if suspicious_base.startswith(safe_base) and len(suspicious_base) > len(safe_base):
@@ -272,7 +271,26 @@ def _is_character_insertion(suspicious_domain, safe_domain):
         # 常見的字母添加（複數形式、常見後綴等）
         if len(added_part) <= 3 and added_part.isalpha():
             return True
-    # 4. 原有的模式檢測
+    
+    # 4. 檢查子網域中的變形攻擊（新增）
+    # 例如 event.liontravel-tw.com 中的 liontravel-tw 是對 liontravel 的變形
+    if len(suspicious_parts) >= 2:
+        for i, suspicious_part in enumerate(suspicious_parts):
+            # 檢查每個部分是否包含對安全網域的變形
+            if '-' in suspicious_part and safe_base in suspicious_part:
+                # 檢查連字符前的部分是否與安全網域匹配
+                dash_parts = suspicious_part.split('-')
+                if dash_parts[0] == safe_base:
+                    return True
+            
+            # 檢查是否為安全網域加上常見後綴
+            for suffix in common_suffixes:
+                if suspicious_part == safe_base + '-' + suffix:
+                    return True
+                if suspicious_part == safe_base + suffix:
+                    return True
+    
+    # 5. 原有的模式檢測
     insertion_patterns = [
         f"{safe_domain.split('.')[0]}-tw.{'.'.join(safe_domain.split('.')[1:])}",
         f"{safe_domain.split('.')[0]}-taiwan.{'.'.join(safe_domain.split('.')[1:])}",
