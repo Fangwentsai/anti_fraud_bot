@@ -718,9 +718,36 @@ if handler:
                 line_bot_api.reply_message(reply_token, TextSendMessage(text=response_text))
                 return
 
+        # 檢查是否為分析請求但沒有內容
+        analysis_request_keywords = ["請幫我分析這則訊息", "幫我分析訊息", "請分析這則訊息", "請幫我分析", "分析這則訊息"]
+        is_analysis_request = any(keyword in cleaned_message for keyword in analysis_request_keywords)
+        
+        # 如果是分析請求但內容太短或只是請求本身，則提示用戶提供內容
+        if is_analysis_request and (len(cleaned_message) < 20 or cleaned_message.rstrip("：:") in analysis_request_keywords):
+            logger.info(f"檢測到分析請求但沒有提供具體內容: {cleaned_message}")
+            
+            # 設置用戶狀態為等待分析
+            current_state["waiting_for_analysis"] = True
+            user_conversation_state[user_id] = current_state
+            
+            prompt_message = f"好的 {display_name}，我會幫您分析可疑訊息！\n\n" \
+                           f"請直接把您收到的可疑訊息或網址傳給我，我會立即為您分析風險程度。\n\n" \
+                           f"💡 您可以：\n" \
+                           f"• 轉傳可疑的文字訊息\n" \
+                           f"• 貼上可疑的網址連結\n" \
+                           f"• 描述您遇到的可疑情況"
+            
+            line_bot_api.reply_message(reply_token, TextSendMessage(text=prompt_message))
+            return
+
         # 執行詐騙分析
-        if should_perform_fraud_analysis(cleaned_message, user_id):
+        if should_perform_fraud_analysis(cleaned_message, user_id) or waiting_for_analysis:
             logger.info(f"開始詐騙分析: {cleaned_message[:50]}...")
+            
+            # 清除等待分析狀態
+            if waiting_for_analysis:
+                current_state["waiting_for_analysis"] = False
+                user_conversation_state[user_id] = current_state
             
             # 分析前先發送等待訊息（在重要分析時）
             should_send_wait = len(cleaned_message) > 100 or any(url_word in cleaned_message.lower() for url_word in ['http', 'www', '.com', '.tw'])
@@ -953,6 +980,11 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
     if is_weather_related(message):
         return False
     
+    # 排除純粹的分析請求（沒有具體內容要分析）
+    analysis_request_keywords = ["請幫我分析這則訊息", "幫我分析訊息", "請分析這則訊息", "請幫我分析", "分析這則訊息"]
+    if any(keyword in message and len(message) < 20 for keyword in analysis_request_keywords):
+        return False
+    
     # 排除一般遊戲討論（而非真正的遊戲觸發）
     game_chat_patterns = ["遊戲推薦", "遊戲好玩", "什麼遊戲", "遊戲有趣"]
     if any(pattern in message_lower for pattern in game_chat_patterns):
@@ -960,14 +992,14 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
     
     # 檢查URL存在（最高優先級）
     import re
-    url_pattern = re.compile(r'https?://[^\\s]+|www\\.[^\\s]+|[a-zA-Z0-9][a-zA-Z0-9-]*\\.[a-zA-Z]{2,}(?:\\.[a-zA-Z]{2,})?')
+    url_pattern = re.compile(r'https?://[^\s]+|www\.[^\s]+|[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?')
     if url_pattern.search(message):
         logger.info("檢測到URL，觸發詐騙分析")
         return True
     
-    # 檢查明確的分析請求
+    # 檢查明確的分析請求（但要有具體內容）
     explicit_analysis_requests = [
-        "幫我分析", "分析這", "這是詐騙嗎", "這可靠嗎", "這是真的嗎", 
+        "這是詐騙嗎", "這可靠嗎", "這是真的嗎", 
         "這安全嗎", "可以相信嗎", "有問題嗎", "是騙人的嗎"
     ]
     if any(request in message_lower for request in explicit_analysis_requests):

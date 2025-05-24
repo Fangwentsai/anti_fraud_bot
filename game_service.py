@@ -27,7 +27,7 @@ class GameService:
     def load_potato_game_questions(self) -> List[Dict]:
         """載入遊戲問題"""
         try:
-            with open('potato_game_questions.json', 'r', encoding='utf-8') as f:
+            with open('fraud_detection_questions.json', 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 
                 # 檢查是否為詐騙問題格式
@@ -54,7 +54,7 @@ class GameService:
                     logger.warning("遊戲問題格式不正確，使用預設問題")
                     return self.get_default_game_questions()
         except FileNotFoundError:
-            logger.info("potato_game_questions.json 檔案不存在，使用預設問題")
+            logger.info("fraud_detection_questions.json 檔案不存在，使用預設問題")
             return self.get_default_game_questions()
         except Exception as e:
             logger.error(f"載入遊戲問題時發生錯誤: {e}，使用預設問題")
