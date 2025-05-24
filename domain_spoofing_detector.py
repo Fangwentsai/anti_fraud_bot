@@ -73,10 +73,63 @@ def detect_domain_spoofing(url_or_message, safe_domains):
                     domain_without_www == safe_domain_without_www):
                     continue
                 
-                # 跳過合法的子網域（例如 mail.google.com, maps.google.com）
-                if (domain.endswith('.' + safe_domain_lower) or 
-                    domain.endswith('.' + safe_domain_without_www)):
-                    continue
+                # 修復：檢查子網域變形攻擊
+                # 分離子網域和主網域
+                domain_parts = domain_without_www.split('.')
+                safe_parts = safe_domain_without_www.split('.')
+                
+                # 如果有子網域，檢查主網域是否為變形攻擊
+                if len(domain_parts) >= 2:
+                    main_domain = '.'.join(domain_parts[1:])  # 去除子網域的主網域
+                    subdomain = domain_parts[0]  # 子網域部分
+                    
+                    # 檢查主網域是否與安全網域完全匹配（合法子網域）
+                    if main_domain == safe_domain_without_www:
+                        # 檢查是否為已知的合法子網域
+                        legitimate_subdomains = [
+                            'mail', 'maps', 'drive', 'docs', 'calendar', 'photos', 'translate',  # Google服務
+                            'www', 'mobile', 'm', 'secure', 'api', 'cdn', 'static', 'img',  # 通用服務
+                            'support', 'help', 'blog', 'news', 'store', 'shop', 'pay',  # 常見服務
+                            'account', 'accounts', 'login', 'signin', 'auth', 'oauth',  # 認證服務
+                            'developer', 'dev', 'admin', 'manage', 'dashboard',  # 開發管理
+                            'app', 'apps', 'play', 'music', 'video', 'tv',  # 應用服務
+                            'cloud', 'storage', 'backup', 'sync',  # 雲端服務
+                            'search', 'images', 'scholar', 'books', 'finance',  # Google專用
+                            'marketplace', 'seller', 'partner', 'affiliate',  # 商務服務
+                            'status', 'health', 'monitor', 'analytics'  # 監控服務
+                        ]
+                        
+                        if subdomain in legitimate_subdomains:
+                            # 這是合法的子網域，跳出整個檢測循環
+                            break
+                    
+                    # 檢查主網域是否為安全網域的變形攻擊
+                    spoofing_detected = False
+                    spoofing_type = ""
+                    
+                    # 對主網域進行變形攻擊檢測
+                    if _is_character_substitution(main_domain, safe_domain_without_www):
+                        spoofing_detected = True
+                        spoofing_type = "子網域+字元替換"
+                    elif _is_character_insertion(main_domain, safe_domain_without_www):
+                        spoofing_detected = True
+                        spoofing_type = "子網域+字元插入"
+                    elif _is_domain_suffix_spoofing(main_domain, safe_domain_without_www):
+                        spoofing_detected = True
+                        spoofing_type = "子網域+後綴變形"
+                    elif _is_homograph_attack(main_domain, safe_domain_without_www):
+                        spoofing_detected = True
+                        spoofing_type = "子網域+相似字元"
+                    
+                    if spoofing_detected:
+                        site_description = safe_domains.get(safe_domain, "知名網站")
+                        return {
+                            'is_spoofed': True,
+                            'original_domain': safe_domain,
+                            'spoofed_domain': domain,
+                            'spoofing_type': spoofing_type,
+                            'risk_explanation': f"⚠️ 高風險警告！\n\n這個網址 {domain} 疑似模仿正牌的 {safe_domain} ({site_description})。\n\n詐騙集團常用這種手法製作假網站來騙取個人資料或信用卡資訊。\n\n🚨 千萬不要在這個網站輸入任何個人資料、密碼或信用卡號碼！"
+                        }
                 
                 # 跳過已知的合法變體（避免誤報）
                 if _is_legitimate_variant(domain_without_www, safe_domain_without_www, safe_domains):
@@ -234,10 +287,21 @@ def _is_character_insertion(suspicious_domain, safe_domain):
     suspicious_parts = suspicious_domain.split('.')
     
     # 檢查基礎網域名稱的插入攻擊
-    safe_base = safe_parts[0]  # 例如 google, pchome, cht
-    suspicious_base = suspicious_parts[0]  # 例如 google-search, pchome-24h, cht-tw
+    safe_base = safe_parts[0]  # 例如 google, pchome, cht, amazon
+    suspicious_base = suspicious_parts[0]  # 例如 google-search, pchome-24h, cht-tw, amazoner
     
-    # 1. 檢查連字符插入 (google -> google-search, pchome -> pchome-24h)
+    # 1. 檢查字母後綴插入 (amazon -> amazoner, google -> googles, facebook -> facebooker)
+    if suspicious_base.startswith(safe_base) and len(suspicious_base) > len(safe_base):
+        added_part = suspicious_base[len(safe_base):]
+        # 常見的字母添加模式
+        common_letter_suffixes = ['r', 's', 'er', 'es', 'ing', 'ed', 'ly', 'al', 'ic', 'tion', 'ment']
+        if added_part in common_letter_suffixes:
+            return True
+        # 檢查是否只是添加了1-4個字母
+        if len(added_part) <= 4 and added_part.isalpha():
+            return True
+    
+    # 2. 檢查連字符插入 (google -> google-search, pchome -> pchome-24h)
     if '-' in suspicious_base and safe_base in suspicious_base:
         # 移除連字符後檢查是否包含原始網域
         base_without_dash = suspicious_base.replace('-', '')
@@ -249,30 +313,22 @@ def _is_character_insertion(suspicious_domain, safe_domain):
         if dash_parts[0] == safe_base:
             return True
     
-    # 2. 檢查數字插入 (pchome -> pchome24h)
+    # 3. 檢查數字插入 (pchome -> pchome24h)
     import re
     # 移除數字後檢查
     base_without_numbers = re.sub(r'\d+', '', suspicious_base)
     if base_without_numbers == safe_base:
         return True
     
-    # 3. 檢查常見後綴插入
-    common_suffixes = ['search', 'official', 'secure', 'login', 'bank', 'pay', 'tw', 'taiwan', '24h', 'shop', 'store']
+    # 4. 檢查常見後綴插入
+    common_suffixes = ['search', 'official', 'secure', 'login', 'bank', 'pay', 'tw', 'taiwan', '24h', 'shop', 'store', 'online', 'web', 'site', 'net', 'app', 'mobile']
     for suffix in common_suffixes:
         if suspicious_base == safe_base + suffix:
             return True
         if suspicious_base == safe_base + '-' + suffix:
             return True
     
-    # 3.5. 檢查字母插入 (apple -> apples, google -> googles)
-    # 檢查是否在原網域後加了單個或少數字母
-    if suspicious_base.startswith(safe_base) and len(suspicious_base) > len(safe_base):
-        added_part = suspicious_base[len(safe_base):]
-        # 常見的字母添加（複數形式、常見後綴等）
-        if len(added_part) <= 3 and added_part.isalpha():
-            return True
-    
-    # 4. 檢查子網域中的變形攻擊（新增）
+    # 5. 檢查子網域中的變形攻擊
     # 例如 event.liontravel-tw.com 中的 liontravel-tw 是對 liontravel 的變形
     if len(suspicious_parts) >= 2:
         for i, suspicious_part in enumerate(suspicious_parts):
@@ -289,8 +345,24 @@ def _is_character_insertion(suspicious_domain, safe_domain):
                     return True
                 if suspicious_part == safe_base + suffix:
                     return True
+            
+            # 檢查字母後綴插入
+            if suspicious_part.startswith(safe_base) and len(suspicious_part) > len(safe_base):
+                added_part = suspicious_part[len(safe_base):]
+                if len(added_part) <= 4 and added_part.isalpha():
+                    return True
     
-    # 5. 原有的模式檢測
+    # 6. 檢查完整網域的字母插入 (amazon.com -> amazoner.com)
+    if len(safe_parts) == len(suspicious_parts):
+        # 檢查每個部分
+        for safe_part, suspicious_part in zip(safe_parts, suspicious_parts):
+            if suspicious_part.startswith(safe_part) and len(suspicious_part) > len(safe_part):
+                added_part = suspicious_part[len(safe_part):]
+                # 如果只是在某個部分後面加了字母
+                if len(added_part) <= 4 and added_part.isalpha():
+                    return True
+    
+    # 7. 原有的模式檢測
     insertion_patterns = [
         f"{safe_domain.split('.')[0]}-tw.{'.'.join(safe_domain.split('.')[1:])}",
         f"{safe_domain.split('.')[0]}-taiwan.{'.'.join(safe_domain.split('.')[1:])}",

@@ -111,7 +111,11 @@
         "fubonlife.com.tw": "富邦人壽",
         "nanshanlife.com.tw": "南山人壽",
         "skl.com.tw": "新光人壽",
-        "taiwanlife.com": "台灣人壽"
+        "taiwanlife.com": "台灣人壽",
+        "paypal.com": "PayPal (國際支付平台)",
+        "visa.com": "Visa (信用卡組織)",
+        "mastercard.com": "Mastercard (信用卡組織)",
+        "jcb.com": "JCB (信用卡組織)"
     },
     "電商購物": {
         "pchome.com.tw": "PChome 線上購物入口",
@@ -135,7 +139,12 @@
         "gohappy.com.tw": "GoHappy 快樂購物網 (遠東集團旗下, 現多整合至SOGO百貨等)",
         "lativ.com.tw": "Lativ 米格國際 (服飾電商)",
         "pxmart.com.tw": "全聯福利中心 (含線上購 PXGo!)",
-        "rt-mart.com.tw": "大潤發 (含線上購)"
+        "rt-mart.com.tw": "大潤發 (含線上購)",
+        "amazon.com": "亞馬遜 (國際電商)",
+        "ebay.com": "eBay (國際拍賣電商)",
+        "taobao.com": "淘寶網 (中國電商)",
+        "tmall.com": "天貓 (中國電商)",
+        "jd.com": "京東 (中國電商)"
     },
     "新聞媒體": {
         "udn.com": "聯合新聞網",

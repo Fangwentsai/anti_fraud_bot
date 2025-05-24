@@ -1,3 +1,20 @@
+# 網域變形攻擊檢測系統依賴
+# Domain Spoofing Detection System Dependencies
+
+# 核心依賴 / Core Dependencies
+urllib3>=1.26.0
+
+# 開發和測試依賴 / Development and Testing Dependencies
+pytest>=7.0.0
+pytest-cov>=4.0.0
+
+# 代碼品質工具 / Code Quality Tools
+flake8>=5.0.0
+black>=22.0.0
+
+# 文檔生成 / Documentation
+sphinx>=5.0.0
+
 Flask==2.3.3
 line-bot-sdk==3.5.0
 openai==1.51.0
