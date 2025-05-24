@@ -618,6 +618,9 @@ def parse_fraud_analysis(analysis_result):
 
 def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None):
     """使用OpenAI的API檢測詐騙信息"""
+    import re
+    from urllib.parse import urlparse
+    
     try:
         # 檢查訊息是否包含URL
         original_url = None
@@ -672,9 +675,6 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
             }
 
         # 檢查訊息是否包含白名單中的網址 - 改進版
-        import re
-        from urllib.parse import urlparse
-        
         # 提取URL進行精確匹配
         url_pattern = re.compile(r'https?://[^\s]+|www\.[^\s]+|[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}[^\s]*')
         urls = url_pattern.findall(analysis_message)
