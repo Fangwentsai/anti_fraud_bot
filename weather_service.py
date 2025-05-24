@@ -27,7 +27,7 @@ class WeatherService:
     def __init__(self):
         # 中央氣象署API設定
         self.cwb_api_key = os.environ.get('CWB_API_KEY', '')
-        self.cwb_base_url = "https://opendata.cwb.gov.tw/api/v1/rest/datastore"
+        self.cwb_base_url = "https://opendata.cwa.gov.tw/api/v1/rest/datastore"
         
         # 天氣相關關鍵詞
         self.weather_keywords = [
