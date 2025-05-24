@@ -118,16 +118,24 @@ class GameService:
     def create_game_flex_message(self, question_data: Dict, user_id: str) -> FlexSendMessage:
         """創建遊戲問題的 Flex Message"""
         
-        question = question_data.get("question", "")
+        # 使用正確的JSON字段名
+        question = question_data.get("fraud_message", "")  # 從JSON獲取詐騙訊息作為問題
+        fraud_type = question_data.get("fraud_type", "詐騙檢測")  # 詐騙類型
         options = question_data.get("options", [])
         
         # 創建選項按鈕
         option_buttons = []
         for i, option in enumerate(options):
-            # 確保按鈕label不超過20字元
-            button_label = option
-            if len(button_label) > 20:
-                button_label = button_label[:17] + "..."
+            # 正確處理選項數據結構
+            if isinstance(option, dict):
+                option_text = option.get("text", "")
+                option_id = option.get("id", str(i))
+            else:
+                option_text = str(option)
+                option_id = str(i)
+            
+            # 創建簡短的按鈕標籤（選項A、B、C等）
+            button_label = f"選項 {chr(65 + i)}"  # A, B, C, D...
             
             option_buttons.append(
                 ButtonComponent(
@@ -140,6 +148,46 @@ class GameService:
                 )
             )
         
+        # 在body中顯示完整的選項內容
+        body_contents = [
+            TextComponent(
+                text=f"🎯 {fraud_type}",
+                weight='bold',
+                size='lg',
+                color='#1DB446'
+            ),
+            SeparatorComponent(margin='md'),
+            TextComponent(
+                text="以下哪一個是詐騙訊息？",
+                size='md',
+                weight='bold',
+                margin='md',
+                color='#FF6B6B'
+            ),
+            SeparatorComponent(margin='md')
+        ]
+        
+        # 添加選項內容到body
+        for i, option in enumerate(options):
+            if isinstance(option, dict):
+                option_text = option.get("text", "")
+            else:
+                option_text = str(option)
+            
+            # 限制選項文字長度，避免過長
+            if len(option_text) > 80:
+                option_text = option_text[:77] + "..."
+            
+            body_contents.append(
+                TextComponent(
+                    text=f"{chr(65 + i)}. {option_text}",
+                    size='sm',
+                    wrap=True,
+                    margin='sm',
+                    color='#464F69'
+                )
+            )
+        
         bubble = BubbleContainer(
             direction='ltr',
             header=BoxComponent(
@@ -148,13 +196,13 @@ class GameService:
                 background_color='#FF6B6B',
                 contents=[
                     TextComponent(
-                        text="🎮 土豆小遊戲",
+                        text="🎮 防詐騙小遊戲",
                         weight='bold',
                         color='#ffffff',
                         size='xl'
                     ),
                     TextComponent(
-                        text="測試你的土豆知識！",
+                        text="測試你的防詐騙知識！",
                         color='#ffffff',
                         size='md'
                     )
@@ -164,28 +212,7 @@ class GameService:
                 layout='vertical',
                 padding_all='20px',
                 spacing='md',
-                contents=[
-                    TextComponent(
-                        text="🤔 問題",
-                        weight='bold',
-                        size='lg',
-                        color='#1DB446'
-                    ),
-                    SeparatorComponent(margin='md'),
-                    TextComponent(
-                        text=question,
-                        size='md',
-                        wrap=True,
-                        margin='md'
-                    ),
-                    SeparatorComponent(margin='md'),
-                    TextComponent(
-                        text="請選擇你的答案：",
-                        size='sm',
-                        color='#464F69',
-                        margin='md'
-                    )
-                ]
+                contents=body_contents
             ),
             footer=BoxComponent(
                 layout='vertical',
@@ -194,7 +221,7 @@ class GameService:
             )
         )
         
-        return FlexSendMessage(alt_text="土豆小遊戲", contents=bubble)
+        return FlexSendMessage(alt_text="防詐騙小遊戲", contents=bubble)
     
     def handle_game_answer(self, user_id: str, answer_index: int) -> Tuple[bool, str, Optional[str]]:
         """處理遊戲答案"""
@@ -208,23 +235,41 @@ class GameService:
             return False, "你已經回答過這個問題了！", None
         
         question_data = game_state["question"]
-        correct_answer = question_data.get("correct_answer", 0)
+        correct_option_letter = question_data.get("correct_option", "A")  # 從JSON獲取字母
         explanation = question_data.get("explanation", "")
         fraud_tip = question_data.get("fraud_tip", "")
         options = question_data.get("options", [])
         
+        # 將字母轉換為索引 (A=0, B=1, C=2...)
+        correct_answer_index = ord(correct_option_letter) - ord('A')
+        
         # 標記為已回答
         self.user_game_state[user_id]["answered"] = True
         
-        is_correct = answer_index == correct_answer
+        is_correct = answer_index == correct_answer_index
+        
+        # 獲取選項文字
+        def get_option_text(option):
+            if isinstance(option, dict):
+                return option.get("text", "")
+            return str(option)
+        
+        user_answer_text = get_option_text(options[answer_index]) if answer_index < len(options) else "未知選項"
+        correct_answer_text = get_option_text(options[correct_answer_index]) if correct_answer_index < len(options) else "未知選項"
+        
+        # 限制文字長度以避免訊息過長
+        if len(user_answer_text) > 50:
+            user_answer_text = user_answer_text[:47] + "..."
+        if len(correct_answer_text) > 50:
+            correct_answer_text = correct_answer_text[:47] + "..."
         
         if is_correct:
-            result_message = f"🎉 答對了！\n\n✅ 正確答案：{options[correct_answer]}\n\n💡 解釋：{explanation}"
+            result_message = f"🎉 答對了！\n\n✅ 正確答案：{chr(65 + correct_answer_index)}. {correct_answer_text}\n\n💡 解釋：{explanation}"
         else:
-            result_message = f"😅 答錯了！\n\n❌ 你的答案：{options[answer_index]}\n✅ 正確答案：{options[correct_answer]}\n\n💡 解釋：{explanation}"
+            result_message = f"😅 答錯了！\n\n❌ 你的答案：{chr(65 + answer_index)}. {user_answer_text}\n✅ 正確答案：{chr(65 + correct_answer_index)}. {correct_answer_text}\n\n💡 解釋：{explanation}"
         
         if fraud_tip:
-            result_message += f"\n\n{fraud_tip}"
+            result_message += f"\n\n💡 防詐提醒：{fraud_tip}"
         
         # 清除遊戲狀態
         del self.user_game_state[user_id]
