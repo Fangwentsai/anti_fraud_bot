@@ -1,0 +1,23 @@
+# 排除備份文件
+app_backup.py
+anti_fraud_clean_app_backup.py
+temp_file.py
+
+# 排除測試文件
+test_*.py
+*_test.py
+comprehensive_test.py
+
+# 排除開發文件
+.DS_Store
+*.pyc
+__pycache__/
+.pytest_cache/
+
+# 排除文檔文件（可選）
+*.md
+!README.md
+
+# 排除範例文件
+*.example
+weather_integration_example.py 

@@ -11,6 +11,8 @@ services:
         value: 8080
       - key: FLASK_ENV
         value: production
+      - key: PYTHONPATH
+        value: .
       - key: LINE_CHANNEL_ACCESS_TOKEN
         sync: false
       - key: LINE_CHANNEL_SECRET
