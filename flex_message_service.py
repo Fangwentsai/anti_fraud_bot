@@ -607,6 +607,68 @@ def create_weather_flex_message(weather_data: Dict, user_name: str = "朋友") -
     """創建天氣預報的 Flex Message"""
     return flex_message_service.create_weather_flex_message(weather_data, user_name)
 
+def create_fraud_types_flex_message(fraud_tactics: Dict, display_name: str = "朋友") -> FlexSendMessage:
+    """創建詐騙類型列表Flex Message"""
+    
+    # 創建詐騙類型按鈕列表
+    type_buttons = []
+    for fraud_type, info in list(fraud_tactics.items())[:8]:  # 限制最多8個按鈕
+        # 簡化按鈕，只顯示類型名稱
+        type_buttons.append(
+            ButtonComponent(
+                style="secondary",
+                height="sm",
+                action=MessageAction(
+                    label=f"📋 {fraud_type}",
+                    text=f"什麼是{fraud_type}"
+                ),
+                color="#E8F4FD"
+            )
+        )
+    
+    bubble = BubbleContainer(
+        size="kilo",
+        header=BoxComponent(
+            layout="vertical",
+            contents=[
+                TextComponent(
+                    text=f"📚 {display_name}，這裡是常見詐騙類型",
+                    weight="bold",
+                    size="lg",
+                    color="#1DB446"
+                ),
+                TextComponent(
+                    text="點選下方按鈕了解詳細資訊",
+                    size="sm",
+                    color="#666666",
+                    margin="sm"
+                )
+            ],
+            background_color="#F0F8FF",
+            padding_all="lg"
+        ),
+        body=BoxComponent(
+            layout="vertical",
+            spacing="sm",
+            padding_all="lg",
+            contents=type_buttons
+        ),
+        footer=BoxComponent(
+            layout="vertical",
+            contents=[
+                TextComponent(
+                    text="💡 有可疑訊息隨時傳給我分析！",
+                    size="xs",
+                    color="#999999",
+                    align="center"
+                )
+            ],
+            padding_all="sm"
+        )
+    )
+    
+    return FlexSendMessage(alt_text="詐騙類型列表", contents=bubble)
+
 
 if __name__ == "__main__":
     # 測試功能

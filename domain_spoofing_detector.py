@@ -61,7 +61,7 @@ def detect_domain_spoofing(url_or_message, safe_domains):
             if domain in normalized_safe_domains or domain_without_www in normalized_safe_domains:
                 continue  # 這是正常的白名單網域，跳過
             
-            # 檢查每個白名單網域
+            # 檢查每個白名單網域是否有相似性
             for safe_domain in safe_domains.keys():
                 safe_domain_lower = safe_domain.lower()
                 safe_domain_without_www = safe_domain_lower[4:] if safe_domain_lower.startswith('www.') else safe_domain_lower
@@ -73,88 +73,31 @@ def detect_domain_spoofing(url_or_message, safe_domains):
                     domain_without_www == safe_domain_without_www):
                     continue
                 
-                # 修復：檢查子網域變形攻擊
-                # 分離子網域和主網域
-                domain_parts = domain_without_www.split('.')
-                safe_parts = safe_domain_without_www.split('.')
+                # 只檢測高相似度的變形（避免誤報）
+                # 需要域名長度相近（差距不超過2個字符）且有高度相似性
+                length_diff = abs(len(domain_without_www) - len(safe_domain_without_www))
+                if length_diff > 2:
+                    continue  # 長度差距太大，跳過
                 
-                # 如果有子網域，檢查主網域是否為變形攻擊
-                if len(domain_parts) >= 2:
-                    main_domain = '.'.join(domain_parts[1:])  # 去除子網域的主網域
-                    subdomain = domain_parts[0]  # 子網域部分
-                    
-                    # 檢查主網域是否與安全網域完全匹配（合法子網域）
-                    if main_domain == safe_domain_without_www:
-                        # 檢查是否為已知的合法子網域
-                        legitimate_subdomains = [
-                            'mail', 'maps', 'drive', 'docs', 'calendar', 'photos', 'translate',  # Google服務
-                            'www', 'mobile', 'm', 'secure', 'api', 'cdn', 'static', 'img',  # 通用服務
-                            'support', 'help', 'blog', 'news', 'store', 'shop', 'pay',  # 常見服務
-                            'account', 'accounts', 'login', 'signin', 'auth', 'oauth',  # 認證服務
-                            'developer', 'dev', 'admin', 'manage', 'dashboard',  # 開發管理
-                            'app', 'apps', 'play', 'music', 'video', 'tv',  # 應用服務
-                            'cloud', 'storage', 'backup', 'sync',  # 雲端服務
-                            'search', 'images', 'scholar', 'books', 'finance',  # Google專用
-                            'marketplace', 'seller', 'partner', 'affiliate',  # 商務服務
-                            'status', 'health', 'monitor', 'analytics'  # 監控服務
-                        ]
-                        
-                        if subdomain in legitimate_subdomains:
-                            # 這是合法的子網域，跳出整個檢測循環
-                            break
-                    
-                    # 檢查主網域是否為安全網域的變形攻擊
-                    spoofing_detected = False
-                    spoofing_type = ""
-                    
-                    # 對主網域進行變形攻擊檢測
-                    if _is_character_substitution(main_domain, safe_domain_without_www):
-                        spoofing_detected = True
-                        spoofing_type = "子網域+字元替換"
-                    elif _is_character_insertion(main_domain, safe_domain_without_www):
-                        spoofing_detected = True
-                        spoofing_type = "子網域+字元插入"
-                    elif _is_domain_suffix_spoofing(main_domain, safe_domain_without_www):
-                        spoofing_detected = True
-                        spoofing_type = "子網域+後綴變形"
-                    elif _is_homograph_attack(main_domain, safe_domain_without_www):
-                        spoofing_detected = True
-                        spoofing_type = "子網域+相似字元"
-                    
-                    if spoofing_detected:
-                        site_description = safe_domains.get(safe_domain, "知名網站")
-                        return {
-                            'is_spoofed': True,
-                            'original_domain': safe_domain,
-                            'spoofed_domain': domain,
-                            'spoofing_type': spoofing_type,
-                            'risk_explanation': f"⚠️ 高風險警告！\n\n這個網址 {domain} 疑似模仿正牌的 {safe_domain} ({site_description})。\n\n詐騙集團常用這種手法製作假網站來騙取個人資料或信用卡資訊。\n\n🚨 千萬不要在這個網站輸入任何個人資料、密碼或信用卡號碼！"
-                        }
+                # 額外檢查：網域名稱必須有足夠的相似性
+                if not _has_sufficient_similarity(domain_without_www, safe_domain_without_www):
+                    continue  # 相似度不足，跳過
                 
-                # 跳過已知的合法變體（避免誤報）
-                if _is_legitimate_variant(domain_without_www, safe_domain_without_www, safe_domains):
-                    continue
-                
-                # 檢測各種變形手法（使用去除www的版本進行比較）
+                # 只檢測非常相似的網域
                 spoofing_detected = False
                 spoofing_type = ""
                 
-                # 1. 字元替換攻擊 (例如 google.com -> goog1e.com, googlе.com)
-                if _is_character_substitution(domain_without_www, safe_domain_without_www):
+                # 1. 字元替換攻擊（只檢測1個字符的差異）
+                if _is_character_substitution(domain_without_www, safe_domain_without_www, max_substitutions=1):
                     spoofing_detected = True
                     spoofing_type = "字元替換"
                 
-                # 2. 插入額外字元 (例如 google.com -> google-tw.com, google.com.tw)
-                elif _is_character_insertion(domain_without_www, safe_domain_without_www):
+                # 2. 插入額外字元（只檢測1個字符的插入）
+                elif _is_character_insertion(domain_without_www, safe_domain_without_www, max_insertions=1):
                     spoofing_detected = True
                     spoofing_type = "插入額外字元"
                 
-                # 3. 網域後綴變形 (例如 google.com -> google.com.tw, google-tw.com)
-                elif _is_domain_suffix_spoofing(domain_without_www, safe_domain_without_www):
-                    spoofing_detected = True
-                    spoofing_type = "網域後綴變形"
-                
-                # 4. 同音字或相似字攻擊 (例如 google.com -> goog1e.com)
+                # 3. 相似字元攻擊（國際化域名攻擊）
                 elif _is_homograph_attack(domain_without_www, safe_domain_without_www):
                     spoofing_detected = True
                     spoofing_type = "相似字元攻擊"
@@ -214,7 +157,7 @@ def _is_legitimate_variant(domain, safe_domain, all_safe_domains):
     
     return False
 
-def _is_character_substitution(suspicious_domain, safe_domain):
+def _is_character_substitution(suspicious_domain, safe_domain, max_substitutions=2):
     """檢測字元替換攻擊 - 改進版"""
     # 計算編輯距離（Levenshtein distance）
     def levenshtein_distance(s1, s2):
@@ -250,7 +193,7 @@ def _is_character_substitution(suspicious_domain, safe_domain):
         max_distance = 3
     
     # 檢查是否為字元替換攻擊
-    if distance <= max_distance and length_diff <= 1:
+    if distance <= max_distance and length_diff <= max_substitutions:
         # 額外檢查：避免誤判完全不相關的網域
         # 計算最長公共子序列
         def lcs_length(s1, s2):
@@ -274,7 +217,7 @@ def _is_character_substitution(suspicious_domain, safe_domain):
     
     return False
 
-def _is_character_insertion(suspicious_domain, safe_domain):
+def _is_character_insertion(suspicious_domain, safe_domain, max_insertions=2):
     """檢測字元插入攻擊 - 改進版"""
     # 移除 www. 前綴
     if suspicious_domain.startswith('www.'):
@@ -439,4 +382,28 @@ def _is_homograph_attack(suspicious_domain, safe_domain):
                 return False  # 字元不在替換表中
     
     # 如果有1-3個字元被替換，認為是相似字元攻擊
-    return 1 <= substitution_count <= 3 
+    return 1 <= substitution_count <= 3
+
+def _has_sufficient_similarity(domain1, domain2):
+    """檢查兩個網域是否有足夠的相似性"""
+    # 計算最長公共子序列
+    def lcs_length(s1, s2):
+        m, n = len(s1), len(s2)
+        dp = [[0] * (n + 1) for _ in range(m + 1)]
+        
+        for i in range(1, m + 1):
+            for j in range(1, n + 1):
+                if s1[i-1] == s2[j-1]:
+                    dp[i][j] = dp[i-1][j-1] + 1
+                else:
+                    dp[i][j] = max(dp[i-1][j], dp[i][j-1])
+        
+        return dp[m][n]
+    
+    # 計算相似度比例
+    max_length = max(len(domain1), len(domain2))
+    lcs_len = lcs_length(domain1, domain2)
+    similarity_ratio = lcs_len / max_length
+    
+    # 要求至少80%的字元相似度
+    return similarity_ratio >= 0.8 

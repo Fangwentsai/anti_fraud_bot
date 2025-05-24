@@ -291,9 +291,16 @@ class GameService:
                 contents=[
                     TextComponent(
                         text=result_message,
-                        size='md',
                         wrap=True,
-                        color='#464F69'
+                        size='md'
+                    ),
+                    SeparatorComponent(margin='lg'),
+                    TextComponent(
+                        text="💪 繼續挑戰，提升防詐騙能力！",
+                        weight='bold',
+                        color='#666666',
+                        size='sm',
+                        margin='lg'
                     )
                 ]
             ),
@@ -305,23 +312,16 @@ class GameService:
                         style='primary',
                         height='sm',
                         action=PostbackAction(
-                            label='🎮 再玩一次',
-                            data=f'action=start_potato_game&user_id={user_id}'
-                        )
-                    ),
-                    ButtonComponent(
-                        style='secondary',
-                        height='sm',
-                        action=PostbackAction(
-                            label='📊 查看防詐統計',
-                            data='action=fraud_stats'
-                        )
+                            label='🎯 再玩一次',
+                            data=f'action=start_potato_game&uid={user_id}'
+                        ),
+                        color='#4ECDC4'
                     )
                 ]
             )
         )
         
-        return FlexSendMessage(alt_text=f"遊戲結果：{header_text}", contents=bubble)
+        return FlexSendMessage(alt_text="遊戲結果", contents=bubble)
     
     def get_game_statistics(self, user_id: str) -> Dict:
         """取得用戶遊戲統計（未來功能）"""
