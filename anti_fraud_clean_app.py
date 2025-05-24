@@ -668,22 +668,22 @@ if handler:
 
         # 檢查是否為空訊息（移除觸發詞後）
         if not cleaned_message.strip():
-            # 發送優化後的功能介紹
-            reply_text = f"您好 {display_name}！我是防詐騙助手，很高興為您服務！\n\n" \
-                        f"經過全面測試，我已準備好提供四項專業服務來保護您：\n\n" \
+            # 土豆的熱情自我介紹
+            reply_text = f"嗨嗨 {display_name}！我是土豆 🥔 很開心你叫我！\n\n" \
+                        f"我是專業的防詐騙小助手，經過全面測試，已經準備好用四項超強服務保護你：\n\n" \
                         f"🔍 **網站安全檢查**\n" \
-                        f"    ✨ 只要把可疑網址貼給我，我就能幫您檢查安全性\n" \
-                        f"    ✨ 自動識別假冒購物網站、釣魚網站等風險\n\n" \
+                        f"    ✨ 把可疑網址丟給我，我立刻幫你檢查安全性\n" \
+                        f"    ✨ 自動抓出假冒購物網站、釣魚網站等壞蛋\n\n" \
                         f"🎯 **防詐騙知識測驗**\n" \
-                        f"    ✨ 透過簡單問答遊戲，提升您的防詐騙能力\n" \
-                        f"    ✨ 學會識別31種常見詐騙手法\n\n" \
+                        f"    ✨ 跟我玩問答遊戲，提升你的防詐騙能力\n" \
+                        f"    ✨ 學會識破31種常見詐騙手法\n\n" \
                         f"📚 **詐騙案例查詢**\n" \
-                        f"    ✨ 提供真實詐騙案例分析和防範方法\n" \
+                        f"    ✨ 真實詐騙案例分析，讓你看清騙子手法\n" \
                         f"    ✨ 涵蓋9大類詐騙類型完整說明\n\n" \
                         f"☁️ **天氣預報查詢**\n" \
-                        f"    ✨ 查詢台灣各縣市即時天氣和未來預報\n" \
-                        f"    ✨ 包含溫度、降雨機率等詳細資訊\n\n" \
-                        f"💡 **使用方式很簡單**：點擊下方按鈕，或直接輸入您想要的服務即可！"
+                        f"    ✨ 台灣各縣市即時天氣，想知道哪裡都可以\n" \
+                        f"    ✨ 溫度、降雨機率通通有\n\n" \
+                        f"💡 **超簡單使用**：直接點下面的按鈕，或是直接跟我說你想要什麼服務！"
                 
             # 如果在群組中，QuickReply按鈕需要包含觸發關鍵詞
             if is_group_message:
@@ -706,6 +706,77 @@ if handler:
                 ])
             
             line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
+            
+            # 如果QuickReply按鈕不顯示，發送備選的Flex Message按鈕
+            try:
+                import time
+                time.sleep(1)  # 稍等一下再發送備選按鈕
+                
+                # 創建備選的Flex Message按鈕
+                backup_flex = FlexSendMessage(
+                    alt_text="土豆的服務選單",
+                    contents=BubbleContainer(
+                        size="kilo",
+                        header=BoxComponent(
+                            layout="vertical",
+                            contents=[
+                                TextComponent(
+                                    text="🥔 土豆的服務選單",
+                                    weight="bold",
+                                    size="lg",
+                                    color="#1DB446"
+                                )
+                            ],
+                            background_color="#F0F0F0",
+                            padding_all="sm"
+                        ),
+                        body=BoxComponent(
+                            layout="vertical",
+                            spacing="sm",
+                            contents=[
+                                ButtonComponent(
+                                    style="primary",
+                                    color="#FF6B6B",
+                                    action=MessageAction(
+                                        label="🔍 檢查網站安全",
+                                        text=f"{bot_trigger_keyword} 請幫我分析這則訊息：" if is_group_message else "請幫我分析這則訊息："
+                                    )
+                                ),
+                                ButtonComponent(
+                                    style="primary", 
+                                    color="#4ECDC4",
+                                    action=MessageAction(
+                                        label="🎯 防詐騙測驗",
+                                        text=f"{bot_trigger_keyword} 防詐騙測試" if is_group_message else "防詐騙測試"
+                                    )
+                                ),
+                                ButtonComponent(
+                                    style="primary",
+                                    color="#45B7D1", 
+                                    action=MessageAction(
+                                        label="📚 詐騙案例",
+                                        text=f"{bot_trigger_keyword} 詐騙類型列表" if is_group_message else "詐騙類型列表"
+                                    )
+                                ),
+                                ButtonComponent(
+                                    style="primary",
+                                    color="#96CEB4",
+                                    action=MessageAction(
+                                        label="☁️ 查詢天氣", 
+                                        text=f"{bot_trigger_keyword} 今天天氣" if is_group_message else "今天天氣"
+                                    )
+                                )
+                            ]
+                        )
+                    )
+                )
+                
+                line_bot_api.push_message(user_id, backup_flex)
+                logger.info("已發送備選Flex Message按鈕")
+                
+            except Exception as e:
+                logger.error(f"發送備選按鈕時發生錯誤: {e}")
+            
             return
 
         # 處理遊戲觸發 - 移到詐騙檢測前面
@@ -842,21 +913,21 @@ if handler:
 
         # 檢查是否詢問功能
         if any(keyword in cleaned_message for keyword in function_inquiry_keywords):
-            reply_text = f"您好 {display_name}！我是防詐騙助手，很高興為您服務！\n\n" \
-                        f"經過全面測試，我已準備好提供四項專業服務來保護您：\n\n" \
+            reply_text = f"嗨嗨 {display_name}！我是土豆 🥔 很開心你問我！\n\n" \
+                        f"我是專業的防詐騙小助手，經過全面測試，已經準備好用四項超強服務保護你：\n\n" \
                         f"🔍 **網站安全檢查**\n" \
-                        f"    ✨ 只要把可疑網址貼給我，我就能幫您檢查安全性\n" \
-                        f"    ✨ 自動識別假冒購物網站、釣魚網站等風險\n\n" \
+                        f"    ✨ 把可疑網址丟給我，我立刻幫你檢查安全性\n" \
+                        f"    ✨ 自動抓出假冒購物網站、釣魚網站等壞蛋\n\n" \
                         f"🎯 **防詐騙知識測驗**\n" \
-                        f"    ✨ 透過簡單問答遊戲，提升您的防詐騙能力\n" \
-                        f"    ✨ 學會識別31種常見詐騙手法\n\n" \
+                        f"    ✨ 跟我玩問答遊戲，提升你的防詐騙能力\n" \
+                        f"    ✨ 學會識破31種常見詐騙手法\n\n" \
                         f"📚 **詐騙案例查詢**\n" \
-                        f"    ✨ 提供真實詐騙案例分析和防範方法\n" \
+                        f"    ✨ 真實詐騙案例分析，讓你看清騙子手法\n" \
                         f"    ✨ 涵蓋9大類詐騙類型完整說明\n\n" \
                         f"☁️ **天氣預報查詢**\n" \
-                        f"    ✨ 查詢台灣各縣市即時天氣和未來預報\n" \
-                        f"    ✨ 包含溫度、降雨機率等詳細資訊\n\n" \
-                        f"💡 **使用方式很簡單**：點擊下方按鈕，或直接輸入您想要的服務即可！"
+                        f"    ✨ 台灣各縣市即時天氣，想知道哪裡都可以\n" \
+                        f"    ✨ 溫度、降雨機率通通有\n\n" \
+                        f"💡 **超簡單使用**：直接點下面的按鈕，或是直接跟我說你想要什麼服務！"
             
             if is_group_message:
                 quick_reply = QuickReply(items=[
@@ -874,6 +945,77 @@ if handler:
                 ])
             
             line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
+            
+            # 如果QuickReply按鈕不顯示，發送備選的Flex Message按鈕
+            try:
+                import time
+                time.sleep(1)  # 稍等一下再發送備選按鈕
+                
+                # 創建備選的Flex Message按鈕
+                backup_flex = FlexSendMessage(
+                    alt_text="土豆的服務選單",
+                    contents=BubbleContainer(
+                        size="kilo",
+                        header=BoxComponent(
+                            layout="vertical",
+                            contents=[
+                                TextComponent(
+                                    text="🥔 土豆的服務選單",
+                                    weight="bold",
+                                    size="lg",
+                                    color="#1DB446"
+                                )
+                            ],
+                            background_color="#F0F0F0",
+                            padding_all="sm"
+                        ),
+                        body=BoxComponent(
+                            layout="vertical",
+                            spacing="sm",
+                            contents=[
+                                ButtonComponent(
+                                    style="primary",
+                                    color="#FF6B6B",
+                                    action=MessageAction(
+                                        label="🔍 檢查網站安全",
+                                        text=f"{bot_trigger_keyword} 請幫我分析這則訊息：" if is_group_message else "請幫我分析這則訊息："
+                                    )
+                                ),
+                                ButtonComponent(
+                                    style="primary", 
+                                    color="#4ECDC4",
+                                    action=MessageAction(
+                                        label="🎯 防詐騙測驗",
+                                        text=f"{bot_trigger_keyword} 防詐騙測試" if is_group_message else "防詐騙測試"
+                                    )
+                                ),
+                                ButtonComponent(
+                                    style="primary",
+                                    color="#45B7D1", 
+                                    action=MessageAction(
+                                        label="📚 詐騙案例",
+                                        text=f"{bot_trigger_keyword} 詐騙類型列表" if is_group_message else "詐騙類型列表"
+                                    )
+                                ),
+                                ButtonComponent(
+                                    style="primary",
+                                    color="#96CEB4",
+                                    action=MessageAction(
+                                        label="☁️ 查詢天氣", 
+                                        text=f"{bot_trigger_keyword} 今天天氣" if is_group_message else "今天天氣"
+                                    )
+                                )
+                            ]
+                        )
+                    )
+                )
+                
+                line_bot_api.push_message(user_id, backup_flex)
+                logger.info("已發送備選Flex Message按鈕")
+                
+            except Exception as e:
+                logger.error(f"發送備選按鈕時發生錯誤: {e}")
+            
             return
 
         # 處理天氣查詢
