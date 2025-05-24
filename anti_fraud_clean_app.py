@@ -335,11 +335,16 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         is_short_url = False
         url_expanded_successfully = False
         
-        url_pattern = re.compile(r'(https?://\S+|www\.\S+)')
+        # 改進的URL提取正則表達式，確保只提取有效的URL部分
+        # 支援二級域名如 .com.tw, .co.uk 等
+        url_pattern = re.compile(r'(https?://[^\s\u4e00-\u9fff，。！？；：]+|www\.[^\s\u4e00-\u9fff，。！？；：]+|[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?(?:/[^\s\u4e00-\u9fff，。！？；：]*)?)')
         url_match = url_pattern.search(user_message)
         
         if url_match:
             original_url = url_match.group(0)
+            # 移除末尾可能的標點符號
+            original_url = re.sub(r'[，。！？；：]+$', '', original_url)
+            
             # 確保URL開頭是http://或https://
             if not original_url.startswith(('http://', 'https://')):
                 original_url = 'https://' + original_url
@@ -350,7 +355,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
             # 如果是短網址且成功展開，調整分析訊息
             if is_short_url and url_expanded_successfully:
                 # 將原始訊息中的短網址替換為展開後的URL，以便於分析
-                analysis_message = user_message.replace(original_url, f"{original_url} (展開後: {expanded_url})")
+                analysis_message = user_message.replace(url_match.group(0), f"{original_url} (展開後: {expanded_url})")
                 logger.info(f"已展開短網址進行分析: {original_url} -> {expanded_url}")
             else:
                 analysis_message = user_message
@@ -382,9 +387,16 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
             }
 
         # 檢查訊息是否包含白名單中的網址 - 改進版
-        # 提取URL進行精確匹配
-        url_pattern = re.compile(r'https?://[^\s]+|www\.[^\s]+|[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}[^\s]*')
-        urls = url_pattern.findall(analysis_message)
+        # 提取URL進行精確匹配，支援二級域名
+        url_pattern_detailed = re.compile(r'https?://[^\s\u4e00-\u9fff，。！？；：]+|www\.[^\s\u4e00-\u9fff，。！？；：]+|[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?(?:/[^\s\u4e00-\u9fff，。！？；：]*)?')
+        urls = url_pattern_detailed.findall(analysis_message)
+        
+        # 清理提取的URL，移除末尾標點符號
+        cleaned_urls = []
+        for url in urls:
+            cleaned_url = re.sub(r'[，。！？；：]+$', '', url)
+            if cleaned_url:  # 確保不是空字串
+                cleaned_urls.append(cleaned_url)
         
         # 創建標準化的安全網域列表（包含www和非www版本）
         normalized_safe_domains = {}
@@ -399,7 +411,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                 normalized_safe_domains['www.' + safe_domain_lower] = (safe_domain, description)
         
         # 檢查每個提取的URL
-        for url in urls:
+        for url in cleaned_urls:
             # 標準化URL
             if not url.startswith(('http://', 'https://')):
                 if url.startswith('www.'):
