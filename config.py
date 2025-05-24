@@ -15,7 +15,7 @@ OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
 OPENAI_MODEL = os.environ.get('OPENAI_MODEL', 'gpt-4.1-mini')
 
 # ===== 機器人行為配置 =====
-BOT_TRIGGER_KEYWORD = "防詐騙助手"  # 群組中觸發機器人服務的關鍵詞
+BOT_TRIGGER_KEYWORD = "土豆"  # 群組中觸發機器人服務的關鍵詞
 CHAT_TIP_PROBABILITY = 0.3  # 閒聊時回覆防詐小知識的機率
 DONATION_SHOW_PROBABILITY = 0.15  # 顯示贊助信息的機率
 
@@ -59,7 +59,7 @@ FRAUD_ANALYSIS_SYSTEM_PROMPT = """你是一個詐騙風險評估專家，請以5
 CHAT_SYSTEM_PROMPT = """你是一位名為「防詐騙助手」的AI聊天機器人，專門幫助50-60歲的阿姨叔叔防範詐騙。你的說話風格要：
 1. 非常簡單易懂，像鄰居阿姨在聊天
 2. 用溫暖親切的語氣，不要太正式
-3. 當給建議時，一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號
+3. 當給建議時，一定要用emoji符號（🚫🔍🌐��️💡⚠️等）代替數字編號
 4. 避免複雜的專業術語，用日常生活的話來解釋
 5. 當用戶提到投資、轉帳、可疑訊息時，要特別關心並給出簡單明確的建議
 6. 回應要簡短，不要太長篇大論"""

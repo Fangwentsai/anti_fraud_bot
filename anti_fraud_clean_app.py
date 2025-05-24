@@ -650,10 +650,10 @@ if handler:
         # 檢查是否為空訊息（移除觸發詞後）
         if not cleaned_message.strip():
             # 發送功能介紹
-            reply_text = f"您好！我是防詐騙小幫手，我的功能包括：\\n\\n" \
-                        f"1️⃣ 詐騙風險分析：我可以分析您收到的可疑訊息，評估是否為詐騙\\n\\n" \
-                        f"2️⃣ 詐騙類型查詢：您可以輸入「詐騙類型列表」查看各種常見詐騙\\n\\n" \
-                        f"3️⃣ 「防詐騙測試」小遊戲：通過遊戲學習辨識詐騙訊息\\n\\n" \
+            reply_text = f"您好！我是防詐騙小幫手，我的功能包括：\n\n" \
+                        f"1️⃣ 詐騙風險分析：我可以分析您收到的可疑訊息，評估是否為詐騙\n\n" \
+                        f"2️⃣ 詐騙類型查詢：您可以輸入「詐騙類型列表」查看各種常見詐騙\n\n" \
+                        f"3️⃣ 「防詐騙測試」小遊戲：通過遊戲學習辨識詐騙訊息\n\n" \
                         f"請選擇您想嘗試的功能："
                 
             # 如果在群組中，QuickReply按鈕需要包含觸發關鍵詞
@@ -690,16 +690,16 @@ if handler:
 
         # 檢查用戶詢問詐騙類型清單
         if any(keyword in cleaned_message for keyword in ["詐騙類型", "詐騙手法", "詐騙種類", "常見詐騙"]):
-            fraud_list = "🚨 **常見詐騙類型一覽** 🚨\\n\\n"
+            fraud_list = "🚨 **常見詐騙類型一覽** 🚨\n\n"
             for fraud_type, description in fraud_types.items():
-                fraud_list += f"🔸 **{fraud_type}**\\n   {description[:50]}...\\n\\n"
+                fraud_list += f"🔸 **{fraud_type}**\n   {description[:50]}...\n\n"
             
-            fraud_list += "💡 如需詳細了解某個詐騙類型，請直接輸入該詐騙名稱！\\n\\n"
+            fraud_list += "💡 如需詳細了解某個詐騙類型，請直接輸入該詐騙名稱！\n\n"
             fraud_list += "⚠️ 如果收到可疑訊息，請直接傳給我分析喔！"
             
             # 截斷過長的訊息
             if len(fraud_list) > LINE_MESSAGE_SAFE_LENGTH:
-                fraud_list = fraud_list[:LINE_MESSAGE_SAFE_LENGTH] + "\\n\\n(更多資訊請分別查詢各詐騙類型)"
+                fraud_list = fraud_list[:LINE_MESSAGE_SAFE_LENGTH] + "\n\n(更多資訊請分別查詢各詐騙類型)"
             
             line_bot_api.reply_message(reply_token, TextSendMessage(text=fraud_list))
             return
@@ -707,12 +707,12 @@ if handler:
         # 檢查是否詢問特定詐騙類型
         for fraud_type, description in fraud_types.items():
             if fraud_type in cleaned_message:
-                response_text = f"🚨 **{fraud_type}詳細說明** 🚨\\n\\n"
-                response_text += f"📋 **說明**：{description}\\n\\n"
-                response_text += "💡 **防範建議**：\\n"
-                response_text += "🛡️ 遇到任何要求提供個人資料或金錢的情況，請先暫停並諮詢家人\\n"
-                response_text += "🔍 對於可疑訊息，可以傳給我幫您分析\\n"
-                response_text += "📞 如有疑慮，請撥打165反詐騙專線\\n\\n"
+                response_text = f"🚨 **{fraud_type}詳細說明** 🚨\n\n"
+                response_text += f"📋 **說明**：{description}\n\n"
+                response_text += "💡 **防範建議**：\n"
+                response_text += "🛡️ 遇到任何要求提供個人資料或金錢的情況，請先暫停並諮詢家人\n"
+                response_text += "🔍 對於可疑訊息，可以傳給我幫您分析\n"
+                response_text += "📞 如有疑慮，請撥打165反詐騙專線\n\n"
                 response_text += f"如果您收到疑似{fraud_type}的訊息，歡迎直接傳給我分析！"
                 
                 line_bot_api.reply_message(reply_token, TextSendMessage(text=response_text))
@@ -733,11 +733,14 @@ if handler:
             if analysis_result["success"]:
                 # 記錄到Firebase
                 try:
-                    firebase_manager.log_fraud_detection(
+                    firebase_manager.save_user_interaction(
                         user_id=user_id,
+                        display_name=display_name,
                         message=cleaned_message,
-                        result=analysis_result["result"],
-                        display_name=display_name
+                        response=str(analysis_result["result"]),
+                        is_fraud_related=True,
+                        fraud_type=analysis_result["result"].get("fraud_type"),
+                        risk_level=analysis_result["result"].get("risk_level")
                     )
                 except Exception as e:
                     logger.error(f"記錄到Firebase時發生錯誤: {e}")
@@ -745,7 +748,7 @@ if handler:
                 # 檢查是否為網域變形攻擊
                 if analysis_result["result"].get("is_domain_spoofing", False):
                     spoofing_result = analysis_result["result"]["spoofing_result"]
-                    flex_message = create_domain_spoofing_flex_message(spoofing_result, display_name)
+                    flex_message = create_domain_spoofing_flex_message(spoofing_result, display_name, cleaned_message)
                     
                     if should_send_wait:
                         # 使用push message發送結果（因為已經用過reply了）
@@ -754,7 +757,7 @@ if handler:
                         line_bot_api.reply_message(reply_token, flex_message)
                 else:
                     # 一般詐騙分析結果
-                    flex_message = create_analysis_flex_message(analysis_result["result"], display_name)
+                    flex_message = create_analysis_flex_message(analysis_result["result"], display_name, cleaned_message)
                     
                     if should_send_wait:
                         # 使用push message發送結果（因為已經用過reply了）
@@ -770,7 +773,7 @@ if handler:
                     except Exception as e:
                         logger.error(f"發送贊助訊息時發生錯誤: {e}")
             else:
-                error_message = f"抱歉，分析過程中遇到問題：{analysis_result['message']}\\n\\n如果是緊急情況，建議您：\\n🚫 暫時不要點擊任何連結\\n📞 撥打165反詐騙專線諮詢\\n👨‍👩‍👧‍👦 請家人朋友幫忙確認"
+                error_message = f"抱歉，分析過程中遇到問題：{analysis_result['message']}\n\n如果是緊急情況，建議您：\n🚫 暫時不要點擊任何連結\n📞 撥打165反詐騙專線諮詢\n👨‍👩‍👧‍👦 請家人朋友幫忙確認"
                 
                 if should_send_wait:
                     line_bot_api.push_message(user_id, TextSendMessage(text=error_message))
@@ -781,7 +784,7 @@ if handler:
 
         # 檢查是否詢問功能
         if any(keyword in cleaned_message for keyword in function_inquiry_keywords):
-            reply_text = f"您好 {display_name}！我是防詐騙機器人「防詐騙助手」，能幫您：\\n🔍 分析可疑訊息\\n🎯 測試您的防詐騙能力\\n📚 查詢各類詐騙手法"
+            reply_text = f"您好 {display_name}！我是防詐騙機器人「防詐騙助手」，能幫您：\n🔍 分析可疑訊息\n🎯 測試您的防詐騙能力\n📚 查詢各類詐騙手法"
             
             if is_group_message:
                 quick_reply = QuickReply(items=[
@@ -810,7 +813,7 @@ if handler:
                 line_bot_api.reply_message(reply_token, weather_flex)
             else:
                 # 發送錯誤訊息
-                error_text = f"抱歉，{weather_result['message']}\\n\\n💡 您可以試著這樣問：\\n• 今天天氣如何\\n• 台北天氣\\n• 明天會下雨嗎"
+                error_text = f"抱歉，{weather_result['message']}\n\n💡 您可以試著這樣問：\n• 今天天氣如何\n• 台北天氣\n• 明天會下雨嗎"
                 line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
             return
 
@@ -820,7 +823,7 @@ if handler:
             chat_response = openai_client.chat.completions.create(
                 model=OPENAI_MODEL,
                 messages=[
-                 {"role": "system", "content": "你是一位名為「防詐騙助手」的AI聊天機器人，專門幫助50-60歲的阿姨叔叔防範詐騙。你的說話風格要：\\n1. 非常簡單易懂，像鄰居阿姨在聊天\\n2. 用溫暖親切的語氣，不要太正式\\n3. 當給建議時，一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號\\n4. 避免複雜的專業術語，用日常生活的話來解釋\\n5. 當用戶提到投資、轉帳、可疑訊息時，要特別關心並給出簡單明確的建議\\n6. 回應要簡短，不要太長篇大論"},
+                 {"role": "system", "content": "你是一位名為「防詐騙助手」的AI聊天機器人，專門幫助50-60歲的阿姨叔叔防範詐騙。你的說話風格要：\n1. 非常簡單易懂，像鄰居阿姨在聊天\n2. 用溫暖親切的語氣，不要太正式\n3. 當給建議時，一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號\n4. 避免複雜的專業術語，用日常生活的話來解釋\n5. 當用戶提到投資、轉帳、可疑訊息時，要特別關心並給出簡單明確的建議\n6. 回應要簡短，不要太長篇大論"},
                  {"role": "user", "content": cleaned_message}
                 ],
                 temperature=CHAT_TEMPERATURE,
@@ -835,13 +838,13 @@ if handler:
                     tips = get_anti_fraud_tips()
                     if tips:
                         random_tip = random.choice(tips)
-                        chat_reply += f"\\n\\n💡 小提醒：{random_tip}"
+                        chat_reply += f"\n\n💡 小提醒：{random_tip}"
                 
                 # 確保回覆不會太長
                 if len(chat_reply) > LINE_MESSAGE_SAFE_LENGTH:
                     chat_reply = chat_reply[:LINE_MESSAGE_SAFE_LENGTH] + "..."
                 
-                introduction = f"\\n\\n我是防詐騙機器人「防詐騙助手」，能幫您：\\n🔍 分析可疑訊息\\n🎯 測試您的防詐騙能力\\n📚 查詢各類詐騙手法"
+                introduction = f"\n\n我是防詐騙機器人「防詐騙助手」，能幫您：\n🔍 分析可疑訊息\n🎯 測試您的防詐騙能力\n📚 查詢各類詐騙手法"
                 
                 # 如果是首次聊天，添加自我介紹
                 if user_id not in first_time_chatters:
@@ -904,7 +907,7 @@ if handler:
                     
                 elif action == 'fraud_stats':
                     # 顯示詐騙統計（未來功能）
-                    stats_message = "📊 詐騙統計功能開發中，敬請期待！\\n\\n目前可用功能：\\n🔍 詐騙訊息分析\\n🎯 防詐騙測試\\n📚 詐騙類型查詢"
+                    stats_message = "📊 詐騙統計功能開發中，敬請期待！\n\n目前可用功能：\n🔍 詐騙訊息分析\n🎯 防詐騙測試\n📚 詐騙類型查詢"
                     line_bot_api.reply_message(reply_token, TextSendMessage(text=stats_message))
                     
                 else:
