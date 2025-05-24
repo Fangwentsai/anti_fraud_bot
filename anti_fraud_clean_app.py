@@ -840,6 +840,27 @@ if handler:
         reply_text = ""
         is_fraud_related = False
         
+        # 首先檢查是否為天氣查詢
+        if is_weather_related(text_message):
+            logger.info(f"Weather query detected from {user_id}: {text_message}")
+            weather_response = handle_weather_query(text_message, display_name)
+            
+            if weather_response:
+                if is_group_message:
+                    mention_message = create_mention_message(weather_response, display_name, user_id)
+                    line_bot_api.reply_message(reply_token, mention_message)
+                else:
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text=weather_response))
+                
+                # 保存天氣查詢互動記錄
+                firebase_manager.save_user_interaction(
+                    user_id, display_name, text_message, weather_response,
+                    is_fraud_related=False,
+                    fraud_type=None,
+                    risk_level=None
+                )
+                return
+        
         # 判斷是否需要進行詐騙分析
         if should_perform_fraud_analysis(text_message):
             logger.info(f"Performing fraud analysis for message from {user_id}: {text_message}")
