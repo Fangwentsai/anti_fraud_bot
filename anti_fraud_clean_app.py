@@ -826,9 +826,16 @@ if handler:
                     page_match = re.search(r'第(\d+)頁', cleaned_message)
                     page = int(page_match.group(1)) if page_match else 1
                     
-                    # 使用Flex Message顯示詐騙類型詳細信息
-                    fraud_detail_flex = create_fraud_detail_flex_message(fraud_type, info, display_name, page)
+                    # 創建詐騙類型詳情Flex Message
+                    fraud_detail_flex = flex_message_service.create_fraud_detail_flex_message(
+                        fraud_type, 
+                        info, 
+                        display_name, 
+                        page
+                    )
+                    
                     line_bot_api.reply_message(reply_token, fraud_detail_flex)
+                    return
                 except Exception as e:
                     logger.error(f"創建詐騙類型詳細信息Flex Message失敗: {e}")
                     

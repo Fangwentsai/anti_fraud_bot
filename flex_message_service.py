@@ -632,6 +632,7 @@ class FlexMessageService:
         real_case = fraud_info.get("真實案例", {})
         case_description = real_case.get("案例描述", "")
         loss_amount = real_case.get("損失金額", "")
+        fraud_channels = real_case.get("詐騙管道", [])
         
         # 分頁邏輯 - 內容按頁分配
         # 計算總頁數（最少1頁，最多4頁）
@@ -690,12 +691,98 @@ class FlexMessageService:
                     )
                 )
             else:
-                # 如果沒有描述，則顯示默認內容
+                # 如果沒有描述，則顯示默認內容並加入風險等級說明
                 body_contents.append(
                     TextComponent(
-                        text=f"這是一種常見的{fraud_type}，請注意以下特徵和防範方法。",
+                        text=f"這是一種常見的{fraud_type}，風險等級為「{risk_level}」。請注意以下特徵和防範方法。",
                         wrap=True,
                         size="md",
+                        margin="md"
+                    )
+                )
+                
+            # 添加風險等級指示
+            body_contents.append(
+                BoxComponent(
+                    layout="vertical",
+                    margin="lg",
+                    contents=[
+                        BoxComponent(
+                            layout="baseline",
+                            contents=[
+                                TextComponent(
+                                    text="風險等級:",
+                                    weight="bold",
+                                    size="md",
+                                    color="#555555",
+                                    flex=3
+                                ),
+                                TextComponent(
+                                    text=risk_level,
+                                    weight="bold",
+                                    size="md",
+                                    color=self._get_risk_color(risk_level),
+                                    flex=5
+                                )
+                            ]
+                        )
+                    ]
+                )
+            )
+            
+            # 添加常見話術預覽（如果有）
+            if common_tactics and len(common_tactics) > 0:
+                body_contents.append(
+                    TextComponent(
+                        text="📝 常見話術預覽",
+                        weight="bold",
+                        size="md",
+                        margin="lg",
+                        color="#1f76de"
+                    )
+                )
+                
+                # 只顯示前3個話術作為預覽
+                tactics_text = ""
+                for i, tactic in enumerate(common_tactics[:3]):
+                    tactics_text += f"• {tactic}\n"
+                
+                if len(common_tactics) > 3:
+                    tactics_text += "...更多常見話術請見下一頁"
+                
+                body_contents.append(
+                    TextComponent(
+                        text=tactics_text.strip(),
+                        wrap=True,
+                        size="sm",
+                        margin="md"
+                    )
+                )
+            elif fraud_process and len(fraud_process) > 0:
+                # 如果沒有常見話術但有詐騙流程，顯示詐騙流程預覽
+                body_contents.append(
+                    TextComponent(
+                        text="🔄 詐騙流程預覽",
+                        weight="bold",
+                        size="md",
+                        margin="lg",
+                        color="#1f76de"
+                    )
+                )
+                
+                # 只顯示前3個流程步驟作為預覽
+                process_text = ""
+                for i, step in enumerate(fraud_process[:3]):
+                    process_text += f"{i+1}. {step}\n"
+                
+                if len(fraud_process) > 3:
+                    process_text += "...更多詐騙流程請見下一頁"
+                
+                body_contents.append(
+                    TextComponent(
+                        text=process_text.strip(),
+                        wrap=True,
+                        size="sm",
                         margin="md"
                     )
                 )
@@ -754,6 +841,55 @@ class FlexMessageService:
                     )
                 )
             
+            # 如果沒有常見話術和詐騙流程，顯示警示信號或防詐技巧
+            if not common_tactics and not fraud_process:
+                if warning_signals and len(warning_signals) > 0:
+                    body_contents.append(
+                        TextComponent(
+                            text="⚠️ 警示信號",
+                            weight="bold",
+                            size="md",
+                            margin="lg",
+                            color="#1f76de"
+                        )
+                    )
+                    
+                    signals_text = ""
+                    for signal in warning_signals:
+                        signals_text += f"• {signal}\n"
+                    
+                    body_contents.append(
+                        TextComponent(
+                            text=signals_text.strip(),
+                            wrap=True,
+                            size="sm",
+                            margin="md"
+                        )
+                    )
+                elif prevention_tips and len(prevention_tips) > 0:
+                    body_contents.append(
+                        TextComponent(
+                            text="🛡️ 防詐技巧",
+                            weight="bold",
+                            size="md",
+                            margin="lg",
+                            color="#1f76de"
+                        )
+                    )
+                    
+                    tips_text = ""
+                    for tip in prevention_tips:
+                        tips_text += f"• {tip}\n"
+                    
+                    body_contents.append(
+                        TextComponent(
+                            text=tips_text.strip(),
+                            wrap=True,
+                            size="sm",
+                            margin="md"
+                        )
+                    )
+        
         elif page == 3:
             # 第3頁：顯示真實案例和警示信號
             # 添加真實案例區塊
@@ -788,6 +924,16 @@ class FlexMessageService:
                         )
                     )
                 
+                if fraud_channels and len(fraud_channels) > 0:
+                    body_contents.append(
+                        TextComponent(
+                            text=f"詐騙管道: {', '.join(fraud_channels)}",
+                            size="sm",
+                            color="#555555",
+                            margin="sm"
+                        )
+                    )
+                
                 body_contents.append(SeparatorComponent(margin="lg"))
             
             # 添加警示信號區塊
@@ -798,12 +944,12 @@ class FlexMessageService:
                         weight="bold",
                         size="md",
                         margin="lg",
-                        color="#E74C3C"
+                        color="#1f76de"
                     )
                 )
                 
                 signals_text = ""
-                for signal in warning_signals:  # 顯示全部警示信號
+                for signal in warning_signals:
                     signals_text += f"• {signal}\n"
                 
                 body_contents.append(
@@ -815,9 +961,34 @@ class FlexMessageService:
                     )
                 )
             
+            # 如果沒有真實案例和警示信號，顯示防詐技巧
+            if not case_description and not warning_signals:
+                if prevention_tips and len(prevention_tips) > 0:
+                    body_contents.append(
+                        TextComponent(
+                            text="🛡️ 防詐技巧",
+                            weight="bold",
+                            size="md",
+                            margin="lg",
+                            color="#1f76de"
+                        )
+                    )
+                    
+                    tips_text = ""
+                    for tip in prevention_tips:
+                        tips_text += f"• {tip}\n"
+                    
+                    body_contents.append(
+                        TextComponent(
+                            text=tips_text.strip(),
+                            wrap=True,
+                            size="sm",
+                            margin="md"
+                        )
+                    )
+        
         elif page == 4:
             # 第4頁：顯示防詐技巧
-            # 添加防詐技巧區塊
             if prevention_tips and len(prevention_tips) > 0:
                 body_contents.append(
                     TextComponent(
@@ -825,12 +996,12 @@ class FlexMessageService:
                         weight="bold",
                         size="md",
                         margin="lg",
-                        color="#2ECC71"
+                        color="#1f76de"
                     )
                 )
                 
                 tips_text = ""
-                for tip in prevention_tips:  # 顯示全部防詐技巧
+                for tip in prevention_tips:
                     tips_text += f"• {tip}\n"
                 
                 body_contents.append(
@@ -841,16 +1012,87 @@ class FlexMessageService:
                         margin="md"
                     )
                 )
-                
-                body_contents.append(
-                    TextComponent(
-                        text="📞 如有任何疑問，請撥打165反詐騙專線",
-                        size="sm",
-                        color="#888888",
-                        margin="lg",
-                        align="center"
+            else:
+                # 如果沒有防詐技巧，顯示其他可能缺失的資訊
+                if not common_tactics and not fraud_process and not warning_signals and not case_description:
+                    body_contents.append(
+                        TextComponent(
+                            text="⚠️ 重要提醒",
+                            weight="bold",
+                            size="md",
+                            margin="lg",
+                            color="#1f76de"
+                        )
                     )
+                    
+                    body_contents.append(
+                        TextComponent(
+                            text=f"遇到{fraud_type}請立即停止與對方聯繫，並撥打165反詐騙專線尋求協助。",
+                            wrap=True,
+                            size="md",
+                            margin="md"
+                        )
+                    )
+                else:
+                    # 顯示已有資訊的摘要
+                    body_contents.append(
+                        TextComponent(
+                            text="📌 謹記要點",
+                            weight="bold",
+                            size="md",
+                            margin="lg",
+                            color="#1f76de"
+                        )
+                    )
+                    
+                    summary_text = f"• {fraud_type}風險等級：{risk_level}\n"
+                    if common_tactics and len(common_tactics) > 0:
+                        summary_text += f"• 常見話術：{len(common_tactics)}種\n"
+                    if fraud_process and len(fraud_process) > 0:
+                        summary_text += f"• 詐騙流程：{len(fraud_process)}步驟\n"
+                    if warning_signals and len(warning_signals) > 0:
+                        summary_text += f"• 警示信號：{len(warning_signals)}種\n"
+                    
+                    body_contents.append(
+                        TextComponent(
+                            text=summary_text.strip(),
+                            wrap=True,
+                            size="sm",
+                            margin="md"
+                        )
+                    )
+            
+            # 添加最後提醒
+            body_contents.append(
+                TextComponent(
+                    text="📞 如有任何疑問，請撥打165反詐騙專線",
+                    size="sm",
+                    color="#888888",
+                    margin="lg",
+                    align="center"
                 )
+            )
+        
+        # 如果頁面內容為空，顯示一些基本信息
+        if len(body_contents) <= 2:  # 只有頁碼指示器和分隔線
+            body_contents.append(
+                TextComponent(
+                    text=f"{fraud_type}相關資訊",
+                    weight="bold",
+                    size="md",
+                    margin="lg",
+                    color="#1f76de"
+                )
+            )
+            
+            body_contents.append(
+                TextComponent(
+                    text="此頁面資訊暫時無法顯示，請查看其他頁面了解更多詳情。",
+                    wrap=True,
+                    size="md",
+                    margin="md"
+                )
+            )
         
         # 創建頁面導航按鈕
         footer_contents = []
