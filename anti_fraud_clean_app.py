@@ -507,13 +507,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
             logger.warning(f"無法展開的短網址: {original_url}，建議提高警覺")
         
         openai_prompt = f"""
-        你是一位名為「防詐騙助手」的AI聊天機器人，專門幫助50-60歲的長輩防範詐騙。你的說話風格要：
-        1. 非常簡單易懂，像鄰居朋友在聊天
-        2. 用溫暖親切的語氣，不要太正式
-        3. 當給建議時，一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號
-        4. 避免複雜的專業術語，用日常生活的話來解釋
-        5. 當用戶提到投資、轉帳、可疑訊息時，要特別關心並給出簡單明確的建議
-        6. 回應要簡短，不要太長篇大論
+        你是一位名為「防詐騙助手」的AI聊天機器人，專門幫助50-60歲的長輩防範詐騙。
         
         {special_notes}
         
@@ -522,7 +516,13 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         {analysis_message}
         ---
         
-        請用繁體中文回答，避免直接使用問候語。直接開始分析。回答應簡潔直接，像是鄰居朋友給出的貼心提醒。
+        請按照以下固定格式回答，每一行都必須包含：
+        
+        風險等級：[極高/高/中高/中/低/極低/無風險]
+        詐騙類型：[具體的詐騙類型，如：釣魚網站、假交友詐騙、投資詐騙等]
+        說明：[用簡單易懂的話解釋為什麼有風險或沒有風險，像鄰居朋友在聊天的語氣，避免複雜術語]
+        建議：[用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號，給出簡單明確的防範建議]
+        新興手法：[是/否]
         """
         
         # 調用OpenAI API (修正為新版API格式)
@@ -1316,6 +1316,18 @@ if handler:
                             logger.error(f"LINE API其他錯誤: {e}")
                     except Exception as e:
                         logger.error(f"發送統一按鈕時發生未知錯誤: {e}")
+                        
+                elif action == 'report_feedback':
+                    # 回報註記功能（開發中）
+                    feedback_message = f"📝 回報註記功能開發中！\n\n" \
+                                     f"感謝 {display_name} 想要回報分析結果的意見。\n\n" \
+                                     f"這個功能正在開發中，之後您可以：\n" \
+                                     f"• 👍 標記分析結果是否準確\n" \
+                                     f"• 📝 提供改善建議\n" \
+                                     f"• 🚨 回報漏判或誤判\n\n" \
+                                     f"敬請期待！🎉"
+                    
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text=feedback_message))
                     
                 # elif action == 'fraud_stats':
                 else:

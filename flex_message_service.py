@@ -119,28 +119,39 @@ class FlexMessageService:
                     )
                 ]
             ),
-            # footer=BoxComponent(
-            #     layout='vertical',
-            #     spacing='sm',
-            #     contents=[
-            #         ButtonComponent(
-            #             style='primary',
-            #             height='sm',
-            #             action=URIAction(
-            #                 label='📞 撥打165反詐騙專線',
-            #                 uri='tel:165'
-            #             )
-            #         ),
-            #         ButtonComponent(
-            #             style='secondary',
-            #             height='sm',
-            #             action=PostbackAction(
-            #                 label='🎮 玩土豆遊戲放鬆一下',
-            #                 data=f'action=potato_game&user_id={safe_user_id}'
-            #             )
-            #         )
-            #     ]
-            # )
+            footer=BoxComponent(
+                layout='vertical',
+                spacing='sm',
+                contents=[
+                    ButtonComponent(
+                        style='primary',
+                        height='sm',
+                        action=MessageAction(
+                            label='🔄 再測一次',
+                            text='土豆 請幫我分析這則訊息：'
+                        ),
+                        color='#4ECDC4'
+                    ),
+                    ButtonComponent(
+                        style='secondary',
+                        height='sm',
+                        action=PostbackAction(
+                            label='🏠 回到首頁',
+                            data=f'action=show_main_menu&user_id={safe_user_id}'
+                        ),
+                        color='#96CEB4'
+                    ),
+                    ButtonComponent(
+                        style='secondary',
+                        height='sm',
+                        action=PostbackAction(
+                            label='📝 回報註記',
+                            data=f'action=report_feedback&user_id={safe_user_id}'
+                        ),
+                        color='#FFB74D'
+                    )
+                ]
+            )
         )
         
         return FlexSendMessage(alt_text=f"詐騙風險分析：{risk_level}", contents=bubble)
