@@ -141,8 +141,23 @@ class FlexMessageService:
         similarity_score = spoofing_result.get("similarity_score", 0)
         
         # 從safe_domains.json獲取正版網站的描述
-        from anti_fraud_clean_app import SAFE_DOMAINS
-        legitimate_description = SAFE_DOMAINS.get(legitimate_domain, "正版網站")
+        try:
+            import json
+            import os
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            safe_domains_path = os.path.join(script_dir, 'safe_domains.json')
+            
+            with open(safe_domains_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                # 扁平化分類的安全網域字典
+                flattened_safe_domains = {}
+                for category, domains in data['safe_domains'].items():
+                    if isinstance(domains, dict):
+                        flattened_safe_domains.update(domains)
+            
+            legitimate_description = flattened_safe_domains.get(legitimate_domain, "正版網站")
+        except Exception as e:
+            legitimate_description = "正版網站"
         
         # 生成可疑網域的說明
         suspicious_explanation = self._generate_suspicious_domain_explanation(
@@ -176,10 +191,11 @@ class FlexMessageService:
                 spacing='md',
                 contents=[
                     TextComponent(
-                        text=f"@{display_name}",
+                        text="⚠️ 詐騙集團可能假冒此網域騙取您的信用卡或銀行帳戶個資，請務必小心！",
                         weight='bold',
-                        size='lg',
-                        color=self.colors["primary"]
+                        size='md',
+                        color=self.colors["danger"],
+                        wrap=True
                     ),
                     SeparatorComponent(margin='md'),
                     TextComponent(
@@ -232,7 +248,7 @@ class FlexMessageService:
                         margin='md'
                     ),
                     TextComponent(
-                        text="🚫 立即停止使用此網站\n🔍 確認網址拼寫是否正確\n🌐 直接搜尋正版網站名稱\n🛡️ 如已輸入資料請立即更改密碼",
+                        text="🚫 立即停止使用此網站\n🔍 確認網址拼寫是否正確\n🌐 直接搜尋正版網站名稱\n🛡️ 如已輸入資料請立即更改密碼\n💳 檢查信用卡及銀行帳戶異常",
                         size='sm',
                         color=self.colors["secondary"],
                         wrap=True,
