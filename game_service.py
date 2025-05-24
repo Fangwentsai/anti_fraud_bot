@@ -118,10 +118,19 @@ class GameService:
     def create_game_flex_message(self, question_data: Dict, user_id: str) -> FlexSendMessage:
         """創建遊戲問題的 Flex Message"""
         
-        # 使用正確的JSON字段名
-        question = question_data.get("fraud_message", "")  # 從JSON獲取詐騙訊息作為問題
-        fraud_type = question_data.get("fraud_type", "詐騙檢測")  # 詐騙類型
-        options = question_data.get("options", [])
+        # 檢查問題格式並適配
+        if "question" in question_data:
+            # 真正的土豆問題格式
+            question = question_data.get("question", "")
+            game_type = "🥔 土豆知識"
+            question_prompt = question
+            options = question_data.get("options", [])
+        else:
+            # 詐騙問題格式
+            question = question_data.get("fraud_message", "")
+            game_type = f"🎯 {question_data.get('fraud_type', '詐騙檢測')}"
+            question_prompt = "以下哪一個是詐騙訊息？"
+            options = question_data.get("options", [])
         
         # 創建選項按鈕
         option_buttons = []
@@ -151,14 +160,14 @@ class GameService:
         # 在body中顯示完整的選項內容
         body_contents = [
             TextComponent(
-                text=f"🎯 {fraud_type}",
+                text=game_type,
                 weight='bold',
                 size='lg',
                 color='#1DB446'
             ),
             SeparatorComponent(margin='md'),
             TextComponent(
-                text="以下哪一個是詐騙訊息？",
+                text=question_prompt,
                 size='md',
                 weight='bold',
                 margin='md',
@@ -188,6 +197,14 @@ class GameService:
                 )
             )
         
+        # 根據問題類型設置標題
+        if "question" in question_data:
+            header_title = "🥔 土豆小遊戲"
+            header_subtitle = "測試你的土豆知識！"
+        else:
+            header_title = "🎮 防詐騙小遊戲"
+            header_subtitle = "測試你的防詐騙知識！"
+        
         bubble = BubbleContainer(
             direction='ltr',
             header=BoxComponent(
@@ -196,13 +213,13 @@ class GameService:
                 background_color='#FF6B6B',
                 contents=[
                     TextComponent(
-                        text="🎮 防詐騙小遊戲",
+                        text=header_title,
                         weight='bold',
                         color='#ffffff',
                         size='xl'
                     ),
                     TextComponent(
-                        text="測試你的防詐騙知識！",
+                        text=header_subtitle,
                         color='#ffffff',
                         size='md'
                     )
@@ -221,7 +238,7 @@ class GameService:
             )
         )
         
-        return FlexSendMessage(alt_text="防詐騙小遊戲", contents=bubble)
+        return FlexSendMessage(alt_text=header_title, contents=bubble)
     
     def handle_game_answer(self, user_id: str, answer_index: int) -> Tuple[bool, str, Optional[str]]:
         """處理遊戲答案"""
@@ -235,13 +252,20 @@ class GameService:
             return False, "你已經回答過這個問題了！", None
         
         question_data = game_state["question"]
-        correct_option_letter = question_data.get("correct_option", "A")  # 從JSON獲取字母
-        explanation = question_data.get("explanation", "")
-        fraud_tip = question_data.get("fraud_tip", "")
         options = question_data.get("options", [])
         
-        # 將字母轉換為索引 (A=0, B=1, C=2...)
-        correct_answer_index = ord(correct_option_letter) - ord('A')
+        # 檢查問題格式並獲取正確答案
+        if "question" in question_data:
+            # 真正的土豆問題格式
+            correct_answer_index = question_data.get("correct_answer", 0)
+            explanation = question_data.get("explanation", "")
+            fraud_tip = question_data.get("fraud_tip", "")
+        else:
+            # 詐騙問題格式
+            correct_option_letter = question_data.get("correct_option", "A")
+            correct_answer_index = ord(correct_option_letter) - ord('A')
+            explanation = question_data.get("explanation", "")
+            fraud_tip = question_data.get("fraud_tip", "")
         
         # 標記為已回答
         self.user_game_state[user_id]["answered"] = True
@@ -380,7 +404,57 @@ def start_potato_game(user_id: str) -> Tuple[Optional[FlexSendMessage], Optional
 def handle_potato_game_answer(user_id: str, answer_index: int) -> Tuple[bool, FlexSendMessage]:
     """處理土豆遊戲答案的便捷函數"""
     is_correct, result_message, fraud_tip = game_service.handle_game_answer(user_id, answer_index)
-    flex_message = game_service.create_game_result_flex_message(is_correct, result_message, user_id)
+    
+    # 如果result_message是字符串（錯誤訊息），創建錯誤的FlexMessage
+    if isinstance(result_message, str) and not is_correct and ("遊戲狀態不存在" in result_message or "已經回答過" in result_message):
+        # 創建錯誤訊息的FlexMessage
+        error_bubble = BubbleContainer(
+            direction='ltr',
+            header=BoxComponent(
+                layout='vertical',
+                padding_all='20px',
+                background_color='#FF6B6B',
+                contents=[
+                    TextComponent(
+                        text="⚠️ 遊戲錯誤",
+                        weight='bold',
+                        color='#ffffff',
+                        size='xl'
+                    )
+                ]
+            ),
+            body=BoxComponent(
+                layout='vertical',
+                padding_all='20px',
+                spacing='md',
+                contents=[
+                    TextComponent(
+                        text=result_message,
+                        size='md',
+                        wrap=True,
+                        color='#464F69'
+                    )
+                ]
+            ),
+            footer=BoxComponent(
+                layout='vertical',
+                spacing='sm',
+                contents=[
+                    ButtonComponent(
+                        style='primary',
+                        height='sm',
+                        action=PostbackAction(
+                            label='🎮 重新開始',
+                            data=f'action=start_potato_game&user_id={user_id}'
+                        )
+                    )
+                ]
+            )
+        )
+        flex_message = FlexSendMessage(alt_text="遊戲錯誤", contents=error_bubble)
+    else:
+        flex_message = game_service.create_game_result_flex_message(is_correct, result_message, user_id)
+    
     return is_correct, flex_message
 
 def is_game_trigger(message: str) -> bool:
