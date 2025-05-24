@@ -219,6 +219,7 @@ fraud_types = load_fraud_tactics()  # 從模組載入
 
 # 載入詐騙話術資料 - 使用模組化版本
 fraud_tactics = load_fraud_tactics()
+logger.info(f"成功載入詐騙類型：{', '.join(fraud_tactics.keys())}")
 
 def create_suspicious_ad_warning_message(display_name, ad_description="兼職計劃旅程"):
     """創建可疑廣告警告訊息，使用emoji代替數字編號"""

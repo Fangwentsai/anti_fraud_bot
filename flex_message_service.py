@@ -592,6 +592,10 @@ class FlexMessageService:
     def create_fraud_detail_flex_message(self, fraud_type: str, fraud_info: Dict, display_name: str = "朋友") -> FlexSendMessage:
         """創建詐騙類型詳細信息的Flex Message"""
         
+        # 記錄收到的詐騙類型信息
+        logger.info(f"創建詐騙類型詳情 Flex Message: {fraud_type}")
+        logger.info(f"詐騙類型信息: {fraud_info}")
+        
         # 獲取詐騙類型信息
         description = fraud_info.get("description", "無相關說明")
         risk_level = fraud_info.get("risk_level", "中")
@@ -748,15 +752,6 @@ def create_fraud_types_flex_message(fraud_tactics: Dict, display_name: str = "�
     # 創建詐騙類型按鈕列表
     type_contents = []
     
-    # 從fraud_knowledge.py中獲取的詐騙類型
-    main_fraud_types = [
-        "假交友投資詐騙", 
-        "假網購詐騙", 
-        "假冒機構詐騙", 
-        "假親友急難詐騙", 
-        "假求職詐騙"
-    ]
-    
     # 添加標題
     type_contents.append(
         TextComponent(
@@ -771,22 +766,21 @@ def create_fraud_types_flex_message(fraud_tactics: Dict, display_name: str = "�
     # 統一按鈕顏色
     button_color = "#E8F4FD"  # 統一使用淺藍色
     
-    # 為每個詐騙類型創建按鈕
-    for fraud_type in main_fraud_types:
-        if fraud_type in fraud_tactics:
-            # 添加該詐騙類型的按鈕
-            type_contents.append(
-                ButtonComponent(
-                    style="secondary",
-                    height="sm",
-                    action=MessageAction(
-                        label=f"{fraud_type}",
-                        text=f"土豆 什麼是{fraud_type}"
-                    ),
-                    color=button_color,
-                    margin="md"
-                )
+    # 為所有詐騙類型創建按鈕
+    for fraud_type in fraud_tactics.keys():
+        # 添加該詐騙類型的按鈕
+        type_contents.append(
+            ButtonComponent(
+                style="secondary",
+                height="sm",
+                action=MessageAction(
+                    label=f"{fraud_type}",
+                    text=f"土豆 什麼是{fraud_type}"
+                ),
+                color=button_color,
+                margin="md"
             )
+        )
     
     # 添加分隔線
     type_contents.append(
