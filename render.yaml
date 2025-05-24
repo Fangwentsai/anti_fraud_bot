@@ -2,7 +2,9 @@ services:
   - type: web
     name: anti-fraud-linebot
     env: python
-    buildCommand: pip install -r requirements.txt
+    region: oregon
+    plan: free
+    buildCommand: chmod +x deploy.sh && pip install -r requirements.txt
     startCommand: python anti_fraud_clean_app.py
     envVars:
       - key: PORT
