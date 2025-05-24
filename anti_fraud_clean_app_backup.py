@@ -223,105 +223,204 @@ def get_user_profile(user_id):
         logger.error(f"獲取用戶 {user_id} 個人資料失敗: {e}")
         return None
 
-# 解析OpenAI返回的詐騙分析結果
+# 分析詐騙風險並解析結果
 def parse_fraud_analysis(analysis_result):
-    """解析OpenAI返回的詐騙分析結果"""
-    try:
-        lines = analysis_result.strip().split('\n')
-        result = {
-            "risk_level": "中風險",
-            "fraud_type": "未知",
-            "explanation": "無法解析分析結果。",
-            "suggestions": "建議謹慎處理。",
-            "is_emerging": False
-        }
-        
-        for line in lines:
-            line = line.strip()
-            if line.startswith("風險等級：") or line.startswith("風險等級:"):
-                result["risk_level"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
-            elif line.startswith("詐騙類型：") or line.startswith("詐騙類型:"):
-                result["fraud_type"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
-            elif line.startswith("說明：") or line.startswith("說明:"):
-                result["explanation"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
-            elif line.startswith("建議：") or line.startswith("建議:"):
-                result["suggestions"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
-            elif line.startswith("新興手法：") or line.startswith("新興手法:"):
-                emerging_text = line.split("：", 1)[-1].split(":", 1)[-1].strip()
-                result["is_emerging"] = emerging_text in ["是", "Yes", "true", "True"]
-        
-        # 如果說明為空，嘗試從整個回應中提取
-        if not result["explanation"] or result["explanation"] == "無法解析分析結果。":
-            # 移除標籤，取得剩餘內容作為說明
-            clean_text = analysis_result
-            for prefix in ["風險等級：", "風險等級:", "詐騙類型：", "詐騙類型:", "說明：", "說明:", "建議：", "建議:", "新興手法：", "新興手法:"]:
-                clean_text = clean_text.replace(prefix, "")
-            
-            # 清理並取得有意義的內容
-            clean_lines = [line.strip() for line in clean_text.split('\n') if line.strip()]
-            if clean_lines:
-                result["explanation"] = clean_lines[0]
-        
-        return result
-        
-    except Exception as e:
-        logger.error(f"解析詐騙分析結果時發生錯誤: {e}")
+    """
+    從ChatGPT的回應中解析出詐騙分析結果。
+    預期格式：
+    風險等級：[高/中/低/無風險/不確定]
+    可能詐騙類型：[類型1, 類型2, ... 或 不適用]
+    說明：[具體說明]
+    建議：[具體建議] 
+    新興手法：[是/否] (可選)
+    """
+    if not analysis_result:
         return {
-            "risk_level": "中風險",
-            "fraud_type": "解析錯誤",
-            "explanation": "分析結果解析失敗，建議人工檢查。",
-            "suggestions": "🔍 請仔細檢查內容\n🛡️ 如有疑慮請諮詢專家",
+            "risk_level": "不確定",
+            "fraud_type": "未知",
+            "explanation": "無法獲取分析結果。",
+            "suggestions": "請稍後再試或聯繫客服。",
             "is_emerging": False
         }
 
-def _is_legitimate_subdomain(subdomain_part):
-    """檢查子網域部分是否合法"""
-    # 合法的子網域特徵
-    if not subdomain_part or len(subdomain_part) > 20:  # 太長的子網域可疑
-        return False
+    # 初始結果字典，包含預設值
+    result = {
+        "risk_level": "不確定",
+        "fraud_type": "未知",
+        "explanation": "無法解析分析結果。",
+        "suggestions": "請保持警惕，如有疑問可諮詢165反詐騙專線。",
+        "is_emerging": False
+    }
+
+    try:
+        # 先處理最常見的情況：JSON格式
+        if analysis_result.strip().startswith('{') and analysis_result.strip().endswith('}'):
+            import json
+            try:
+                # 嘗試解析JSON
+                parsed_data = json.loads(analysis_result)
+                
+                # 風險等級 - 處理各種可能的鍵名和格式
+                for key in ['risk_level', 'risk level', 'riskLevel', '風險等級', '風險']:
+                    if key in parsed_data and parsed_data[key]:
+                        result["risk_level"] = parsed_data[key]
+                        break
+                
+                # 詐騙類型 - 處理各種可能的鍵名和格式
+                for key in ['fraud_type', 'type', 'fraudType', '詐騙類型', '可能詐騙類型', '類型']:
+                    if key in parsed_data and parsed_data[key]:
+                        result["fraud_type"] = parsed_data[key]
+                        break
+                
+                # 處理"無"或"不適用"的詐騙類型
+                if result["fraud_type"].lower() in ["不適用", "無", "none", "n/a"]:
+                 result["fraud_type"] = "非詐騙相關"
+                
+                # 解釋說明 - 處理各種可能的鍵名和格式
+                for key in ['explanation', 'explain', '說明', '分析理由', '理由', '分析']:
+                    if key in parsed_data and parsed_data[key]:
+                        # 如果是列表，就用換行符合併
+                        if isinstance(parsed_data[key], list):
+                            result["explanation"] = '\n'.join(parsed_data[key])
+                        else:
+                            result["explanation"] = parsed_data[key]
+                        break
+                
+                # 建議 - 處理各種可能的鍵名和格式
+                for key in ['suggestions', 'suggestion', 'advice', '建議', '防範建議']:
+                    if key in parsed_data and parsed_data[key]:
+                        # 如果是列表，就用換行符合併
+                        if isinstance(parsed_data[key], list):
+                            result["suggestions"] = '\n'.join(parsed_data[key])
+                        else:
+                            result["suggestions"] = parsed_data[key]
+                        break
+                
+                # 新興手法 - 處理各種可能的鍵名和格式
+                for key in ['is_emerging', 'isEmerging', '新興手法', '是否新興']:
+                    if key in parsed_data:
+                        # 處理不同的布爾值格式
+                        val = parsed_data[key]
+                        if isinstance(val, bool):
+                            result["is_emerging"] = val
+                        elif isinstance(val, str):
+                            result["is_emerging"] = val.lower() in ['true', 'yes', '是', '1', 't', 'y']
+                        elif isinstance(val, int):
+                            result["is_emerging"] = val == 1
+                        break
+                
+                # 如果任何必要字段仍然缺少，我們可以通過原始文本進行進一步解析
+                if result["risk_level"] == "不確定" or result["fraud_type"] == "未知" or result["explanation"] == "無法解析分析結果。":
+                    # 繼續使用文本解析方法
+                    logger.info("JSON解析結果不完整，使用額外的文本解析")
+                else:
+                    return result
+
+            except json.JSONDecodeError as e:
+                # JSON解析失敗，使用文本解析
+                logger.warning(f"JSON解析失敗: {e}，改用文本解析")
+        
+        # 文本解析 - 增強的版本，可以處理各種格式
+        # 使用多種分隔符號和模式匹配
+        
+        # 1. 分析風險等級
+        risk_patterns = [
+            r'風險等級[：:]\s*(.+?)(?:\n|$)',
+            r'risk_level[：:]\s*(.+?)(?:\n|$)',
+            r'風險[：:]\s*(.+?)(?:\n|$)',
+            r'1\.\s*(?:風險等級)?[：:]\s*(.+?)(?:\n|$)'
+        ]
+        for pattern in risk_patterns:
+            import re
+            match = re.search(pattern, analysis_result, re.IGNORECASE)
+            if match:
+                result["risk_level"] = match.group(1).strip()
+                break
+        
+        # 2. 分析詐騙類型
+        fraud_patterns = [
+            r'詐騙類型[：:]\s*(.+?)(?:\n|$)',
+            r'fraud_type[：:]\s*(.+?)(?:\n|$)',
+            r'可能詐騙類型[：:]\s*(.+?)(?:\n|$)',
+            r'類型[：:]\s*(.+?)(?:\n|$)',
+            r'2\.\s*(?:詐騙類型)?[：:]\s*(.+?)(?:\n|$)'
+        ]
+        for pattern in fraud_patterns:
+            match = re.search(pattern, analysis_result, re.IGNORECASE)
+            if match:
+                fraud_type = match.group(1).strip()
+                if fraud_type.lower() in ["不適用", "無", "none", "n/a"]:
+                    fraud_type = "非詐騙相關"
+                result["fraud_type"] = fraud_type
+                break
+        
+        # 3. 分析理由/說明
+        explanation_patterns = [
+            r'說明[：:]\s*(.+?)(?=(?:建議|suggestions|suggestion|防範建議|新興手法|is_emerging|$))',
+            r'explanation[：:]\s*(.+?)(?=(?:建議|suggestions|suggestion|防範建議|新興手法|is_emerging|$))',
+            r'分析理由[：:]\s*(.+?)(?=(?:建議|suggestions|suggestion|防範建議|新興手法|is_emerging|$))',
+            r'理由[：:]\s*(.+?)(?=(?:建議|suggestions|suggestion|防範建議|新興手法|is_emerging|$))',
+            r'3\.\s*(?:分析理由)?[：:]\s*(.+?)(?=(?:4\.|建議|suggestions|suggestion|防範建議|新興手法|is_emerging|$))'
+        ]
+        for pattern in explanation_patterns:
+            match = re.search(pattern, analysis_result, re.IGNORECASE | re.DOTALL)
+            if match:
+                explanation = match.group(1).strip()
+                if explanation:
+                    result["explanation"] = explanation
+                break
+        
+        # 4. 防範建議
+        suggestion_patterns = [
+            r'建議[：:]\s*(.+?)(?=(?:新興手法|is_emerging|$))',
+            r'suggestions[：:]\s*(.+?)(?=(?:新興手法|is_emerging|$))',
+            r'suggestion[：:]\s*(.+?)(?=(?:新興手法|is_emerging|$))',
+            r'防範建議[：:]\s*(.+?)(?=(?:新興手法|is_emerging|$))',
+            r'4\.\s*(?:防範建議)?[：:]\s*(.+?)(?=$)'
+        ]
+        for pattern in suggestion_patterns:
+            match = re.search(pattern, analysis_result, re.IGNORECASE | re.DOTALL)
+            if match:
+                suggestions = match.group(1).strip()
+                if suggestions:
+                    result["suggestions"] = suggestions
+                break
+        
+        # 5. 新興手法
+        emerging_patterns = [
+            r'新興手法[：:]\s*(.+?)(?:\n|$)',
+            r'is_emerging[：:]\s*(.+?)(?:\n|$)'
+        ]
+        for pattern in emerging_patterns:
+            match = re.search(pattern, analysis_result, re.IGNORECASE)
+            if match:
+                emerging_text = match.group(1).strip().lower()
+                result["is_emerging"] = emerging_text in ["是", "true", "yes", "1", "t", "y"]
+                break
+        
+        # 確保結果中所有的文本字段不為空
+        for key in ["risk_level", "fraud_type", "explanation", "suggestions"]:
+            if not result[key] or result[key].strip() == "":
+                if key == "risk_level":
+                    result[key] = "不確定"
+                elif key == "fraud_type":
+                    result[key] = "未知"
+                elif key == "explanation":
+                    result[key] = "無法提取分析理由。"
+                elif key == "suggestions":
+                    result[key] = "請保持警惕，如有疑問可諮詢165反詐騙專線。"
+        
+        return result
     
-    # 常見的合法子網域前綴
-    legitimate_prefixes = [
-        'www', 'mail', 'email', 'webmail', 'smtp', 'pop', 'imap',
-        'ftp', 'sftp', 'api', 'app', 'mobile', 'm', 'wap',
-        'admin', 'secure', 'ssl', 'login', 'auth', 'account',
-        'shop', 'store', 'buy', 'order', 'cart', 'checkout',
-        'news', 'blog', 'forum', 'support', 'help', 'service',
-        'event', 'events', 'promo', 'promotion', 'campaign',
-        'member', 'members', 'user', 'users', 'profile',
-        'search', 'find', 'discover', 'explore',
-        'download', 'upload', 'file', 'files', 'doc', 'docs',
-        'img', 'image', 'images', 'pic', 'pics', 'photo', 'photos',
-        'video', 'videos', 'media', 'cdn', 'static', 'assets',
-        'dev', 'test', 'staging', 'beta', 'alpha', 'demo',
-        'tw', 'taiwan', 'hk', 'hongkong', 'cn', 'china',
-        'en', 'english', 'zh', 'chinese'
-    ]
-    
-    # 檢查是否為已知的合法前綴
-    if subdomain_part.lower() in legitimate_prefixes:
-        return True
-    
-    # 檢查是否包含可疑字元或模式
-    suspicious_patterns = [
-        '-tw-', '-official-', '-secure-', '-login-', '-bank-',
-        'phishing', 'fake', 'scam', 'fraud', 'malware'
-    ]
-    
-    for pattern in suspicious_patterns:
-        if pattern in subdomain_part.lower():
-            return False
-    
-    # 檢查是否只包含字母、數字和連字符
-    import re
-    if not re.match(r'^[a-zA-Z0-9-]+$', subdomain_part):
-        return False
-    
-    # 不能以連字符開始或結束
-    if subdomain_part.startswith('-') or subdomain_part.endswith('-'):
-        return False
-    
-    return True
+    except Exception as e:
+        logger.error(f"解析詐騙分析結果時發生錯誤: {e}")
+        return {
+            "risk_level": "不確定",
+            "fraud_type": "未知",
+            "explanation": "無法解析分析結果。系統錯誤，請稍後再試。",
+            "suggestions": "請保持警惕，如有疑問可諮詢165反詐騙專線。",
+            "is_emerging": False
+        }
 
 def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None):
     """使用OpenAI的API檢測詐騙信息"""
@@ -468,6 +567,31 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
             except Exception as e:
                 # URL解析失敗，繼續檢查下一個
                 continue
+        
+        # 如果沒有精確匹配，則進行包含檢查（保留原有邏輯作為備用）
+        for safe_domain in SAFE_DOMAINS.keys():
+            if safe_domain in analysis_message:
+                logger.info(f"檢測到白名單中的域名（包含匹配）: {safe_domain}")
+                # 獲取網站描述信息
+                site_description = SAFE_DOMAINS.get(safe_domain, "台灣常見的可靠網站")
+                return {
+                    "success": True,
+                    "message": "分析完成",
+                    "result": {
+                        "risk_level": "低風險",
+                        "fraud_type": "非詐騙相關",
+                        "explanation": f"這個網站是 {safe_domain}，{site_description}，可以安心使用。",
+                        "suggestions": "這是正規網站，不必特別擔心。如有疑慮，建議您直接從官方管道進入該網站。",
+                        "is_emerging": False,
+                        "display_name": display_name,
+                        "original_url": original_url,
+                        "expanded_url": expanded_url,
+                        "is_short_url": is_short_url,
+                        "url_expanded_successfully": url_expanded_successfully
+                    },
+                    "raw_result": f"經過分析，這是已知的可信任網站：{site_description}"
+                }
+
         # 如果是短網址但無法展開，提高風險評估
         special_notes = ""
         if is_short_url and not url_expanded_successfully:
