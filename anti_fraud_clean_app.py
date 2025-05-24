@@ -653,17 +653,17 @@ if handler:
         current_state = user_conversation_state.get(user_id, {})
         current_state["last_time"] = current_time
         
-        # 檢查是否包含觸發關鍵詞 "防詐騙助手"或者用戶處於等待分析狀態
+        # 檢查是否包含觸發關鍵詞 "土豆"或者用戶處於等待分析狀態
         waiting_for_analysis = current_state.get("waiting_for_analysis", False)
         
-        # 如果是群組訊息，需要檢查是否包含觸發關鍵詞，或者用戶處於等待分析狀態
-        if is_group_message and bot_trigger_keyword not in text_message and not waiting_for_analysis:
-            logger.info(f"群組訊息不包含觸發關鍵詞 '{bot_trigger_keyword}'，也不在等待分析狀態，忽略此訊息")
+        # 個人和群組訊息都需要檢查是否包含觸發關鍵詞，或者用戶處於等待分析狀態
+        if bot_trigger_keyword not in text_message and not waiting_for_analysis:
+            logger.info(f"訊息不包含觸發關鍵詞 '{bot_trigger_keyword}'，也不在等待分析狀態，忽略此訊息")
             return
 
-        # 在群組中移除觸發關鍵詞，以便後續處理
+        # 移除觸發關鍵詞，以便後續處理
         cleaned_message = text_message
-        if is_group_message and bot_trigger_keyword in text_message:
+        if bot_trigger_keyword in text_message:
             cleaned_message = text_message.replace(bot_trigger_keyword, "").strip()
             logger.info(f"移除觸發關鍵詞後的訊息: {cleaned_message}")
 
