@@ -1156,7 +1156,6 @@ if handler:
             
             return
 
-        
         # 處理天氣查詢
         if is_weather_related(cleaned_message):
             logger.info(f"檢測到天氣查詢: {cleaned_message}")
