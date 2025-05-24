@@ -1238,13 +1238,13 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
     if len(message_lower) < 3:
         return False
     
-    # 排除明確的問候語
-    greetings = ["你好", "哈囉", "嗨", "hi", "hello", "早安", "午安", "晚安", "再見", "謝謝", "感謝"]
-    if any(greeting in message_lower for greeting in greetings) and len(message_lower) < 10:
+    # 優先排除功能查詢（在問候語排除之前）
+    if any(keyword in message_lower for keyword in function_inquiry_keywords):
         return False
     
-    # 排除功能查詢
-    if any(keyword in message_lower for keyword in function_inquiry_keywords):
+    # 排除明確的問候語（但只有在不是功能查詢的情況下）
+    greetings = ["你好", "哈囉", "嗨", "hi", "hello", "早安", "午安", "晚安", "再見", "謝謝", "感謝"]
+    if any(greeting in message_lower for greeting in greetings) and len(message_lower) < 10:
         return False
     
     # 排除詐騙類型查詢
