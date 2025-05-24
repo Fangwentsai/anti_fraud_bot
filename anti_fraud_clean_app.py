@@ -37,6 +37,9 @@ from game_service import (
     start_potato_game, handle_potato_game_answer, is_game_trigger, get_user_game_state
 )
 
+# 首先在頂部添加導入城市選擇器
+from city_selector import get_city_selector
+
 # 指定 .env 文件的路徑
 # 優先從當前目錄載入，然後嘗試其他路徑
 current_dir_env = os.path.join(os.path.dirname(__file__), '.env')
@@ -1162,6 +1165,18 @@ if handler:
             logger.info(f"檢測到天氣查詢: {cleaned_message}")
             
             try:
+                # 檢查是否指定了城市
+                from weather_service import weather_service
+                has_weather_query, mentioned_location = weather_service.detect_weather_query(cleaned_message)
+                
+                # 如果沒有指定城市，顯示城市選擇器
+                if not mentioned_location:
+                    logger.info("未指定城市，顯示城市選擇器")
+                    city_selector = get_city_selector(display_name)
+                    line_bot_api.reply_message(reply_token, city_selector)
+                    return
+                
+                # 指定了城市，繼續正常處理
                 # 先嘗試使用結構化數據創建Flex Message
                 weather_data = handle_weather_query_data(cleaned_message)
                 
