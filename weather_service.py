@@ -9,10 +9,17 @@ import json
 import logging
 import requests
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple, Any
 
 logger = logging.getLogger(__name__)
+
+# 台北時區 (UTC+8)
+TAIPEI_TZ = timezone(timedelta(hours=8))
+
+def get_taipei_time():
+    """獲取台北時間"""
+    return datetime.now(TAIPEI_TZ)
 
 class WeatherService:
     """天氣服務類"""
@@ -116,7 +123,7 @@ class WeatherService:
                 "success": True,
                 "city": city,
                 "forecast": weather_data,
-                "update_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "update_time": get_taipei_time().strftime("%Y-%m-%d %H:%M:%S"),
                 "source": "中央氣象署"
             }
             
@@ -139,7 +146,7 @@ class WeatherService:
             
             # 模擬解析邏輯（實際需要根據API文件調整）
             for i in range(days):
-                date = datetime.now() + timedelta(days=i)
+                date = get_taipei_time() + timedelta(days=i)
                 forecast.append({
                     "date": date.strftime("%Y-%m-%d"),
                     "weekday": self._get_chinese_weekday(date.weekday()),
@@ -166,7 +173,7 @@ class WeatherService:
         weather_conditions = ["晴天", "多雲", "陰天", "小雨", "雷陣雨"]
         
         for i in range(days):
-            date = datetime.now() + timedelta(days=i)
+            date = get_taipei_time() + timedelta(days=i)
             forecast.append({
                 "date": date.strftime("%Y-%m-%d"),
                 "weekday": self._get_chinese_weekday(date.weekday()),
@@ -184,7 +191,7 @@ class WeatherService:
             "success": True,
             "city": city,
             "forecast": forecast,
-            "update_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "update_time": get_taipei_time().strftime("%Y-%m-%d %H:%M:%S"),
             "source": "模擬資料",
             "note": "⚠️ 此為模擬資料，實際天氣請參考中央氣象署"
         }
@@ -253,7 +260,7 @@ class WeatherService:
         # 檢查是否為日期時間查詢
         date_keywords = ["日期", "幾號", "星期幾", "禮拜幾", "今天幾號", "今天星期幾", "今天禮拜幾", "現在幾點", "時間"]
         if any(keyword in message for keyword in date_keywords):
-            current_time = datetime.now()
+            current_time = get_taipei_time()
             
             # 格式化日期和時間
             date_str = current_time.strftime("%Y年%m月%d日")
@@ -318,7 +325,7 @@ class WeatherService:
             # 使用模擬資料
             logger.warning("未設定中央氣象署API金鑰，使用模擬資料")
             
-            current_time = datetime.now()
+            current_time = get_taipei_time()
             
             return {
                 "city": city,
