@@ -686,25 +686,18 @@ if handler:
                         f"    ✨ 溫度、降雨機率通通有\n\n" \
                         f"💡 **超簡單使用**：直接點下面的按鈕，或是直接跟我說你想要什麼服務！"
                 
-            # 如果在群組中，QuickReply按鈕需要包含觸發關鍵詞
-            if is_group_message:
-                quick_reply = QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="🔍 檢查網站安全", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
-                    QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text=f"{bot_trigger_keyword} 防詐騙測試")),
-                    QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text=f"{bot_trigger_keyword} 詐騙類型列表")),
-                    QuickReplyButton(action=MessageAction(label="☁️ 查詢天氣", text=f"{bot_trigger_keyword} 今天天氣"))
-                ])
-                # 在群組中使用mention功能
-                mention_text = f"@{display_name} {reply_text}"
-                if len(mention_text) <= LINE_MESSAGE_MAX_LENGTH:
-                    reply_text = mention_text
-            else:
-                quick_reply = QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="🔍 檢查網站安全", text="請幫我分析這則訊息：")),
-                    QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text="防詐騙測試")),
-                    QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text="詐騙類型列表")),
-                    QuickReplyButton(action=MessageAction(label="☁️ 查詢天氣", text="今天天氣"))
-                ])
+            # 統一QuickReply按鈕（個人和群組完全一樣）
+            quick_reply = QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label="🔍 檢查網站安全", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
+                QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text=f"{bot_trigger_keyword} 防詐騙測試")),
+                QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text=f"{bot_trigger_keyword} 詐騙類型列表")),
+                QuickReplyButton(action=MessageAction(label="☁️ 查詢天氣", text=f"{bot_trigger_keyword} 今天天氣"))
+            ])
+            
+            # 統一使用mention功能（個人和群組完全一樣）
+            mention_text = f"@{display_name} {reply_text}"
+            if len(mention_text) <= LINE_MESSAGE_MAX_LENGTH:
+                reply_text = mention_text
             
             line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
             
@@ -740,7 +733,7 @@ if handler:
                                     color="#FF6B6B",
                                     action=MessageAction(
                                         label="🔍 檢查網站安全",
-                                        text=f"{bot_trigger_keyword} 請幫我分析這則訊息：" if is_group_message else "請幫我分析這則訊息："
+                                        text=f"{bot_trigger_keyword} 請幫我分析這則訊息："
                                     )
                                 ),
                                 ButtonComponent(
@@ -748,7 +741,7 @@ if handler:
                                     color="#4ECDC4",
                                     action=MessageAction(
                                         label="🎯 防詐騙測驗",
-                                        text=f"{bot_trigger_keyword} 防詐騙測試" if is_group_message else "防詐騙測試"
+                                        text=f"{bot_trigger_keyword} 防詐騙測試"
                                     )
                                 ),
                                 ButtonComponent(
@@ -756,7 +749,7 @@ if handler:
                                     color="#45B7D1", 
                                     action=MessageAction(
                                         label="📚 詐騙案例",
-                                        text=f"{bot_trigger_keyword} 詐騙類型列表" if is_group_message else "詐騙類型列表"
+                                        text=f"{bot_trigger_keyword} 詐騙類型列表"
                                     )
                                 ),
                                 ButtonComponent(
@@ -764,7 +757,7 @@ if handler:
                                     color="#96CEB4",
                                     action=MessageAction(
                                         label="☁️ 查詢天氣", 
-                                        text=f"{bot_trigger_keyword} 今天天氣" if is_group_message else "今天天氣"
+                                        text=f"{bot_trigger_keyword} 今天天氣"
                                     )
                                 )
                             ]
@@ -986,20 +979,13 @@ if handler:
                         f"    ✨ 溫度、降雨機率通通有\n\n" \
                         f"💡 **超簡單使用**：直接點下面的按鈕，或是直接跟我說你想要什麼服務！"
             
-            if is_group_message:
-                quick_reply = QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="🔍 檢查網站安全", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
-                    QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text=f"{bot_trigger_keyword} 防詐騙測試")),
-                    QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text=f"{bot_trigger_keyword} 詐騙類型列表")),
-                    QuickReplyButton(action=MessageAction(label="☁️ 查詢天氣", text=f"{bot_trigger_keyword} 今天天氣"))
-                ])
-            else:
-                quick_reply = QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="🔍 檢查網站安全", text="請幫我分析這則訊息：")),
-                    QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text="防詐騙測試")),
-                    QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text="詐騙類型列表")),
-                    QuickReplyButton(action=MessageAction(label="☁️ 查詢天氣", text="今天天氣"))
-                ])
+            # 統一QuickReply按鈕（個人和群組完全一樣）
+            quick_reply = QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label="🔍 檢查網站安全", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
+                QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text=f"{bot_trigger_keyword} 防詐騙測試")),
+                QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text=f"{bot_trigger_keyword} 詐騙類型列表")),
+                QuickReplyButton(action=MessageAction(label="☁️ 查詢天氣", text=f"{bot_trigger_keyword} 今天天氣"))
+            ])
             
             line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
             
@@ -1035,7 +1021,7 @@ if handler:
                                     color="#FF6B6B",
                                     action=MessageAction(
                                         label="🔍 檢查網站安全",
-                                        text=f"{bot_trigger_keyword} 請幫我分析這則訊息：" if is_group_message else "請幫我分析這則訊息："
+                                        text=f"{bot_trigger_keyword} 請幫我分析這則訊息："
                                     )
                                 ),
                                 ButtonComponent(
@@ -1043,7 +1029,7 @@ if handler:
                                     color="#4ECDC4",
                                     action=MessageAction(
                                         label="🎯 防詐騙測驗",
-                                        text=f"{bot_trigger_keyword} 防詐騙測試" if is_group_message else "防詐騙測試"
+                                        text=f"{bot_trigger_keyword} 防詐騙測試"
                                     )
                                 ),
                                 ButtonComponent(
@@ -1051,7 +1037,7 @@ if handler:
                                     color="#45B7D1", 
                                     action=MessageAction(
                                         label="📚 詐騙案例",
-                                        text=f"{bot_trigger_keyword} 詐騙類型列表" if is_group_message else "詐騙類型列表"
+                                        text=f"{bot_trigger_keyword} 詐騙類型列表"
                                     )
                                 ),
                                 ButtonComponent(
@@ -1059,7 +1045,7 @@ if handler:
                                     color="#96CEB4",
                                     action=MessageAction(
                                         label="☁️ 查詢天氣", 
-                                        text=f"{bot_trigger_keyword} 今天天氣" if is_group_message else "今天天氣"
+                                        text=f"{bot_trigger_keyword} 今天天氣"
                                     )
                                 )
                             ]
