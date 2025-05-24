@@ -140,6 +140,15 @@ class FlexMessageService:
         attack_type = spoofing_result.get("attack_type", "未知攻擊")
         similarity_score = spoofing_result.get("similarity_score", 0)
         
+        # 從safe_domains.json獲取正版網站的描述
+        from anti_fraud_clean_app import SAFE_DOMAINS
+        legitimate_description = SAFE_DOMAINS.get(legitimate_domain, "正版網站")
+        
+        # 生成可疑網域的說明
+        suspicious_explanation = self._generate_suspicious_domain_explanation(
+            suspicious_domain, legitimate_domain, attack_type
+        )
+        
         bubble = BubbleContainer(
             direction='ltr',
             header=BoxComponent(
@@ -174,34 +183,44 @@ class FlexMessageService:
                     ),
                     SeparatorComponent(margin='md'),
                     TextComponent(
-                        text="⚠️ 可疑網域對比",
+                        text="⚠️ 網域對比分析",
                         weight='bold',
                         size='md',
                         margin='md'
                     ),
                     TextComponent(
-                        text=f"可疑：{suspicious_domain}",
+                        text=f"可疑網域：{suspicious_domain}",
                         size='sm',
                         color=self.colors["danger"],
                         wrap=True,
-                        margin='sm'
+                        margin='sm',
+                        weight='bold'
                     ),
                     TextComponent(
-                        text=f"正版：{legitimate_domain}",
+                        text=suspicious_explanation,
+                        size='xs',
+                        color=self.colors["danger"],
+                        wrap=True,
+                        margin='xs'
+                    ),
+                    TextComponent(
+                        text=f"正版網域：{legitimate_domain}",
                         size='sm',
                         color=self.colors["success"],
                         wrap=True,
-                        margin='sm'
+                        margin='sm',
+                        weight='bold'
                     ),
                     TextComponent(
-                        text=f"攻擊類型：{attack_type}",
-                        size='sm',
-                        color=self.colors["secondary"],
-                        margin='sm'
+                        text=legitimate_description,
+                        size='xs',
+                        color=self.colors["success"],
+                        wrap=True,
+                        margin='xs'
                     ),
                     TextComponent(
                         text=f"相似度：{similarity_score:.1%}",
-                        size='sm',
+                        size='xs',
                         color=self.colors["secondary"],
                         margin='sm'
                     ),
@@ -213,7 +232,7 @@ class FlexMessageService:
                         margin='md'
                     ),
                     TextComponent(
-                        text="🚫 立即停止使用此網站\n🔍 確認網址拼寫是否正確\n🌐 前往官方網站重新操作\n🛡️ 如已輸入資料請立即更改密碼",
+                        text="🚫 立即停止使用此網站\n🔍 確認網址拼寫是否正確\n🌐 直接搜尋正版網站名稱\n🛡️ 如已輸入資料請立即更改密碼",
                         size='sm',
                         color=self.colors["secondary"],
                         wrap=True,
@@ -236,9 +255,9 @@ class FlexMessageService:
                     ButtonComponent(
                         style='secondary',
                         height='sm',
-                        action=MessageAction(
-                            label='🌐 查看正版網站',
-                            text=f'正版網站：{legitimate_domain}'
+                        action=PostbackAction(
+                            label='🎮 玩土豆遊戲放鬆一下',
+                            data=f'action=potato_game&user_id={user_id or "unknown"}'
                         )
                     )
                 ]
@@ -246,6 +265,27 @@ class FlexMessageService:
         )
         
         return FlexSendMessage(alt_text=f"網域變形攻擊警告：{suspicious_domain}", contents=bubble)
+
+    def _generate_suspicious_domain_explanation(self, suspicious_domain: str, legitimate_domain: str, attack_type: str) -> str:
+        """生成可疑網域的說明文字"""
+        explanations = {
+            "字元替換攻擊": f"將正版網域中的字元替換（如 o→0, l→1）",
+            "插入額外字元": f"在正版網域中插入額外字元（如加入 -tw, -official 等）",
+            "網域後綴變形": f"修改網域後綴來混淆視聽",
+            "相似字元攻擊": f"使用外觀相似的字元（如希臘字母、俄文字母）"
+        }
+        
+        base_explanation = explanations.get(attack_type, "模仿正版網域的變形攻擊")
+        
+        # 分析具體的變形方式
+        if "-tw" in suspicious_domain and "-tw" not in legitimate_domain:
+            return f"{base_explanation}，在網域中加入了 '-tw' 來偽裝成台灣官方網站"
+        elif "-official" in suspicious_domain:
+            return f"{base_explanation}，加入了 '-official' 來偽裝成官方網站"
+        elif len(suspicious_domain) > len(legitimate_domain):
+            return f"{base_explanation}，在正版網域基礎上添加了額外字元"
+        else:
+            return base_explanation
 
     def create_donation_flex_message(self) -> FlexSendMessage:
         """創建贊助彩蛋的 Flex Message"""
