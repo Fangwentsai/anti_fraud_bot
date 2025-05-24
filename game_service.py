@@ -334,16 +334,12 @@ class GameService:
     
     def is_game_trigger(self, message: str) -> bool:
         """檢查訊息是否觸發遊戲"""
+        from config import GAME_TRIGGER_KEYWORDS
+        
         message_lower = message.lower().strip()
         
-        # 檢查是否包含遊戲觸發關鍵詞
-        game_keywords = [
-            "防詐騙測試", "防詐騙測驗", "詐騙識別測試", "防詐測試", 
-            "反詐測試", "測試防詐能力", "詐騙檢測測試", "開始測試",
-            "防詐騙遊戲", "詐騙檢測", "反詐遊戲", "識別詐騙"
-        ]
-        
-        for keyword in game_keywords:
+        # 使用config.py中定義的觸發關鍵詞
+        for keyword in GAME_TRIGGER_KEYWORDS:
             if keyword in message_lower:
                 return True
         

@@ -467,6 +467,81 @@ def get_weather_data(city: str) -> Dict[str, Any]:
     """
     return weather_service.get_weather_data(city)
 
+def handle_weather_query_data(message: str) -> Dict[str, Any]:
+    """
+    處理天氣詢問並返回結構化資料（專用於測試）
+    
+    Args:
+        message: 用戶查詢訊息
+        
+    Returns:
+        包含天氣資料的字典，格式：
+        {
+            "success": bool,
+            "data": {
+                "location": str,
+                "temperature": str,
+                "weather_description": str,
+                "rain_probability": str,
+                "forecast_time": str
+            },
+            "message": str (錯誤時)
+        }
+    """
+    try:
+        # 檢查是否為天氣相關查詢
+        has_weather_query, location = weather_service.detect_weather_query(message)
+        
+        if not has_weather_query:
+            return {
+                "success": False,
+                "message": "這不是天氣相關的查詢"
+            }
+        
+        # 預設地點為台北
+        if not location:
+            location = "台北"
+        
+        # 獲取天氣預報
+        weather_data = weather_service.get_weather_forecast(location, 1)
+        
+        if not weather_data.get("success"):
+            return {
+                "success": False,
+                "message": weather_data.get("error", "天氣查詢失敗")
+            }
+        
+        # 提取天氣資料
+        forecast = weather_data.get("forecast", [])
+        if not forecast:
+            return {
+                "success": False,
+                "message": "沒有可用的天氣資料"
+            }
+        
+        day_data = forecast[0]
+        temperature = day_data.get("temperature", {})
+        temp_str = f"{temperature.get('low', '')}°C - {temperature.get('high', '')}°C"
+        
+        return {
+            "success": True,
+            "data": {
+                "location": f"{location}市" if location not in ["台北", "新北", "桃園", "台中", "台南", "高雄"] else weather_service.city_mapping.get(location, location),
+                "temperature": temp_str,
+                "weather_description": day_data.get("weather", ""),
+                "rain_probability": day_data.get("rain_probability", ""),
+                "forecast_time": day_data.get("date", ""),
+                "update_time": weather_data.get("update_time", "")
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"處理天氣查詢時發生錯誤: {e}")
+        return {
+            "success": False,
+            "message": f"處理天氣查詢時發生錯誤: {str(e)}"
+        }
+
 
 if __name__ == "__main__":
     # 測試功能
