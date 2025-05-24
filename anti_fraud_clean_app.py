@@ -1189,10 +1189,10 @@ if handler:
                     is_correct, result_flex = handle_potato_game_answer(user_id, answer_index)
                     line_bot_api.reply_message(reply_token, result_flex)
                     
-                elif action == 'fraud_stats':
-                    # 顯示詐騙統計（未來功能）
-                    stats_message = "📊 詐騙統計功能開發中，敬請期待！\\n\\n目前可用功能：\\n🔍 詐騙訊息分析\\n🎯 防詐騙測試\\n📚 詐騙類型查詢"
-                    line_bot_api.reply_message(reply_token, TextSendMessage(text=stats_message))
+                # elif action == 'fraud_stats':
+                #     # 顯示詐騙統計（未來功能）
+                #     stats_message = "📊 詐騙統計功能開發中，敬請期待！\\n\\n目前可用功能：\\n🔍 詐騙訊息分析\\n🎯 防詐騙測試\\n📚 詐騙類型查詢"
+                #     line_bot_api.reply_message(reply_token, TextSendMessage(text=stats_message))
                     
                 else:
                     logger.warning(f"未知的postback動作: {action}")

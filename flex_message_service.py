@@ -119,28 +119,28 @@ class FlexMessageService:
                     )
                 ]
             ),
-            footer=BoxComponent(
-                layout='vertical',
-                spacing='sm',
-                contents=[
-                    ButtonComponent(
-                        style='primary',
-                        height='sm',
-                        action=URIAction(
-                            label='📞 撥打165反詐騙專線',
-                            uri='tel:165'
-                        )
-                    ),
-                    ButtonComponent(
-                        style='secondary',
-                        height='sm',
-                        action=PostbackAction(
-                            label='🎮 玩土豆遊戲放鬆一下',
-                            data=f'action=potato_game&user_id={safe_user_id}'
-                        )
-                    )
-                ]
-            )
+            # footer=BoxComponent(
+            #     layout='vertical',
+            #     spacing='sm',
+            #     contents=[
+            #         ButtonComponent(
+            #             style='primary',
+            #             height='sm',
+            #             action=URIAction(
+            #                 label='📞 撥打165反詐騙專線',
+            #                 uri='tel:165'
+            #             )
+            #         ),
+            #         ButtonComponent(
+            #             style='secondary',
+            #             height='sm',
+            #             action=PostbackAction(
+            #                 label='🎮 玩土豆遊戲放鬆一下',
+            #                 data=f'action=potato_game&user_id={safe_user_id}'
+            #             )
+            #         )
+            #     ]
+            # )
         )
         
         return FlexSendMessage(alt_text=f"詐騙風險分析：{risk_level}", contents=bubble)
@@ -271,28 +271,28 @@ class FlexMessageService:
                     )
                 ]
             ),
-            footer=BoxComponent(
-                layout='vertical',
-                spacing='sm',
-                contents=[
-                    ButtonComponent(
-                        style='primary',
-                        height='sm',
-                        action=URIAction(
-                            label='📞 立即撥打165專線',
-                            uri='tel:165'
-                        )
-                    ),
-                    ButtonComponent(
-                        style='secondary',
-                        height='sm',
-                        action=PostbackAction(
-                            label='🎮 玩土豆遊戲放鬆一下',
-                            data=f'action=potato_game&user_id={safe_user_id}'
-                        )
-                    )
-                ]
-            )
+            # footer=BoxComponent(
+            #     layout='vertical',
+            #     spacing='sm',
+            #     contents=[
+            #         ButtonComponent(
+            #             style='primary',
+            #             height='sm',
+            #             action=URIAction(
+            #                 label='📞 立即撥打165專線',
+            #                 uri='tel:165'
+            #             )
+            #         ),
+            #         ButtonComponent(
+            #             style='secondary',
+            #             height='sm',
+            #             action=PostbackAction(
+            #                 label='🎮 玩土豆遊戲放鬆一下',
+            #                 data=f'action=potato_game&user_id={safe_user_id}'
+            #             )
+            #         )
+            #     ]
+            # )
         )
         
         return FlexSendMessage(alt_text=f"網域偽裝攻擊警告：{suspicious_domain}", contents=bubble)
@@ -406,14 +406,14 @@ class FlexMessageService:
                             data='action=potato_game'
                         )
                     ),
-                    ButtonComponent(
-                        style='secondary',
-                        height='sm',
-                        action=PostbackAction(
-                            label='📊 查看防詐統計',
-                            data='action=fraud_stats'
-                        )
-                    )
+                    # ButtonComponent(
+                    #     style='secondary',
+                    #     height='sm',
+                    #     action=PostbackAction(
+                    #         label='📊 查看防詐統計',
+                    #         data='action=fraud_stats'
+                    #     )
+                    # )
                 ]
             )
         )
