@@ -26,7 +26,7 @@ import time
 # 導入新的模組化組件
 from config import *
 from fraud_knowledge import load_fraud_tactics, get_anti_fraud_tips, get_fraud_features, analyze_fraud_keywords
-from weather_service import handle_weather_query, is_weather_related
+from weather_service import handle_weather_query, is_weather_related, handle_weather_query_data
 from flex_message_service import (
     create_analysis_flex_message, create_domain_spoofing_flex_message,
     create_donation_flex_message, create_weather_flex_message,
@@ -1159,16 +1159,35 @@ if handler:
         # 處理天氣查詢
         if is_weather_related(cleaned_message):
             logger.info(f"檢測到天氣查詢: {cleaned_message}")
-            weather_result = handle_weather_query(cleaned_message)
             
-            if weather_result["success"]:
-                # 創建天氣Flex訊息
-                weather_flex = create_weather_flex_message(weather_result["data"])
-                line_bot_api.reply_message(reply_token, weather_flex)
-            else:
-                # 發送錯誤訊息
-                error_text = f"抱歉，{weather_result['message']}\\n\\n💡 您可以試著這樣問：\\n• 今天天氣如何\\n• 台北天氣\\n• 明天會下雨嗎"
-                line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
+            try:
+                # 先嘗試使用結構化數據創建Flex Message
+                weather_data = handle_weather_query_data(cleaned_message)
+                
+                if weather_data.get("success"):
+                    # 創建天氣Flex Message
+                    weather_flex = create_weather_flex_message(weather_data.get("data", {}), display_name)
+                    line_bot_api.reply_message(reply_token, weather_flex)
+                else:
+                    # 如果結構化數據獲取失敗，退回到文字格式
+                    weather_text = handle_weather_query(cleaned_message, display_name)
+                    if weather_text:
+                        line_bot_api.reply_message(reply_token, TextSendMessage(text=weather_text))
+                    else:
+                        # 發送錯誤訊息
+                        error_text = f"抱歉，無法處理您的天氣查詢。\n\n💡 您可以試著這樣問：\n• 今天天氣如何\n• 台北天氣\n• 明天會下雨嗎"
+                        line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
+            except Exception as e:
+                logger.error(f"處理天氣查詢時發生錯誤: {e}")
+                # 使用文字格式作為備用方案
+                weather_text = handle_weather_query(cleaned_message, display_name)
+                if weather_text:
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text=weather_text))
+                else:
+                    # 發送錯誤訊息
+                    error_text = f"抱歉，無法處理您的天氣查詢。\n\n💡 您可以試著這樣問：\n• 今天天氣如何\n• 台北天氣\n• 明天會下雨嗎"
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
+            
             return
 
         # 一般聊天回應
