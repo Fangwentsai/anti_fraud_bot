@@ -589,6 +589,132 @@ class FlexMessageService:
         else:
             return "🌤️"
 
+    def create_fraud_detail_flex_message(self, fraud_type: str, fraud_info: Dict, display_name: str = "朋友") -> FlexSendMessage:
+        """創建詐騙類型詳細信息的Flex Message"""
+        
+        # 獲取詐騙類型信息
+        description = fraud_info.get("description", "無相關說明")
+        risk_level = fraud_info.get("risk_level", "中")
+        sop_items = fraud_info.get("sop", [])
+        
+        # 根據風險等級選擇顏色
+        header_color = "#3498DB"  # 默認藍色
+        if risk_level == "極高":
+            header_color = "#E74C3C"  # 紅色
+        elif risk_level == "高":
+            header_color = "#F39C12"  # 橙色
+        elif risk_level == "中高":
+            header_color = "#F1C40F"  # 黃色
+        
+        # 創建內容
+        body_contents = [
+            TextComponent(
+                text=f"🔍 詐騙手法說明",
+                weight="bold",
+                size="md",
+                color="#1DB446",
+                margin="md"
+            ),
+            TextComponent(
+                text=description,
+                size="sm",
+                color="#666666",
+                wrap=True,
+                margin="sm"
+            ),
+            SeparatorComponent(margin="lg"),
+            TextComponent(
+                text=f"🛡️ 防範步驟",
+                weight="bold",
+                size="md",
+                color="#1DB446",
+                margin="md"
+            )
+        ]
+        
+        # 添加防範步驟
+        for step in sop_items:
+            body_contents.append(
+                TextComponent(
+                    text=step,
+                    size="sm",
+                    color="#666666",
+                    wrap=True,
+                    margin="sm"
+                )
+            )
+        
+        # 添加風險等級提示
+        body_contents.extend([
+            SeparatorComponent(margin="lg"),
+            TextComponent(
+                text=f"⚠️ 風險等級：{risk_level}",
+                weight="bold",
+                size="sm",
+                color="#E74C3C" if risk_level in ["極高", "高"] else "#F39C12",
+                margin="md"
+            )
+        ])
+        
+        bubble = BubbleContainer(
+            size="mega",
+            header=BoxComponent(
+                layout="vertical",
+                contents=[
+                    TextComponent(
+                        text=f"📋 {fraud_type}",
+                        weight="bold",
+                        size="xl",
+                        color="#ffffff"
+                    ),
+                    TextComponent(
+                        text=f"請認真閱讀防範步驟，保護自己！",
+                        size="sm",
+                        color="#ffffff",
+                        margin="sm",
+                        wrap=True
+                    )
+                ],
+                background_color=header_color,
+                padding_all="lg"
+            ),
+            body=BoxComponent(
+                layout="vertical",
+                spacing="md",
+                padding_all="lg",
+                contents=body_contents
+            ),
+            footer=BoxComponent(
+                layout="horizontal",
+                spacing="sm",
+                contents=[
+                    ButtonComponent(
+                        style="primary",
+                        color="#2980B9",
+                        action=MessageAction(
+                            label="👀 看其他分類",
+                            text="土豆 詐騙類型列表"
+                        ),
+                        height="sm",
+                        flex=1
+                    ),
+                    ButtonComponent(
+                        style="primary",
+                        color="#27AE60",
+                        action=PostbackAction(
+                            label="🏠 回到首頁",
+                            data="action=show_main_menu"
+                        ),
+                        height="sm",
+                        flex=1
+                    )
+                ],
+                padding_all="sm"
+            )
+        )
+        
+        return FlexSendMessage(alt_text=f"{fraud_type}詳細說明", contents=bubble)
+
 
 # 創建全域服務實例
 flex_message_service = FlexMessageService()
@@ -612,81 +738,55 @@ def create_weather_flex_message(weather_data: Dict, user_name: str = "朋友") -
     """創建天氣預報的 Flex Message"""
     return flex_message_service.create_weather_flex_message(weather_data, user_name)
 
+def create_fraud_detail_flex_message(fraud_type: str, fraud_info: Dict, display_name: str = "朋友") -> FlexSendMessage:
+    """創建詐騙類型詳細信息的Flex Message"""
+    return flex_message_service.create_fraud_detail_flex_message(fraud_type, fraud_info, display_name)
+
 def create_fraud_types_flex_message(fraud_tactics: Dict, display_name: str = "朋友") -> FlexSendMessage:
     """創建詐騙類型列表Flex Message"""
     
     # 創建詐騙類型按鈕列表
     type_contents = []
     
-    # 將詐騙類型分成多個分類，每個分類一個區塊
-    categories = {
-        "網路詐騙": ["網路購物詐騙", "釣魚網站詐騙", "假投資詐騙", "網路交友詐騙"],
-        "個人資料詐騙": ["假冒身份詐騙", "個資盜用詐騙", "社交工程詐騙"],
-        "金融詐騙": ["假銀行詐騙", "ATM解除分期詐騙", "假貸款詐騙"],
-        "其他詐騙": ["假招工詐騙", "假中獎詐騙", "假政府詐騙", "假親友詐騙"]
-    }
+    # 從fraud_knowledge.py中獲取的詐騙類型
+    main_fraud_types = [
+        "假交友投資詐騙", 
+        "假網購詐騙", 
+        "假冒機構詐騙", 
+        "假親友急難詐騙", 
+        "假求職詐騙"
+    ]
     
-    # 創建分類標題和按鈕
-    for category, types in categories.items():
-        # 添加分類標題
-        type_contents.append(
-            TextComponent(
-                text=f"⭐ {category}",
-                weight="bold",
-                size="md",
-                color="#1DB446",
-                margin="lg"
-            )
-        )
-        
-        # 創建當前分類的按鈕盒子
-        buttons_box = BoxComponent(
-            layout="horizontal",
+    # 添加標題
+    type_contents.append(
+        TextComponent(
+            text="⚠️ 點選詐騙類型查看詳細說明與防範措施",
+            size="sm",
+            color="#666666",
             margin="md",
-            flex=0,
-            spacing="sm",
-            contents=[]
+            wrap=True
         )
-        
-        # 將當前分類的詐騙類型添加到按鈕盒子
-        row_buttons = []
-        for fraud_type in types:
-            if fraud_type in fraud_tactics:
-                row_buttons.append(
-                    ButtonComponent(
-                        style="secondary",
-                        height="sm",
-                        action=MessageAction(
-                            label=f"{fraud_type}",
-                            text=f"土豆 什麼是{fraud_type}"
-                        ),
-                        color="#E8F4FD",
-                        flex=1
-                    )
+    )
+    
+    # 統一按鈕顏色
+    button_color = "#E8F4FD"  # 統一使用淺藍色
+    
+    # 為每個詐騙類型創建按鈕
+    for fraud_type in main_fraud_types:
+        if fraud_type in fraud_tactics:
+            # 添加該詐騙類型的按鈕
+            type_contents.append(
+                ButtonComponent(
+                    style="secondary",
+                    height="sm",
+                    action=MessageAction(
+                        label=f"{fraud_type}",
+                        text=f"土豆 什麼是{fraud_type}"
+                    ),
+                    color=button_color,
+                    margin="md"
                 )
-                
-                # 每兩個按鈕一行
-                if len(row_buttons) == 2:
-                    buttons_box = BoxComponent(
-                        layout="horizontal",
-                        margin="md",
-                        flex=0,
-                        spacing="sm",
-                        contents=row_buttons
-                    )
-                    type_contents.append(buttons_box)
-                    row_buttons = []
-            
-            # 如果只有一個按鈕，也要添加
-            if row_buttons:
-                buttons_box = BoxComponent(
-                    layout="horizontal",
-                    margin="md",
-                    flex=0,
-                    spacing="sm",
-                    contents=row_buttons
-                )
-                type_contents.append(buttons_box)
+            )
     
     # 添加分隔線
     type_contents.append(
@@ -695,18 +795,8 @@ def create_fraud_types_flex_message(fraud_tactics: Dict, display_name: str = "�
         )
     )
     
-    # 添加其他詐騙類型說明
-    type_contents.append(
-        TextComponent(
-            text="👉 點選詐騙類型查看詳細說明",
-            size="sm",
-            color="#666666",
-            margin="md"
-        )
-    )
-    
     bubble = BubbleContainer(
-        size="giga",
+        size="mega",
         header=BoxComponent(
             layout="vertical",
             contents=[
@@ -717,10 +807,11 @@ def create_fraud_types_flex_message(fraud_tactics: Dict, display_name: str = "�
                     color="#ffffff"
                 ),
                 TextComponent(
-                    text="點選類型了解詳細資訊",
+                    text="這些詐騙手法最常見，請特別小心！",
                     size="sm",
                     color="#ffffff",
-                    margin="sm"
+                    margin="sm",
+                    wrap=True
                 )
             ],
             background_color="#3498DB",
@@ -731,34 +822,8 @@ def create_fraud_types_flex_message(fraud_tactics: Dict, display_name: str = "�
             spacing="md",
             padding_all="lg",
             contents=type_contents
-        ),
-        footer=BoxComponent(
-            layout="horizontal",
-            spacing="sm",
-            contents=[
-                ButtonComponent(
-                    style="primary",
-                    color="#2980B9",
-                    action=MessageAction(
-                        label="🔍 檢查詐騙",
-                        text="土豆 請幫我分析這則訊息："
-                    ),
-                    height="sm",
-                    flex=1
-                ),
-                ButtonComponent(
-                    style="primary",
-                    color="#27AE60",
-                    action=PostbackAction(
-                        label="🏠 回到首頁",
-                        data="action=show_main_menu"
-                    ),
-                    height="sm",
-                    flex=1
-                )
-            ],
-            padding_all="sm"
         )
+        # 移除footer部分
     )
     
     return FlexSendMessage(alt_text="詐騙類型列表", contents=bubble)

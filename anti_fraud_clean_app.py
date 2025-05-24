@@ -30,7 +30,7 @@ from weather_service import handle_weather_query, is_weather_related
 from flex_message_service import (
     create_analysis_flex_message, create_domain_spoofing_flex_message,
     create_donation_flex_message, create_weather_flex_message,
-    create_fraud_types_flex_message
+    create_fraud_types_flex_message, create_fraud_detail_flex_message
 )
 from game_service import (
     start_potato_game, handle_potato_game_answer, is_game_trigger, get_user_game_state
@@ -818,34 +818,45 @@ if handler:
         # 檢查是否詢問特定詐騙類型
         for fraud_type, info in fraud_types.items():
             if fraud_type in cleaned_message:
-                response_text = f"🚨 **{fraud_type}詳細說明** 🚨\n\n"
+                logger.info(f"檢測到特定詐騙類型查詢: {fraud_type}")
                 
-                # 獲取description字段，如果info是字典而非字符串
-                if isinstance(info, dict) and "description" in info:
-                    description = info["description"]
-                    response_text += f"📋 **說明**：{description}\n\n"
+                try:
+                    # 使用Flex Message顯示詐騙類型詳細信息
+                    fraud_detail_flex = create_fraud_detail_flex_message(fraud_type, info, display_name)
+                    line_bot_api.reply_message(reply_token, fraud_detail_flex)
+                except Exception as e:
+                    logger.error(f"創建詐騙類型詳細信息Flex Message失敗: {e}")
                     
-                    # 如果有SOP（防範步驟），也顯示出來
-                    if "sop" in info and isinstance(info["sop"], list) and info["sop"]:
-                        response_text += "💡 **防範建議**：\n"
-                        for step in info["sop"]:
-                            response_text += f"{step}\n"
+                    # 降級處理：如果Flex Message失敗，使用文字訊息
+                    response_text = f"🚨 **{fraud_type}詳細說明** 🚨\n\n"
+                    
+                    # 獲取description字段，如果info是字典而非字符串
+                    if isinstance(info, dict) and "description" in info:
+                        description = info["description"]
+                        response_text += f"📋 **說明**：{description}\n\n"
+                        
+                        # 如果有SOP（防範步驟），也顯示出來
+                        if "sop" in info and isinstance(info["sop"], list) and info["sop"]:
+                            response_text += "💡 **防範建議**：\n"
+                            for step in info["sop"]:
+                                response_text += f"{step}\n"
+                        else:
+                            response_text += "💡 **防範建議**：\n"
+                            response_text += "🛡️ 遇到任何要求提供個人資料或金錢的情況，請先暫停並諮詢家人\n"
+                            response_text += "🔍 對於可疑訊息，可以傳給我幫您分析\n"
+                            response_text += "📞 如有疑慮，請撥打165反詐騙專線\n"
                     else:
+                        # 如果info不是預期的字典結構，使用fallback描述
+                        response_text += f"📋 **說明**：{str(info)}\n\n"
                         response_text += "💡 **防範建議**：\n"
                         response_text += "🛡️ 遇到任何要求提供個人資料或金錢的情況，請先暫停並諮詢家人\n"
                         response_text += "🔍 對於可疑訊息，可以傳給我幫您分析\n"
                         response_text += "📞 如有疑慮，請撥打165反詐騙專線\n"
-                else:
-                    # 如果info不是預期的字典結構，使用fallback描述
-                    response_text += f"📋 **說明**：{str(info)}\n\n"
-                    response_text += "💡 **防範建議**：\n"
-                    response_text += "🛡️ 遇到任何要求提供個人資料或金錢的情況，請先暫停並諮詢家人\n"
-                    response_text += "🔍 對於可疑訊息，可以傳給我幫您分析\n"
-                    response_text += "📞 如有疑慮，請撥打165反詐騙專線\n"
+                    
+                    response_text += f"\n如果您收到疑似{fraud_type}的訊息，歡迎直接傳給我分析！"
+                    
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text=response_text))
                 
-                response_text += f"\n如果您收到疑似{fraud_type}的訊息，歡迎直接傳給我分析！"
-                
-                line_bot_api.reply_message(reply_token, TextSendMessage(text=response_text))
                 return
 
         # 處理詐騙類型列表查詢 - 使用Flex Message
