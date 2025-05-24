@@ -84,13 +84,6 @@ class FlexMessageService:
                 spacing='md',
                 contents=[
                     safe_text_component(
-                        f"@{display_name}",
-                        weight='bold',
-                        size='lg',
-                        color=self.colors["primary"]
-                    ),
-                    SeparatorComponent(margin='md'),
-                    safe_text_component(
                         f"詐騙類型：{fraud_type}",
                         size='md',
                         weight='bold',
@@ -111,7 +104,7 @@ class FlexMessageService:
                         margin='md'
                     ),
                     safe_text_component(
-                        suggestions,
+                        suggestions if "\n" in suggestions else suggestions.replace("。", "。\n").replace("，", "，\n"),
                         size='sm',
                         color=self.colors["secondary"],
                         wrap=True,
@@ -130,25 +123,25 @@ class FlexMessageService:
                             label='🔄 再測一次',
                             text='土豆 請幫我分析這則訊息：'
                         ),
-                        color='#4ECDC4'
+                        color='#2E86C1'
                     ),
                     ButtonComponent(
-                        style='secondary',
+                        style='primary',
                         height='sm',
                         action=PostbackAction(
                             label='🏠 回到首頁',
                             data=f'action=show_main_menu&user_id={safe_user_id}'
                         ),
-                        color='#96CEB4'
+                        color='#27AE60'
                     ),
                     ButtonComponent(
-                        style='secondary',
+                        style='primary',
                         height='sm',
                         action=PostbackAction(
                             label='📝 回報註記',
                             data=f'action=report_feedback&user_id={safe_user_id}'
                         ),
-                        color='#FFB74D'
+                        color='#E67E22'
                     )
                 ]
             )
