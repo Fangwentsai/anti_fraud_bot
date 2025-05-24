@@ -372,6 +372,19 @@
         "i-pass.com.tw": "一卡通票證公司 (含iPASS MONEY)",
         "icash.com.tw": "愛金卡股份有限公司 (icash, icash Pay)",
         "openpoint.com.tw": "OPEN POINT (7-ELEVEN點數)"
+    },
+    "電子郵件": {
+        "gmail.com": "Google 電子郵件服務 (Gmail)",
+        "yahoo.com": "Yahoo 電子郵件服務 (國際)",
+        "yahoo.com.tw": "Yahoo奇摩電子郵件服務 (台灣)",
+        "outlook.com": "Microsoft Outlook 電子郵件服務 (取代Hotmail, Live Mail)",
+        "hotmail.com": "Microsoft Hotmail 電子郵件服務 (現多導向 Outlook.com)",
+        "live.com": "Microsoft Live Mail 電子郵件服務 (現多導向 Outlook.com)",
+        "msn.com": "Microsoft MSN 相關服務 (可能包含舊有郵件帳號)",
+        "icloud.com": "Apple iCloud 電子郵件服務",
+        "aol.com": "AOL Mail 電子郵件服務",
+        "proton.me": "Proton Mail (注重隱私的電子郵件服務, 原 protonmail.com)",
+        "protonmail.com": "ProtonMail (注重隱私的電子郵件服務, 現主推 proton.me)"
     }
     },
 

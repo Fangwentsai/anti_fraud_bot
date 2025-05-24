@@ -1428,7 +1428,7 @@ def create_mention_all_message(text, quick_reply=None):
         logger.error(f"創建@所有人mention消息時發生錯誤: {e}")
         # 降級到傳統@格式
         text_with_mention = f"@所有人 {text}"
-        return TextSendMessage(text=text_with_mention, quick_reply=quick_reply)
+    return TextSendMessage(text=text_with_mention, quick_reply=quick_reply)
 
 # 創建一個全局字典來跟踪用戶狀態
 user_conversation_state = {}  # 格式: {user_id: {"last_time": timestamp, "waiting_for_analysis": True/False}} 

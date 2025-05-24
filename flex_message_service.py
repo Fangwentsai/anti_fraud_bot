@@ -15,6 +15,15 @@ from linebot.models import (
 
 logger = logging.getLogger(__name__)
 
+def safe_text_component(text: str, **kwargs) -> TextComponent:
+    """創建安全的文字組件，確保文字不為空"""
+    # 確保文字不為空或僅包含空白字符
+    safe_text = str(text).strip() if text is not None else ""
+    if not safe_text:
+        safe_text = "無內容"  # 預設文字
+    
+    return TextComponent(text=safe_text, **kwargs)
+
 class FlexMessageService:
     """Flex Message 服務類"""
     
@@ -33,10 +42,15 @@ class FlexMessageService:
                                    message_to_analyze: str, user_id: Optional[str] = None) -> FlexSendMessage:
         """創建詐騙分析結果的 Flex Message"""
         
-        risk_level = analysis_data.get("risk_level", "不確定")
-        fraud_type = analysis_data.get("fraud_type", "未知")
-        explanation = analysis_data.get("explanation", "無法分析")
-        suggestions = analysis_data.get("suggestions", "請保持警覺")
+        # 安全地獲取數據，並提供預設值
+        risk_level = str(analysis_data.get("risk_level", "不確定")).strip() or "不確定"
+        fraud_type = str(analysis_data.get("fraud_type", "未知")).strip() or "未知"
+        explanation = str(analysis_data.get("explanation", "分析結果不完整")).strip() or "分析結果不完整"
+        suggestions = str(analysis_data.get("suggestions", "請保持警覺")).strip() or "請保持警覺"
+        display_name = str(display_name).strip() or "用戶"
+        
+        # 確保用戶ID有值
+        safe_user_id = user_id if user_id else "unknown"
         
         # 根據風險等級選擇顏色
         risk_color = self._get_risk_color(risk_level)
@@ -51,14 +65,14 @@ class FlexMessageService:
                 background_color=risk_color,
                 spacing='md',
                 contents=[
-                    TextComponent(
-                        text=f"{risk_emoji} 詐騙風險分析",
+                    safe_text_component(
+                        f"{risk_emoji} 詐騙風險分析",
                         weight='bold',
                         color='#ffffff',
                         size='xl'
                     ),
-                    TextComponent(
-                        text=f"風險等級：{risk_level}",
+                    safe_text_component(
+                        f"風險等級：{risk_level}",
                         color='#ffffff',
                         size='md'
                     )
@@ -69,35 +83,35 @@ class FlexMessageService:
                 padding_all='20px',
                 spacing='md',
                 contents=[
-                    TextComponent(
-                        text=f"@{display_name}",
+                    safe_text_component(
+                        f"@{display_name}",
                         weight='bold',
                         size='lg',
                         color=self.colors["primary"]
                     ),
                     SeparatorComponent(margin='md'),
-                    TextComponent(
-                        text=f"詐騙類型：{fraud_type}",
+                    safe_text_component(
+                        f"詐騙類型：{fraud_type}",
                         size='md',
                         weight='bold',
                         margin='md'
                     ),
-                    TextComponent(
-                        text=explanation,
+                    safe_text_component(
+                        explanation,
                         size='sm',
                         color=self.colors["secondary"],
                         wrap=True,
                         margin='md'
                     ),
                     SeparatorComponent(margin='md'),
-                    TextComponent(
-                        text="🛡️ 防範建議",
+                    safe_text_component(
+                        "🛡️ 防範建議",
                         weight='bold',
                         size='md',
                         margin='md'
                     ),
-                    TextComponent(
-                        text=suggestions,
+                    safe_text_component(
+                        suggestions,
                         size='sm',
                         color=self.colors["secondary"],
                         wrap=True,
@@ -122,7 +136,7 @@ class FlexMessageService:
                         height='sm',
                         action=PostbackAction(
                             label='🎮 玩土豆遊戲放鬆一下',
-                            data=f'action=potato_game&user_id={user_id or "unknown"}'
+                            data=f'action=potato_game&user_id={safe_user_id}'
                         )
                     )
                 ]
@@ -135,9 +149,11 @@ class FlexMessageService:
                                           message_to_analyze: str, user_id: Optional[str] = None) -> FlexSendMessage:
         """創建網域變形攻擊警告的 Flex Message"""
         
-        suspicious_domain = spoofing_result.get("spoofed_domain", "未知網域")
-        legitimate_domain = spoofing_result.get("original_domain", "未知網域")
-        attack_type = spoofing_result.get("spoofing_type", "未知攻擊")
+        # 安全地獲取數據
+        suspicious_domain = str(spoofing_result.get("spoofed_domain", "未知網域")).strip() or "未知網域"
+        legitimate_domain = str(spoofing_result.get("original_domain", "未知網域")).strip() or "未知網域"
+        attack_type = str(spoofing_result.get("spoofing_type", "未知攻擊")).strip() or "未知攻擊"
+        safe_user_id = user_id if user_id else "unknown"
         
         # 從safe_domains.json獲取正版網站的描述
         try:
@@ -159,8 +175,7 @@ class FlexMessageService:
             legitimate_description = "正版網站"
         
         # 確保描述不為空
-        if not legitimate_description or legitimate_description.strip() == "":
-            legitimate_description = "正版網站"
+        legitimate_description = str(legitimate_description).strip() or "正版網站"
         
         # 生成可疑網域的說明
         suspicious_explanation = self._generate_suspicious_domain_explanation(
@@ -168,8 +183,7 @@ class FlexMessageService:
         )
         
         # 確保說明不為空
-        if not suspicious_explanation or suspicious_explanation.strip() == "":
-            suspicious_explanation = "這是一個可疑的假冒網域"
+        suspicious_explanation = str(suspicious_explanation).strip() or "這是一個可疑的假冒網域"
         
         bubble = BubbleContainer(
             direction='ltr',
@@ -179,14 +193,14 @@ class FlexMessageService:
                 background_color=self.colors["danger"],
                 spacing='md',
                 contents=[
-                    TextComponent(
-                        text="🚨 網域偽裝攻擊警告",
+                    safe_text_component(
+                        "🚨 網域偽裝攻擊警告",
                         weight='bold',
                         color='#ffffff',
                         size='xl'
                     ),
-                    TextComponent(
-                        text="檢測到可疑網域",
+                    safe_text_component(
+                        "檢測到可疑網域",
                         color='#ffffff',
                         size='md'
                     )
@@ -197,59 +211,59 @@ class FlexMessageService:
                 padding_all='20px',
                 spacing='md',
                 contents=[
-                    TextComponent(
-                        text="⚠️ 詐騙集團可能假冒此網域騙取您的信用卡或銀行帳戶個資，請務必小心！",
+                    safe_text_component(
+                        "⚠️ 詐騙集團可能假冒此網域騙取您的信用卡或銀行帳戶個資，請務必小心！",
                         weight='bold',
                         size='md',
                         color=self.colors["danger"],
                         wrap=True
                     ),
                     SeparatorComponent(margin='md'),
-                    TextComponent(
-                        text="⚠️ 網域對比分析",
+                    safe_text_component(
+                        "⚠️ 網域對比分析",
                         weight='bold',
                         size='md',
                         margin='md'
                     ),
-                    TextComponent(
-                        text=f"可疑網域：{suspicious_domain}",
+                    safe_text_component(
+                        f"可疑網域：{suspicious_domain}",
                         size='sm',
                         color=self.colors["danger"],
                         wrap=True,
                         margin='sm',
                         weight='bold'
                     ),
-                    TextComponent(
-                        text=suspicious_explanation,
+                    safe_text_component(
+                        suspicious_explanation,
                         size='xs',
                         color=self.colors["danger"],
                         wrap=True,
                         margin='xs'
                     ),
-                    TextComponent(
-                        text=f"正版網域：{legitimate_domain}",
+                    safe_text_component(
+                        f"正版網域：{legitimate_domain}",
                         size='sm',
                         color=self.colors["success"],
                         wrap=True,
                         margin='sm',
                         weight='bold'
                     ),
-                    TextComponent(
-                        text=legitimate_description,
+                    safe_text_component(
+                        legitimate_description,
                         size='xs',
                         color=self.colors["success"],
                         wrap=True,
                         margin='xs'
                     ),
                     SeparatorComponent(margin='md'),
-                    TextComponent(
-                        text="🛡️ 緊急建議",
+                    safe_text_component(
+                        "🛡️ 緊急建議",
                         weight='bold',
                         size='md',
                         margin='md'
                     ),
-                    TextComponent(
-                        text="🚫 立即停止使用此網站\n🔍 確認網址拼寫是否正確\n🌐 直接搜尋正版網站名稱\n🛡️ 如已輸入資料請立即更改密碼\n💳 檢查信用卡及銀行帳戶異常",
+                    safe_text_component(
+                        "🚫 立即停止使用此網站\n🔍 確認網址拼寫是否正確\n🌐 直接搜尋正版網站名稱\n🛡️ 如已輸入資料請立即更改密碼\n💳 檢查信用卡及銀行帳戶異常",
                         size='sm',
                         color=self.colors["secondary"],
                         wrap=True,
@@ -274,7 +288,7 @@ class FlexMessageService:
                         height='sm',
                         action=PostbackAction(
                             label='🎮 玩土豆遊戲放鬆一下',
-                            data=f'action=potato_game&user_id={user_id or "unknown"}'
+                            data=f'action=potato_game&user_id={safe_user_id}'
                         )
                     )
                 ]
