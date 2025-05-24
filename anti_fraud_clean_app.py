@@ -855,11 +855,22 @@ if handler:
                 current_state["waiting_for_analysis"] = False
                 user_conversation_state[user_id] = current_state
             
-            # 分析前先發送等待訊息（在重要分析時）
-            should_send_wait = len(cleaned_message) > 100 or any(url_word in cleaned_message.lower() for url_word in ['http', 'www', '.com', '.tw'])
+            # 分析前先發送等待訊息（在重要分析時，但不包括等待分析狀態）
+            should_send_wait = (len(cleaned_message) > 100 or any(url_word in cleaned_message.lower() for url_word in ['http', 'www', '.com', '.tw'])) and not waiting_for_analysis
+            reply_token_used = False
+            
             if should_send_wait:
-                wait_message = "🔍 正在分析中，請稍候..."
-                line_bot_api.reply_message(reply_token, TextSendMessage(text=wait_message))
+                try:
+                    wait_message = "🔍 正在分析中，請稍候..."
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text=wait_message))
+                    reply_token_used = True
+                except LineBotApiError as e:
+                    logger.error(f"發送等待訊息時發生LINE API錯誤: {e}")
+                    # 如果連等待訊息都無法發送，則不繼續分析
+                    return
+                except Exception as e:
+                    logger.error(f"發送等待訊息時發生未知錯誤: {e}")
+                    return
             
             analysis_result = detect_fraud_with_chatgpt(cleaned_message, display_name, user_id)
             
@@ -883,99 +894,88 @@ if handler:
                     spoofing_result = analysis_result["result"]["spoofing_result"]
                     flex_message = create_domain_spoofing_flex_message(spoofing_result, display_name, cleaned_message)
                     
-                    if should_send_wait:
-                        # 使用push message發送結果（因為已經用過reply了）
-                        try:
+                    try:
+                        if reply_token_used:
+                            # 已經用過reply，使用push
                             if event.source.type == 'group':
-                                # 群組訊息：發送到群組
                                 line_bot_api.push_message(event.source.group_id, flex_message)
                             else:
-                                # 個人訊息：發送到個人
                                 line_bot_api.push_message(user_id, flex_message)
-                        except LineBotApiError as e:
-                            logger.error(f"LINE API錯誤: {e}")
-                            if e.status_code == 429:
-                                # 達到月度限制，嘗試用push_message發送簡單文字訊息
-                                simple_warning = f"⚠️ 高風險警告！\n\n{spoofing_result.get('risk_explanation', '這個網址可能是詐騙網站')}"
-                                try:
-                                    if event.source.type == 'group':
-                                        line_bot_api.push_message(event.source.group_id, TextSendMessage(text=simple_warning))
-                                    else:
-                                        line_bot_api.push_message(user_id, TextSendMessage(text=simple_warning))
-                                except LineBotApiError as push_error:
-                                    logger.error(f"連簡單警告訊息也無法發送: {push_error}")
-                    else:
-                        try:
+                        else:
+                            # 還沒用過reply，直接用reply
                             line_bot_api.reply_message(reply_token, flex_message)
-                        except LineBotApiError as e:
-                            logger.error(f"LINE API錯誤: {e}")
-                            if e.status_code == 429:
-                                # 達到月度限制，發送簡單文字訊息
+                            reply_token_used = True
+                    except LineBotApiError as e:
+                        logger.error(f"發送網域變形警告時發生LINE API錯誤: {e}")
+                        if e.status_code == 429:
+                            logger.warning("達到LINE API月度限制，無法發送詳細分析結果")
+                        elif not reply_token_used:
+                            # 如果還沒用過reply且不是429錯誤，嘗試發送簡單訊息
+                            try:
                                 simple_warning = f"⚠️ 高風險警告！\n\n{spoofing_result.get('risk_explanation', '這個網址可能是詐騙網站')}"
                                 line_bot_api.reply_message(reply_token, TextSendMessage(text=simple_warning))
-                            else:
-                                # 其他API錯誤，嘗試發送簡單訊息
-                                simple_warning = f"⚠️ 檢測到可疑網址！\n\n{spoofing_result.get('risk_explanation', '請小心這個網站')}"
-                                line_bot_api.reply_message(reply_token, TextSendMessage(text=simple_warning))
+                                reply_token_used = True
+                            except Exception as fallback_error:
+                                logger.error(f"發送簡單警告也失敗: {fallback_error}")
                 else:
                     # 一般詐騙分析結果
                     flex_message = create_analysis_flex_message(analysis_result["result"], display_name, cleaned_message)
                     
-                    if should_send_wait:
-                        # 使用push message發送結果（因為已經用過reply了）
-                        try:
+                    try:
+                        if reply_token_used:
+                            # 已經用過reply，使用push
                             if event.source.type == 'group':
-                                # 群組訊息：發送到群組
                                 line_bot_api.push_message(event.source.group_id, flex_message)
                             else:
-                                # 個人訊息：發送到個人
                                 line_bot_api.push_message(user_id, flex_message)
-                        except LineBotApiError as e:
-                            logger.error(f"LINE API錯誤: {e}")
-                            if e.status_code == 429:
-                                # 達到月度限制，嘗試用push_message發送簡單文字訊息
-                                simple_result = f"📊 分析結果\n\n{analysis_result['result'].get('explanation', '請小心這個訊息')}"
-                                try:
-                                    if event.source.type == 'group':
-                                        line_bot_api.push_message(event.source.group_id, TextSendMessage(text=simple_result))
-                                    else:
-                                        line_bot_api.push_message(user_id, TextSendMessage(text=simple_result))
-                                except LineBotApiError as push_error:
-                                    logger.error(f"連簡單分析結果也無法發送: {push_error}")
-                    else:
-                        try:
+                        else:
+                            # 還沒用過reply，直接用reply
                             line_bot_api.reply_message(reply_token, flex_message)
-                        except LineBotApiError as e:
-                            logger.error(f"LINE API錯誤: {e}")
-                            if e.status_code == 429:
-                                # 達到月度限制，發送簡單文字訊息
+                            reply_token_used = True
+                    except LineBotApiError as e:
+                        logger.error(f"發送分析結果時發生LINE API錯誤: {e}")
+                        if e.status_code == 429:
+                            logger.warning("達到LINE API月度限制，無法發送詳細分析結果")
+                        elif not reply_token_used:
+                            # 如果還沒用過reply且不是429錯誤，嘗試發送簡單訊息
+                            try:
                                 simple_result = f"📊 分析結果\n\n{analysis_result['result'].get('explanation', '請小心這個訊息')}"
                                 line_bot_api.reply_message(reply_token, TextSendMessage(text=simple_result))
-                            else:
-                                # 其他API錯誤，嘗試發送簡單訊息
-                                simple_result = f"📊 分析完成\n\n{analysis_result['result'].get('explanation', '分析結果已產生')}"
-                                line_bot_api.reply_message(reply_token, TextSendMessage(text=simple_result))
+                                reply_token_used = True
+                            except Exception as fallback_error:
+                                logger.error(f"發送簡單分析結果也失敗: {fallback_error}")
                 
-                # 隨機顯示贊助信息
+                # 隨機顯示贊助信息（只在沒有API限制時）
                 if random.random() < DONATION_SHOW_PROBABILITY:
                     try:
                         donation_flex = create_donation_flex_message()
                         line_bot_api.push_message(user_id, donation_flex)
+                    except LineBotApiError as e:
+                        if e.status_code != 429:  # 只有非429錯誤才記錄
+                            logger.error(f"發送贊助訊息時發生錯誤: {e}")
                     except Exception as e:
                         logger.error(f"發送贊助訊息時發生錯誤: {e}")
             else:
                 error_message = f"抱歉，分析過程中遇到問題：{analysis_result['message']}\n\n如果是緊急情況，建議您：\n🚫 暫時不要點擊任何連結\n📞 撥打165反詐騙專線諮詢\n👨‍👩‍👧‍👦 請家人朋友幫忙確認"
                 
-                if should_send_wait:
-                    try:
+                try:
+                    if reply_token_used:
+                        # 已經用過reply，使用push
                         if event.source.type == 'group':
                             line_bot_api.push_message(event.source.group_id, TextSendMessage(text=error_message))
                         else:
                             line_bot_api.push_message(user_id, TextSendMessage(text=error_message))
-                    except LineBotApiError as e:
-                        logger.error(f"無法發送錯誤訊息: {e}")
-                else:
-                    line_bot_api.reply_message(reply_token, TextSendMessage(text=error_message))
+                    else:
+                        # 還沒用過reply，直接用reply
+                        line_bot_api.reply_message(reply_token, TextSendMessage(text=error_message))
+                        reply_token_used = True
+                except LineBotApiError as e:
+                    logger.error(f"發送錯誤訊息時發生LINE API錯誤: {e}")
+                except Exception as e:
+                    logger.error(f"發送錯誤訊息時發生未知錯誤: {e}")
+            
+            # 詐騙分析完成，直接返回，不繼續執行其他邏輯
+            return
 
         # 檢查是否詢問功能
         if any(keyword in cleaned_message for keyword in function_inquiry_keywords):
@@ -1211,11 +1211,113 @@ if handler:
                     is_correct, result_flex = handle_potato_game_answer(user_id, answer_index)
                     line_bot_api.reply_message(reply_token, result_flex)
                     
-                # elif action == 'fraud_stats':
-                #     # 顯示詐騙統計（未來功能）
-                #     stats_message = "📊 詐騙統計功能開發中，敬請期待！\\n\\n目前可用功能：\\n🔍 詐騙訊息分析\\n🎯 防詐騙測試\\n📚 詐騙類型查詢"
-                #     line_bot_api.reply_message(reply_token, TextSendMessage(text=stats_message))
+                elif action == 'show_main_menu':
+                    # 顯示土豆主選單
+                    reply_text = f"嗨嗨 {display_name}！我是土豆 🥔 很開心你回來了！\n\n" \
+                                f"我是專業的防詐騙小助手，經過全面測試，已經準備好用四項超強服務保護你：\n\n" \
+                                f"🔍 **網站安全檢查**\n" \
+                                f"    ✨ 把可疑網址丟給我，我立刻幫你檢查安全性\n" \
+                                f"    ✨ 自動抓出假冒購物網站、釣魚網站等壞蛋\n\n" \
+                                f"🎯 **防詐騙知識測驗**\n" \
+                                f"    ✨ 跟我玩問答遊戲，提升你的防詐騙能力\n" \
+                                f"    ✨ 學會識破31種常見詐騙手法\n\n" \
+                                f"📚 **詐騙案例查詢**\n" \
+                                f"    ✨ 真實詐騙案例分析，讓你看清騙子手法\n" \
+                                f"    ✨ 涵蓋9大類詐騙類型完整說明\n\n" \
+                                f"☁️ **天氣預報查詢**\n" \
+                                f"    ✨ 台灣各縣市即時天氣，想知道哪裡都可以\n" \
+                                f"    ✨ 溫度、降雨機率通通有\n\n" \
+                                f"💡 **超簡單使用**：直接點下面的按鈕，或是直接跟我說你想要什麼服務！"
                     
+                    # 統一QuickReply按鈕
+                    quick_reply = QuickReply(items=[
+                        QuickReplyButton(action=MessageAction(label="🔍 檢查網站安全", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
+                        QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text=f"{bot_trigger_keyword} 防詐騙測試")),
+                        QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text=f"{bot_trigger_keyword} 詐騙類型列表")),
+                        QuickReplyButton(action=MessageAction(label="☁️ 查詢天氣", text=f"{bot_trigger_keyword} 今天天氣"))
+                    ])
+                    
+                    # 統一使用mention功能
+                    mention_text = f"@{display_name} {reply_text}"
+                    if len(mention_text) <= LINE_MESSAGE_MAX_LENGTH:
+                        reply_text = mention_text
+                    
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
+                    
+                    # 發送彩色的Flex Message按鈕
+                    try:
+                        import time
+                        time.sleep(1)
+                        
+                        unified_flex = FlexSendMessage(
+                            alt_text="土豆的服務選單",
+                            contents=BubbleContainer(
+                                size="kilo",
+                                header=BoxComponent(
+                                    layout="vertical",
+                                    contents=[
+                                        TextComponent(
+                                            text="🥔 土豆的服務選單",
+                                            weight="bold",
+                                            size="lg",
+                                            color="#1DB446"
+                                        )
+                                    ],
+                                    background_color="#F0F0F0",
+                                    padding_all="sm"
+                                ),
+                                body=BoxComponent(
+                                    layout="vertical",
+                                    spacing="sm",
+                                    contents=[
+                                        ButtonComponent(
+                                            style="primary",
+                                            color="#FF6B6B",
+                                            action=MessageAction(
+                                                label="🔍 檢查網站安全",
+                                                text=f"{bot_trigger_keyword} 請幫我分析這則訊息："
+                                            )
+                                        ),
+                                        ButtonComponent(
+                                            style="primary", 
+                                            color="#4ECDC4",
+                                            action=MessageAction(
+                                                label="🎯 防詐騙測驗",
+                                                text=f"{bot_trigger_keyword} 防詐騙測試"
+                                            )
+                                        ),
+                                        ButtonComponent(
+                                            style="primary",
+                                            color="#45B7D1", 
+                                            action=MessageAction(
+                                                label="📚 詐騙案例",
+                                                text=f"{bot_trigger_keyword} 詐騙類型列表"
+                                            )
+                                        ),
+                                        ButtonComponent(
+                                            style="primary",
+                                            color="#96CEB4",
+                                            action=MessageAction(
+                                                label="☁️ 查詢天氣", 
+                                                text=f"{bot_trigger_keyword} 今天天氣"
+                                            )
+                                        )
+                                    ]
+                                )
+                            )
+                        )
+                        
+                        line_bot_api.push_message(user_id, unified_flex)
+                        
+                    except LineBotApiError as e:
+                        if e.status_code == 429:
+                            logger.warning(f"達到LINE API月度限制，無法發送額外按鈕: {e}")
+                        else:
+                            logger.error(f"LINE API其他錯誤: {e}")
+                    except Exception as e:
+                        logger.error(f"發送統一按鈕時發生未知錯誤: {e}")
+                    
+                # elif action == 'fraud_stats':
                 else:
                     logger.warning(f"未知的postback動作: {action}")
                     line_bot_api.reply_message(reply_token, TextSendMessage(text="抱歉，我不太明白您想要做什麼，請重新嘗試！"))

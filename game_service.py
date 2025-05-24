@@ -316,6 +316,15 @@ class GameService:
                             data=f'action=start_potato_game&uid={user_id}'
                         ),
                         color='#4ECDC4'
+                    ),
+                    ButtonComponent(
+                        style='secondary',
+                        height='sm',
+                        action=PostbackAction(
+                            label='🏠 回到首頁',
+                            data=f'action=show_main_menu&user_id={user_id}'
+                        ),
+                        color='#96CEB4'
                     )
                 ]
             )
