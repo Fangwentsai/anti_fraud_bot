@@ -25,38 +25,39 @@ class GameService:
         self.game_questions = self.load_potato_game_questions()
         
     def load_potato_game_questions(self) -> List[Dict]:
-        """載入土豆遊戲問題"""
+        """載入遊戲問題"""
         try:
             with open('potato_game_questions.json', 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 
-                # 檢查是否為詐騙問題格式（不適用於土豆遊戲）
+                # 檢查是否為詐騙問題格式
                 if isinstance(data, dict) and 'questions' in data:
                     questions = data['questions']
                     # 檢查第一個問題的格式
                     if questions and isinstance(questions[0].get('options'), list):
                         first_option = questions[0]['options'][0]
-                        # 如果選項是字典格式（詐騙問題），則使用預設土豆問題
+                        # 如果選項是字典格式（詐騙問題），直接使用
                         if isinstance(first_option, dict) and 'id' in first_option:
-                            logger.info("檢測到詐騙問題格式，使用預設土豆問題")
-                            return self.get_default_game_questions()
+                            logger.info("載入詐騙檢測問題")
+                            return questions
                         else:
                             return questions
                 elif isinstance(data, list):
                     # 檢查是否為土豆遊戲格式
                     if data and 'question' in data[0] and isinstance(data[0].get('options'), list):
+                        logger.info("載入土豆遊戲問題")
                         return data
                     else:
-                        logger.info("問題格式不符合土豆遊戲，使用預設問題")
+                        logger.info("問題格式不符合，使用預設問題")
                         return self.get_default_game_questions()
                 else:
                     logger.warning("遊戲問題格式不正確，使用預設問題")
                     return self.get_default_game_questions()
         except FileNotFoundError:
-            logger.info("potato_game_questions.json 檔案不存在，使用預設土豆問題")
+            logger.info("potato_game_questions.json 檔案不存在，使用預設問題")
             return self.get_default_game_questions()
         except Exception as e:
-            logger.error(f"載入遊戲問題時發生錯誤: {e}，使用預設土豆問題")
+            logger.error(f"載入遊戲問題時發生錯誤: {e}，使用預設問題")
             return self.get_default_game_questions()
     
     def get_default_game_questions(self) -> List[Dict]:
@@ -377,7 +378,9 @@ class GameService:
         # 檢查是否包含遊戲觸發關鍵詞
         game_keywords = [
             "選哪顆土豆", "玩土豆", "選土豆", "土豆遊戲", 
-            "玩遊戲", "選土豆遊戲", "開始遊戲"
+            "玩遊戲", "選土豆遊戲", "開始遊戲",
+            "防詐騙遊戲", "詐騙檢測", "測試防詐", "防詐測試",
+            "詐騙遊戲", "反詐遊戲", "識別詐騙"
         ]
         
         for keyword in game_keywords:
