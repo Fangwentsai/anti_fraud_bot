@@ -8,7 +8,8 @@ import os
 import multiprocessing
 
 # 伺服器設定
-bind = f"0.0.0.0:{os.environ.get('PORT', 8080)}"
+port = os.environ.get('PORT', 8080)
+bind = f"0.0.0.0:{port}"
 workers = min(multiprocessing.cpu_count() * 2 + 1, 4)  # 限制最大 worker 數量
 worker_class = "sync"
 worker_connections = 1000
@@ -45,20 +46,21 @@ limit_request_field_size = 8190
 
 def when_ready(server):
     """伺服器準備就緒時的回調"""
-    server.log.info("Gunicorn 伺服器已準備就緒")
+    server.log.info(f"🚀 Gunicorn 伺服器已準備就緒，監聽端口: {port}")
+    server.log.info(f"🔧 Workers: {workers}, 連接數: {worker_connections}")
 
 def worker_int(worker):
     """Worker 被中斷時的回調"""
-    worker.log.info("Worker 收到中斷信號")
+    worker.log.info(f"⚠️ Worker {worker.pid} 收到中斷信號")
 
 def pre_fork(server, worker):
     """Fork worker 前的回調"""
-    server.log.info(f"Worker {worker.pid} 即將啟動")
+    server.log.info(f"🔄 Worker {worker.pid} 即將啟動")
 
 def post_fork(server, worker):
     """Fork worker 後的回調"""
-    server.log.info(f"Worker {worker.pid} 已啟動")
+    server.log.info(f"✅ Worker {worker.pid} 已啟動")
 
 def worker_abort(worker):
     """Worker 異常終止時的回調"""
-    worker.log.info(f"Worker {worker.pid} 異常終止") 
+    worker.log.error(f"❌ Worker {worker.pid} 異常終止") 

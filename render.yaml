@@ -4,7 +4,7 @@ services:
     env: python
     region: oregon
     plan: free
-    buildCommand: chmod +x deploy.sh && pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt
     startCommand: gunicorn --config gunicorn.conf.py anti_fraud_clean_app:app
     envVars:
       - key: PORT

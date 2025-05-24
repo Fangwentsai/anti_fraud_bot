@@ -1496,10 +1496,13 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     
     if flask_env == 'production':
-        # 生產環境：提示使用 Gunicorn
-        logger.info("生產環境檢測到，請使用 Gunicorn 啟動：")
-        logger.info(f"gunicorn --bind 0.0.0.0:{port} anti_fraud_clean_app:app")
-        logger.warning("如果您看到這個訊息，表示應該使用 Gunicorn 而不是直接執行 Python 檔案")
+        # 生產環境：不啟動 Flask 開發伺服器，只提示使用 Gunicorn
+        logger.info("生產環境檢測到，應該使用 Gunicorn 啟動")
+        logger.info(f"正確的啟動命令：gunicorn --bind 0.0.0.0:{port} anti_fraud_clean_app:app")
+        logger.warning("⚠️ 如果您看到這個訊息，表示正在直接執行 Python 檔案")
+        logger.warning("⚠️ 在生產環境中請使用 Gunicorn 啟動，而不是直接執行 Python 檔案")
+        # 在生產環境中不啟動 Flask 開發伺服器
+        exit(1)
     else:
         # 開發環境：使用 Flask 開發伺服器
         logger.info("開發環境：使用 Flask 開發伺服器")

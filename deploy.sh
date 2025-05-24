@@ -18,6 +18,12 @@ if [ ! -f "anti_fraud_clean_app.py" ]; then
     exit 1
 fi
 
+echo "🔍 檢查Gunicorn配置文件..."
+if [ ! -f "gunicorn.conf.py" ]; then
+    echo "❌ 錯誤: gunicorn.conf.py 不存在"
+    exit 1
+fi
+
 echo "✅ 部署準備完成！"
-echo "🎯 啟動應用程式..."
-python anti_fraud_clean_app.py 
+echo "🎯 準備使用 Gunicorn 啟動應用程式..."
+# 不在這裡啟動應用程式，讓 Render.com 使用 startCommand 
