@@ -572,6 +572,7 @@ class FlexMessageService:
             "中高": self.colors["warning"],
             "中": "#FFA726",
             "低": self.colors["success"],
+            "低風險": self.colors["success"],
             "極低": self.colors["success"],
             "無風險": self.colors["success"]
         }
@@ -585,6 +586,7 @@ class FlexMessageService:
             "中高": "⚠️",
             "中": "⚡",
             "低": "✅",
+            "低風險": "✅",
             "極低": "✅",
             "無風險": "✅"
         }
