@@ -29,19 +29,34 @@ class GameService:
         try:
             with open('potato_game_questions.json', 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                # 如果是字典格式，取出問題列表
+                
+                # 檢查是否為詐騙問題格式（不適用於土豆遊戲）
                 if isinstance(data, dict) and 'questions' in data:
-                    return data['questions']
+                    questions = data['questions']
+                    # 檢查第一個問題的格式
+                    if questions and isinstance(questions[0].get('options'), list):
+                        first_option = questions[0]['options'][0]
+                        # 如果選項是字典格式（詐騙問題），則使用預設土豆問題
+                        if isinstance(first_option, dict) and 'id' in first_option:
+                            logger.info("檢測到詐騙問題格式，使用預設土豆問題")
+                            return self.get_default_game_questions()
+                        else:
+                            return questions
                 elif isinstance(data, list):
-                    return data
+                    # 檢查是否為土豆遊戲格式
+                    if data and 'question' in data[0] and isinstance(data[0].get('options'), list):
+                        return data
+                    else:
+                        logger.info("問題格式不符合土豆遊戲，使用預設問題")
+                        return self.get_default_game_questions()
                 else:
                     logger.warning("遊戲問題格式不正確，使用預設問題")
                     return self.get_default_game_questions()
         except FileNotFoundError:
-            logger.warning("potato_game_questions.json 檔案不存在，使用預設問題")
+            logger.info("potato_game_questions.json 檔案不存在，使用預設土豆問題")
             return self.get_default_game_questions()
         except Exception as e:
-            logger.error(f"載入遊戲問題時發生錯誤: {e}")
+            logger.error(f"載入遊戲問題時發生錯誤: {e}，使用預設土豆問題")
             return self.get_default_game_questions()
     
     def get_default_game_questions(self) -> List[Dict]:
@@ -77,7 +92,7 @@ class GameService:
             },
             {
                 "question": "土豆發芽了還能吃嗎？",
-                "options": ["✅ 可以，很營養", "❌ 不行，有毒", "🤔 去掉芽就行", "🔥 煮熟就沒事"],
+                "options": ["✅ 可以很營養", "❌ 不行有毒", "🤔 去掉芽就行", "🔥 煮熟沒事"],
                 "correct_answer": 1,
                 "explanation": "發芽的土豆含有龍葵鹼，有毒不能吃！",
                 "fraud_tip": "💡 發芽的土豆不能吃，可疑的投資也不能碰！遇到要求先付錢的投資，就像發芽的土豆一樣危險。"
@@ -109,13 +124,18 @@ class GameService:
         # 創建選項按鈕
         option_buttons = []
         for i, option in enumerate(options):
+            # 確保按鈕label不超過20字元
+            button_label = option
+            if len(button_label) > 20:
+                button_label = button_label[:17] + "..."
+            
             option_buttons.append(
                 ButtonComponent(
                     style='secondary',
                     height='sm',
                     action=PostbackAction(
-                        label=option,
-                        data=f'action=potato_answer&user_id={user_id}&answer={i}'
+                        label=button_label,
+                        data=f'action=potato_game_answer&user_id={user_id}&answer={i}'
                     )
                 )
             )
@@ -255,7 +275,7 @@ class GameService:
                         height='sm',
                         action=PostbackAction(
                             label='🎮 再玩一次',
-                            data=f'action=potato_game&user_id={user_id}'
+                            data=f'action=start_potato_game&user_id={user_id}'
                         )
                     ),
                     ButtonComponent(
