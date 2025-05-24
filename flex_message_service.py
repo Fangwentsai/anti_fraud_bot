@@ -10,7 +10,7 @@ import random
 from typing import Dict, List, Optional, Any
 from linebot.models import (
     FlexSendMessage, BubbleContainer, BoxComponent, TextComponent, 
-    SeparatorComponent, ButtonComponent, URIAction, PostbackAction
+    SeparatorComponent, ButtonComponent, URIAction, PostbackAction, MessageAction
 )
 
 logger = logging.getLogger(__name__)
@@ -236,9 +236,9 @@ class FlexMessageService:
                     ButtonComponent(
                         style='secondary',
                         height='sm',
-                        action=URIAction(
-                            label='🌐 前往正版網站',
-                            uri=f'https://{legitimate_domain}'
+                        action=MessageAction(
+                            label='🌐 查看正版網站',
+                            text=f'正版網站：{legitimate_domain}'
                         )
                     )
                 ]

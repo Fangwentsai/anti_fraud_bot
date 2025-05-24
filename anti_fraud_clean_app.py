@@ -8,6 +8,7 @@ import requests
 from urllib.parse import urlparse
 from datetime import datetime, timedelta
 import openai
+from openai import OpenAI
 from flask import Flask, request, abort, render_template, jsonify
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
@@ -108,11 +109,12 @@ else:
     handler = None
     logger.warning("LINE Bot API 初始化失敗：缺少必要的環境變數")
 
-# OpenAI設定 - 使用配置模組
+# OpenAI設定 - 使用新版本的客戶端初始化
 if OPENAI_API_KEY:
-    openai.api_key = OPENAI_API_KEY
+    openai_client = OpenAI(api_key=OPENAI_API_KEY)
     logger.info("OpenAI API 初始化成功")
 else:
+    openai_client = None
     logger.warning("OpenAI API 初始化失敗：缺少 API 金鑰")
 
 # 初始化Firebase管理器
@@ -576,7 +578,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         """
         
         # 調用OpenAI API (修正為新版API格式)
-        response = openai.chat.completions.create(
+        response = openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "你是一個詐騙風險評估專家，請以50歲以上的長輩能理解的口語化方式分析詐騙風險。避免使用「您」「我」等主觀用詞，而是使用更直接的表述。提供的建議應該具體實用且直接，並且一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號。語言要像鄰居阿姨在關心提醒一樣親切簡單。"},
@@ -1056,7 +1058,7 @@ if handler:
                 logger.info(f"使用記憶功能，總共提供 {len(messages)} 條消息給ChatGPT")
                 
                 # 使用更新後的OpenAI API格式
-                chat_response = openai.chat.completions.create(
+                chat_response = openai_client.chat.completions.create(
                     model=os.environ.get('OPENAI_MODEL', 'gpt-3.5-turbo'),
                     messages=messages,
                     temperature=0.7,
