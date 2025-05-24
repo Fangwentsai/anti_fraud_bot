@@ -668,21 +668,30 @@ if handler:
 
         # 檢查是否為空訊息（移除觸發詞後）
         if not cleaned_message.strip():
-            # 發送功能介紹
-            reply_text = f"您好！我是防詐騙小幫手，提供四項服務：\n\n" \
-                        f"🔍 **網址分析** → 直接貼網址或說「幫我分析」\n" \
-                        f"🎯 **防詐騙測試** → 說「防詐騙測試」\n" \
-                        f"📚 **詐騙類型查詢** → 說「詐騙類型列表」\n" \
-                        f"☁️ **天氣查詢** → 問「今天天氣」或「台北天氣」\n\n" \
-                        f"請直接輸入關鍵字啟用對應服務！"
+            # 發送優化後的功能介紹
+            reply_text = f"您好 {display_name}！我是防詐騙助手，很高興為您服務！\n\n" \
+                        f"經過全面測試，我已準備好提供四項專業服務來保護您：\n\n" \
+                        f"🔍 **網站安全檢查**\n" \
+                        f"    ✨ 只要把可疑網址貼給我，我就能幫您檢查安全性\n" \
+                        f"    ✨ 自動識別假冒購物網站、釣魚網站等風險\n\n" \
+                        f"🎯 **防詐騙知識測驗**\n" \
+                        f"    ✨ 透過簡單問答遊戲，提升您的防詐騙能力\n" \
+                        f"    ✨ 學會識別31種常見詐騙手法\n\n" \
+                        f"📚 **詐騙案例查詢**\n" \
+                        f"    ✨ 提供真實詐騙案例分析和防範方法\n" \
+                        f"    ✨ 涵蓋9大類詐騙類型完整說明\n\n" \
+                        f"☁️ **天氣預報查詢**\n" \
+                        f"    ✨ 查詢台灣各縣市即時天氣和未來預報\n" \
+                        f"    ✨ 包含溫度、降雨機率等詳細資訊\n\n" \
+                        f"💡 **使用方式很簡單**：點擊下方按鈕，或直接輸入您想要的服務即可！"
                 
             # 如果在群組中，QuickReply按鈕需要包含觸發關鍵詞
             if is_group_message:
                 quick_reply = QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="🔍 網址分析", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
-                    QuickReplyButton(action=MessageAction(label="🎯 防詐騙測試", text=f"{bot_trigger_keyword} 防詐騙測試")),
-                    QuickReplyButton(action=MessageAction(label="📚 詐騙類型", text=f"{bot_trigger_keyword} 詐騙類型列表")),
-                    QuickReplyButton(action=MessageAction(label="☁️ 天氣查詢", text=f"{bot_trigger_keyword} 今天天氣"))
+                    QuickReplyButton(action=MessageAction(label="🔍 檢查網站安全", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
+                    QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text=f"{bot_trigger_keyword} 防詐騙測試")),
+                    QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text=f"{bot_trigger_keyword} 詐騙類型列表")),
+                    QuickReplyButton(action=MessageAction(label="☁️ 查詢天氣", text=f"{bot_trigger_keyword} 今天天氣"))
                 ])
                 # 在群組中使用mention功能
                 mention_text = f"@{display_name} {reply_text}"
@@ -690,10 +699,10 @@ if handler:
                     reply_text = mention_text
             else:
                 quick_reply = QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="🔍 網址分析", text="請幫我分析這則訊息：")),
-                    QuickReplyButton(action=MessageAction(label="🎯 防詐騙測試", text="防詐騙測試")),
-                    QuickReplyButton(action=MessageAction(label="📚 詐騙類型", text="詐騙類型列表")),
-                    QuickReplyButton(action=MessageAction(label="☁️ 天氣查詢", text="今天天氣"))
+                    QuickReplyButton(action=MessageAction(label="🔍 檢查網站安全", text="請幫我分析這則訊息：")),
+                    QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text="防詐騙測試")),
+                    QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text="詐騙類型列表")),
+                    QuickReplyButton(action=MessageAction(label="☁️ 查詢天氣", text="今天天氣"))
                 ])
             
             line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
@@ -833,26 +842,35 @@ if handler:
 
         # 檢查是否詢問功能
         if any(keyword in cleaned_message for keyword in function_inquiry_keywords):
-            reply_text = f"您好 {display_name}！我是防詐騙小幫手，提供四項服務：\n\n" \
-                        f"🔍 **網址分析** → 直接貼網址或說「幫我分析」\n" \
-                        f"🎯 **防詐騙測試** → 說「防詐騙測試」\n" \
-                        f"📚 **詐騙類型查詢** → 說「詐騙類型列表」\n" \
-                        f"☁️ **天氣查詢** → 問「今天天氣」或「台北天氣」\n\n" \
-                        f"請直接輸入關鍵字啟用對應服務！"
+            reply_text = f"您好 {display_name}！我是防詐騙助手，很高興為您服務！\n\n" \
+                        f"經過全面測試，我已準備好提供四項專業服務來保護您：\n\n" \
+                        f"🔍 **網站安全檢查**\n" \
+                        f"    ✨ 只要把可疑網址貼給我，我就能幫您檢查安全性\n" \
+                        f"    ✨ 自動識別假冒購物網站、釣魚網站等風險\n\n" \
+                        f"🎯 **防詐騙知識測驗**\n" \
+                        f"    ✨ 透過簡單問答遊戲，提升您的防詐騙能力\n" \
+                        f"    ✨ 學會識別31種常見詐騙手法\n\n" \
+                        f"📚 **詐騙案例查詢**\n" \
+                        f"    ✨ 提供真實詐騙案例分析和防範方法\n" \
+                        f"    ✨ 涵蓋9大類詐騙類型完整說明\n\n" \
+                        f"☁️ **天氣預報查詢**\n" \
+                        f"    ✨ 查詢台灣各縣市即時天氣和未來預報\n" \
+                        f"    ✨ 包含溫度、降雨機率等詳細資訊\n\n" \
+                        f"💡 **使用方式很簡單**：點擊下方按鈕，或直接輸入您想要的服務即可！"
             
             if is_group_message:
                 quick_reply = QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="🔍 網址分析", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
-                    QuickReplyButton(action=MessageAction(label="🎯 防詐騙測試", text=f"{bot_trigger_keyword} 防詐騙測試")),
-                    QuickReplyButton(action=MessageAction(label="📚 詐騙類型", text=f"{bot_trigger_keyword} 詐騙類型列表")),
-                    QuickReplyButton(action=MessageAction(label="☁️ 天氣查詢", text=f"{bot_trigger_keyword} 今天天氣"))
+                    QuickReplyButton(action=MessageAction(label="🔍 檢查網站安全", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
+                    QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text=f"{bot_trigger_keyword} 防詐騙測試")),
+                    QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text=f"{bot_trigger_keyword} 詐騙類型列表")),
+                    QuickReplyButton(action=MessageAction(label="☁️ 查詢天氣", text=f"{bot_trigger_keyword} 今天天氣"))
                 ])
             else:
                 quick_reply = QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="🔍 網址分析", text="請幫我分析這則訊息：")),
-                    QuickReplyButton(action=MessageAction(label="🎯 防詐騙測試", text="防詐騙測試")),
-                    QuickReplyButton(action=MessageAction(label="📚 詐騙類型", text="詐騙類型列表")),
-                    QuickReplyButton(action=MessageAction(label="☁️ 天氣查詢", text="今天天氣"))
+                    QuickReplyButton(action=MessageAction(label="🔍 檢查網站安全", text="請幫我分析這則訊息：")),
+                    QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text="防詐騙測試")),
+                    QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text="詐騙類型列表")),
+                    QuickReplyButton(action=MessageAction(label="☁️ 查詢天氣", text="今天天氣"))
                 ])
             
             line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
@@ -900,7 +918,7 @@ if handler:
                 if len(chat_reply) > LINE_MESSAGE_SAFE_LENGTH:
                     chat_reply = chat_reply[:LINE_MESSAGE_SAFE_LENGTH] + "..."
                 
-                introduction = f"\n\n我是防詐騙機器人「防詐騙助手」，能幫您：\n🔍 分析可疑訊息\n🎯 測試您的防詐騙能力\n📚 查詢各類詐騙手法"
+                introduction = f"\n\n💫 我是您的專業防詐騙助手！經過全面測試，我能為您提供：\n🔍 網站安全檢查\n🎯 防詐騙知識測驗\n📚 詐騙案例查詢\n☁️ 天氣預報查詢\n\n有任何可疑訊息都歡迎直接傳給我分析喔！"
                 
                 # 如果是首次聊天，添加自我介紹
                 if user_id not in first_time_chatters:
