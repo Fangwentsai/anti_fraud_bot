@@ -1,0 +1,53 @@
+{
+  "version": "1.0.0",
+  "timestamp": "2025-05-24T11:36:23.079645",
+  "status": "LOCKED",
+  "files": {
+    "anti_fraud_clean_app.py": {
+      "hash": "7a6962785f91baf89634acc88bed43b4",
+      "description": "主程式 - 防詐騙LINE Bot核心邏輯",
+      "critical_functions": [
+        "handle_message",
+        "detect_fraud_with_chatgpt",
+        "parse_fraud_analysis",
+        "should_perform_fraud_analysis"
+      ],
+      "last_stable": "2025-05-24 11:33:00",
+      "exists": true
+    },
+    "weather_service.py": {
+      "hash": "47409f73038db2ee4a00861283c5aa50",
+      "description": "天氣服務 - 中央氣象署API整合",
+      "critical_functions": [
+        "handle_weather_query",
+        "get_weather_forecast",
+        "_parse_cwb_weather_data",
+        "get_taipei_time"
+      ],
+      "last_stable": "2025-05-24 11:33:00",
+      "exists": true
+    },
+    "domain_spoofing_detector.py": {
+      "hash": "eb6c0bac4ac2c71fbf7c6c766990b964",
+      "description": "網域變形攻擊檢測",
+      "critical_functions": [
+        "DomainSpoofingDetector",
+        "detect_domain_spoofing",
+        "_is_legitimate_subdomain"
+      ],
+      "last_stable": "2025-05-24 10:00:00",
+      "exists": true
+    },
+    "flex_message_service.py": {
+      "hash": "19a139add49912c6c60815fb6755abc6",
+      "description": "Flex訊息服務",
+      "critical_functions": [
+        "FlexMessageService",
+        "create_fraud_analysis_flex",
+        "create_domain_spoofing_flex"
+      ],
+      "last_stable": "2025-05-24 10:00:00",
+      "exists": true
+    }
+  }
+}

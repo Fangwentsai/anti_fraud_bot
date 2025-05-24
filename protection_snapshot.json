@@ -1,0 +1,17 @@
+{
+  "version": "1.0.0-stable",
+  "lock_date": "2025-05-24",
+  "timestamp": "2025-05-24T11:38:59.077339",
+  "files": {
+    "anti_fraud_clean_app.py": {
+      "hash": "7a6962785f91baf89634acc88bed43b4",
+      "size": 80638,
+      "exists": true
+    },
+    "weather_service.py": {
+      "hash": "47409f73038db2ee4a00861283c5aa50",
+      "size": 20504,
+      "exists": true
+    }
+  }
+}
