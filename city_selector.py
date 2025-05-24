@@ -35,21 +35,21 @@ def create_city_selector_flex_message(user_name: str = "朋友") -> FlexSendMess
     
     # 創建按鈕顏色
     region_colors = {
-        "北部": "#1976D2",  # 深藍色
-        "中部": "#388E3C",  # 綠色
-        "南部": "#F57C00",  # 橙色
-        "東部": "#7B1FA2",  # 紫色
-        "離島": "#00796B"   # 青色
+        "北部": "#2196F3",  # 藍色
+        "中部": "#4CAF50",  # 綠色
+        "南部": "#FF9800",  # 橙色
+        "東部": "#9C27B0",  # 紫色
+        "離島": "#009688"   # 青色
     }
     
-    # 創建標題
+    # 創建標題和說明
     body_contents = [
         TextComponent(
-            text=f"@{user_name} 想查詢哪個縣市的天氣呢？",
+            text="想查詢哪個縣市的天氣？",
             weight="bold",
             size="md",
             color="#555555",
-            wrap=True
+            align="center"
         ),
         SeparatorComponent(margin="md")
     ]
@@ -59,10 +59,10 @@ def create_city_selector_flex_message(user_name: str = "朋友") -> FlexSendMess
         # 添加區域標題
         body_contents.append(
             TextComponent(
-                text=f"📍 {region}",
+                text=f"{region}",
                 weight="bold",
-                size="md",
-                margin="lg",
+                size="sm",
+                margin="md",
                 color=region_colors[region]
             )
         )
@@ -70,9 +70,9 @@ def create_city_selector_flex_message(user_name: str = "朋友") -> FlexSendMess
         # 為每個城市創建按鈕
         city_buttons = []
         
-        # 創建每行的按鈕容器
-        for i in range(0, len(cities), 3):  # 每行最多3個按鈕
-            row_cities = cities[i:i+3]
+        # 創建每行的按鈕容器 (每行4個按鈕)
+        for i in range(0, len(cities), 4):
+            row_cities = cities[i:i+4]
             row_buttons = []
             
             for city in row_cities:
@@ -84,8 +84,9 @@ def create_city_selector_flex_message(user_name: str = "朋友") -> FlexSendMess
                             label=f"{city}",
                             text=f"土豆 {city}天氣"
                         ),
-                        margin="sm",
-                        color="#f5f5f5"  # 淺灰色背景
+                        margin="xs",
+                        color="#f5f5f5",
+                        flex=1
                     )
                 )
             
@@ -93,8 +94,8 @@ def create_city_selector_flex_message(user_name: str = "朋友") -> FlexSendMess
             city_buttons.append(
                 BoxComponent(
                     layout="horizontal",
-                    margin="md",
-                    spacing="sm",
+                    margin="xs",
+                    spacing="xs",
                     contents=row_buttons
                 )
             )
@@ -104,42 +105,36 @@ def create_city_selector_flex_message(user_name: str = "朋友") -> FlexSendMess
     
     # 創建Flex Message
     bubble = BubbleContainer(
-        direction="ltr",
+        size="mega",  # 使用更合適的尺寸
         header=BoxComponent(
             layout="vertical",
-            background_color="#2196F3",  # 藍色
-            padding_all="15px",
+            background_color="#2196F3",
+            paddingAll="10px",  # 縮小padding
+            height="50px",  # 設定較小的高度
             contents=[
                 TextComponent(
-                    text="🌤️ 天氣查詢",
+                    text="天氣查詢",
                     weight="bold",
                     color="#ffffff",
-                    size="xl"
+                    size="md",
+                    align="center"
                 )
             ]
         ),
         body=BoxComponent(
             layout="vertical",
-            padding_all="15px",
+            paddingAll="10px",  # 縮小padding
             contents=body_contents
         ),
         footer=BoxComponent(
             layout="vertical",
-            padding_all="15px",
+            paddingAll="10px",  # 縮小padding
+            height="40px",  # 設定較小的高度
             contents=[
-                ButtonComponent(
-                    style="primary",
-                    color="#2196F3",
-                    action=MessageAction(
-                        label="台北天氣",
-                        text="土豆 台北天氣"
-                    )
-                ),
                 TextComponent(
-                    text="🔍 點選任一縣市或直接輸入「OO天氣」",
+                    text="點選縣市或直接輸入「OO天氣」",
                     size="xs",
                     color="#aaaaaa",
-                    margin="md",
                     align="center"
                 )
             ]

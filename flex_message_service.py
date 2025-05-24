@@ -435,110 +435,126 @@ class FlexMessageService:
         if not forecast:
             # 錯誤情況的簡單 Flex Message
             bubble = BubbleContainer(
+                size="kilo",
                 direction='ltr',
                 body=BoxComponent(
                     layout='vertical',
                     contents=[
                         TextComponent(
-                            text=f"@{user_name} ❌ 無法取得{city}的天氣資訊",
-                            wrap=True
+                            text=f"❌ 無法取得{city}的天氣資訊",
+                            wrap=True,
+                            weight="bold",
+                            color="#DD2C00"
                         )
                     ]
                 )
             )
             return FlexSendMessage(alt_text="天氣資訊錯誤", contents=bubble)
         
-        # 創建天氣預報內容
+        # 只取第一天的資料，簡化顯示
+        day_data = forecast[0] if forecast else {}
+        date = day_data.get("date", "")
+        weekday = day_data.get("weekday", "")
+        weather = day_data.get("weather", "")
+        temp = day_data.get("temperature", {})
+        rain_prob = day_data.get("rain_probability", "")
+        
+        weather_emoji = self._get_weather_emoji(weather)
+        
+        # 創建更簡潔的天氣預報內容
         body_contents = [
-            TextComponent(
-                text=f"@{user_name}",
-                weight='bold',
-                size='lg',
-                color=self.colors["primary"]
+            BoxComponent(
+                layout="horizontal",
+                margin="md",
+                contents=[
+                    TextComponent(
+                        text=weather_emoji,
+                        size="3xl",
+                        align="center",
+                        gravity="center",
+                        flex=1
+                    ),
+                    BoxComponent(
+                        layout="vertical",
+                        flex=2,
+                        spacing="sm",
+                        contents=[
+                            TextComponent(
+                                text=f"{temp.get('low', '')}°C - {temp.get('high', '')}°C",
+                                size="xl",
+                                weight="bold",
+                                color="#555555"
+                            ),
+                            TextComponent(
+                                text=weather,
+                                size="md",
+                                color="#888888"
+                            ),
+                            TextComponent(
+                                text=f"降雨機率：{rain_prob}",
+                                size="sm",
+                                color="#aaaaaa"
+                            )
+                        ]
+                    )
+                ]
             ),
-            SeparatorComponent(margin='md')
+            SeparatorComponent(margin="lg"),
+            BoxComponent(
+                layout="horizontal",
+                margin="md",
+                contents=[
+                    TextComponent(
+                        text=f"{date} {weekday}",
+                        size="xs",
+                        color="#aaaaaa",
+                        flex=1
+                    ),
+                    TextComponent(
+                        text=f"資料來源：{source}",
+                        size="xs",
+                        color="#aaaaaa",
+                        align="end",
+                        flex=1
+                    )
+                ]
+            )
         ]
         
-        for i, day_data in enumerate(forecast[:3]):  # 最多顯示3天
-            date = day_data.get("date", "")
-            weekday = day_data.get("weekday", "")
-            weather = day_data.get("weather", "")
-            temp = day_data.get("temperature", {})
-            rain_prob = day_data.get("rain_probability", "")
-            
-            weather_emoji = self._get_weather_emoji(weather)
-            
-            if i > 0:
-                body_contents.append(SeparatorComponent(margin='md'))
-            
-            body_contents.extend([
-                TextComponent(
-                    text=f"{weather_emoji} {date} {weekday}",
-                    weight='bold',
-                    size='md',
-                    margin='md'
-                ),
-                TextComponent(
-                    text=f"天氣：{weather}",
-                    size='sm',
-                    color=self.colors["secondary"],
-                    margin='sm'
-                ),
-                TextComponent(
-                    text=f"溫度：{temp.get('low', '')}°C - {temp.get('high', '')}°C",
-                    size='sm',
-                    color=self.colors["secondary"],
-                    margin='xs'
-                ),
-                TextComponent(
-                    text=f"降雨機率：{rain_prob}",
-                    size='sm',
-                    color=self.colors["secondary"],
-                    margin='xs'
-                )
-            ])
-        
-        # 添加資料來源
-        body_contents.extend([
-            SeparatorComponent(margin='md'),
-            TextComponent(
-                text=f"📡 資料來源：{source}",
-                size='xs',
-                color=self.colors["secondary"],
-                margin='md'
-            )
-        ])
-        
         bubble = BubbleContainer(
+            size="kilo",  # 使用較小的尺寸
             direction='ltr',
             header=BoxComponent(
                 layout='vertical',
-                padding_all='20px',
-                background_color=self.colors["info"],
+                background_color="#1E88E5",
+                height="65px",  # 降低高度
+                paddingAll="15px",
                 contents=[
                     TextComponent(
-                        text=f"🌤️ {city} 天氣預報",
+                        text=f"{city}天氣",
                         weight='bold',
                         color='#ffffff',
-                        size='xl'
+                        size='lg',
+                        align="center"
                     )
                 ]
             ),
             body=BoxComponent(
                 layout='vertical',
-                padding_all='20px',
-                spacing='sm',
+                paddingAll="15px",
                 contents=body_contents
             ),
             footer=BoxComponent(
                 layout='vertical',
-                spacing='sm',
+                height="40px",  # 降低高度
+                paddingAll="10px",
                 contents=[
-                    ButtonComponent(
-                        style='secondary',
-                        height='sm',
+                    TextComponent(
+                        text="點此查看更多天氣資訊",
+                        size="xs",
+                        align="center",
+                        color="#1E88E5",
                         action=URIAction(
-                            label='🌐 中央氣象署',
                             uri='https://www.cwb.gov.tw/'
                         )
                     )

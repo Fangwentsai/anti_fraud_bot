@@ -18,6 +18,10 @@ from linebot.models import (
     BubbleContainer, BoxComponent, TextComponent, SeparatorComponent,
     ButtonComponent, URIAction, PostbackAction
 )
+from linebot.v3 import WebhookHandler as V3WebhookHandler
+from linebot.v3.messaging import Configuration, ApiClient, MessagingApi
+from linebot.v3.webhooks import MessageEvent as V3MessageEvent
+from linebot.v3.messaging import TextMessage as V3TextMessage
 from firebase_manager import FirebaseManager
 from domain_spoofing_detector import detect_domain_spoofing
 from dotenv import load_dotenv
@@ -127,10 +131,17 @@ app = Flask(__name__)
 if LINE_CHANNEL_ACCESS_TOKEN and LINE_CHANNEL_SECRET:
     line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
     handler = WebhookHandler(LINE_CHANNEL_SECRET)
+    
+    # 初始化新版 LINE API
+    v3_configuration = Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN)
+    v3_api_client = ApiClient(v3_configuration)
+    v3_messaging_api = MessagingApi(v3_api_client)
+    
     logger.info("LINE Bot API 初始化成功")
 else:
     line_bot_api = None
     handler = None
+    v3_messaging_api = None
     logger.warning("LINE Bot API 初始化失敗：缺少必要的環境變數")
 
 # OpenAI設定 - 使用新版本的客戶端初始化，添加錯誤處理
@@ -1173,7 +1184,16 @@ if handler:
                 if not mentioned_location:
                     logger.info("未指定城市，顯示城市選擇器")
                     city_selector = get_city_selector(display_name)
-                    line_bot_api.reply_message(reply_token, city_selector)
+                    
+                    # 使用新版 API 回覆
+                    if v3_messaging_api:
+                        v3_messaging_api.reply_message(
+                            reply_token=reply_token,
+                            messages=[city_selector]
+                        )
+                    else:
+                        # 舊版 API 作為備用
+                        line_bot_api.reply_message(reply_token, city_selector)
                     return
                 
                 # 指定了城市，繼續正常處理
@@ -1183,26 +1203,69 @@ if handler:
                 if weather_data.get("success"):
                     # 創建天氣Flex Message
                     weather_flex = create_weather_flex_message(weather_data.get("data", {}), display_name)
-                    line_bot_api.reply_message(reply_token, weather_flex)
+                    
+                    # 使用新版 API 回覆
+                    if v3_messaging_api:
+                        v3_messaging_api.reply_message(
+                            reply_token=reply_token,
+                            messages=[weather_flex]
+                        )
+                    else:
+                        # 舊版 API 作為備用
+                        line_bot_api.reply_message(reply_token, weather_flex)
                 else:
                     # 如果結構化數據獲取失敗，退回到文字格式
                     weather_text = handle_weather_query(cleaned_message, display_name)
                     if weather_text:
-                        line_bot_api.reply_message(reply_token, TextSendMessage(text=weather_text))
+                        # 使用新版 API 回覆
+                        if v3_messaging_api:
+                            v3_messaging_api.reply_message(
+                                reply_token=reply_token,
+                                messages=[V3TextMessage(text=weather_text)]
+                            )
+                        else:
+                            # 舊版 API 作為備用
+                            line_bot_api.reply_message(reply_token, TextSendMessage(text=weather_text))
                     else:
                         # 發送錯誤訊息
                         error_text = f"抱歉，無法處理您的天氣查詢。\n\n💡 您可以試著這樣問：\n• 今天天氣如何\n• 台北天氣\n• 明天會下雨嗎"
-                        line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
+                        
+                        # 使用新版 API 回覆
+                        if v3_messaging_api:
+                            v3_messaging_api.reply_message(
+                                reply_token=reply_token,
+                                messages=[V3TextMessage(text=error_text)]
+                            )
+                        else:
+                            # 舊版 API 作為備用
+                            line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
             except Exception as e:
                 logger.error(f"處理天氣查詢時發生錯誤: {e}")
                 # 使用文字格式作為備用方案
                 weather_text = handle_weather_query(cleaned_message, display_name)
                 if weather_text:
-                    line_bot_api.reply_message(reply_token, TextSendMessage(text=weather_text))
+                    # 使用新版 API 回覆
+                    if v3_messaging_api:
+                        v3_messaging_api.reply_message(
+                            reply_token=reply_token,
+                            messages=[V3TextMessage(text=weather_text)]
+                        )
+                    else:
+                        # 舊版 API 作為備用
+                        line_bot_api.reply_message(reply_token, TextSendMessage(text=weather_text))
                 else:
                     # 發送錯誤訊息
                     error_text = f"抱歉，無法處理您的天氣查詢。\n\n💡 您可以試著這樣問：\n• 今天天氣如何\n• 台北天氣\n• 明天會下雨嗎"
-                    line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
+                    
+                    # 使用新版 API 回覆
+                    if v3_messaging_api:
+                        v3_messaging_api.reply_message(
+                            reply_token=reply_token,
+                            messages=[V3TextMessage(text=error_text)]
+                        )
+                    else:
+                        # 舊版 API 作為備用
+                        line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
             
             return
 
