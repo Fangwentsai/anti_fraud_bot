@@ -180,7 +180,7 @@ class FlexMessageService:
                 spacing='md',
                 contents=[
                     TextComponent(
-                        text="🚨 網域變形攻擊警告",
+                        text="🚨 網域偽裝攻擊警告",
                         weight='bold',
                         color='#ffffff',
                         size='xl'
@@ -281,7 +281,7 @@ class FlexMessageService:
             )
         )
         
-        return FlexSendMessage(alt_text=f"網域變形攻擊警告：{suspicious_domain}", contents=bubble)
+        return FlexSendMessage(alt_text=f"網域偽裝攻擊警告：{suspicious_domain}", contents=bubble)
 
     def _generate_suspicious_domain_explanation(self, suspicious_domain: str, legitimate_domain: str, attack_type: str) -> str:
         """生成可疑網域的說明文字"""
