@@ -5,7 +5,7 @@ services:
     region: oregon
     plan: free
     buildCommand: chmod +x deploy.sh && pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT anti_fraud_clean_app:app
+    startCommand: gunicorn --config gunicorn.conf.py anti_fraud_clean_app:app
     envVars:
       - key: PORT
         value: 8080

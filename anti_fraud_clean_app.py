@@ -1491,6 +1491,17 @@ if __name__ == "__main__":
     # 確保在服務啟動時重新加載資料
     load_fraud_tactics()
     
+    # 檢查是否為生產環境
+    flask_env = os.environ.get('FLASK_ENV', 'development')
     port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
+    
+    if flask_env == 'production':
+        # 生產環境：提示使用 Gunicorn
+        logger.info("生產環境檢測到，請使用 Gunicorn 啟動：")
+        logger.info(f"gunicorn --bind 0.0.0.0:{port} anti_fraud_clean_app:app")
+        logger.warning("如果您看到這個訊息，表示應該使用 Gunicorn 而不是直接執行 Python 檔案")
+    else:
+        # 開發環境：使用 Flask 開發伺服器
+        logger.info("開發環境：使用 Flask 開發伺服器")
+        app.run(host="0.0.0.0", port=port, debug=True)
 

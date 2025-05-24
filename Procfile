@@ -1,1 +1,1 @@
-web: python anti_fraud_clean_app.py 
+web: gunicorn --bind 0.0.0.0:$PORT anti_fraud_clean_app:app 
