@@ -686,7 +686,7 @@ if handler:
         # 檢查是否為空訊息（移除觸發詞後）
         if not cleaned_message.strip():
             # 土豆的熱情自我介紹
-            reply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐騙小助手，記得要用土豆開頭喔！\n" \
+            reply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐小助手，記得用土豆開頭喔！\n" \
                         f"我用4大服務保護你：\n\n" \
                         f"🔍 網站安全檢查：\n立刻分析假冒、釣魚網站！\n" \
                         f"🎯 防詐騙測驗：\n玩問答提升你的防詐意識，輕鬆識破詐騙！\n" \
@@ -1055,7 +1055,7 @@ if handler:
 
         # 檢查是否詢問功能
         if any(keyword in cleaned_message for keyword in function_inquiry_keywords):
-            reply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐騙小助手，記得要用土豆開頭喔！\n" \
+            reply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐騙，記得用土豆開頭喔！\n" \
                         f"我用4大服務保護你：\n\n" \
                         f"🔍 網站安全檢查：\n立刻分析假冒、釣魚網站！\n" \
                         f"🎯 防詐騙測驗：\n玩問答提升防詐意識，輕鬆識破詐騙！\n" \
@@ -1345,7 +1345,7 @@ if handler:
                     
                 elif action == 'show_main_menu':
                     # 顯示土豆主選單
-                    reply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐騙小助手，記得要用土豆開頭喔！\n" \
+                    reply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐小助手，記得用土豆開頭喔！\n" \
                                 f"我用4大服務保護你：\n\n" \
                                 f"🔍 網站安全檢查：\n立刻分析假冒、釣魚網站！\n" \
                                 f"🎯 防詐騙測驗：\n玩問答提升你的防詐意識，輕鬆識破詐騙！\n" \

@@ -113,7 +113,8 @@ class FlexMessageService:
                     ),
                     SeparatorComponent(margin='md'),
                     safe_text_component(
-                        "此為土豆分析結果，請自行評估結果",
+                        "土豆是自我學習的機器人，風險結果請自行評估",
+
                         size='xs',
                         color='#888888',
                         align='center',
@@ -132,7 +133,7 @@ class FlexMessageService:
         return FlexSendMessage(alt_text=f"詐騙風險分析：{risk_level}", contents=bubble)
 
     def _get_analysis_footer_buttons(self, user_id: str) -> List:
-        """取得分析結果頁面的底部按鈕，有8%機率顯示贊助按鈕"""
+        """取得分析結果頁面的底部按鈕，有10%機率顯示贊助按鈕"""
         import random
         
         # 基本按鈕
@@ -166,14 +167,14 @@ class FlexMessageService:
             )
         ]
         
-        # 99%的機率顯示贊助按鈕
-        if random.random() < 0.99:
+        # 10%的機率顯示贊助按鈕
+        if random.random() < 0.10:
             buttons.append(
                 SeparatorComponent(margin='md')
             )
             buttons.append(
                 TextComponent(
-                    text="喜歡我們的服務嗎？歡迎點擊下方贊助按鈕支持我們一杯咖啡，讓網站能持續運作☕️",
+                    text="喜歡土豆的服務嗎？歡迎點擊贊助土豆一杯咖啡，讓網站能持續運作☕️",
                     size="xs",
                     color="#888888",
                     margin="md",
@@ -335,7 +336,7 @@ class FlexMessageService:
                     ),
                     SeparatorComponent(margin='md'),
                     safe_text_component(
-                        "土豆機器人尚在機器學習中，請自行評估評估結果",
+                        "土豆是自我學習的機器人，風險結果請自行評估",
 
                         size='xs',
                         color='#888888',
@@ -355,7 +356,7 @@ class FlexMessageService:
         return FlexSendMessage(alt_text=f"網域偽裝攻擊警告：{suspicious_domain}", contents=bubble)
 
     def _get_domain_spoofing_footer_buttons(self, user_id: str) -> List:
-        """取得網域變形警告頁面的底部按鈕，有8%機率顯示贊助按鈕"""
+        """取得網域變形警告頁面的底部按鈕，有10%機率顯示贊助按鈕"""
         import random
         
         # 基本按鈕
@@ -389,14 +390,14 @@ class FlexMessageService:
             )
         ]
         
-        # 99%的機率顯示贊助按鈕
-        if random.random() < 0.99:
+        # 10%的機率顯示贊助按鈕
+        if random.random() < 0.10:
             buttons.append(
                 SeparatorComponent(margin='md')
             )
             buttons.append(
                 TextComponent(
-                    text="喜歡我們的服務嗎？歡迎點擊下方贊助按鈕支持我們一杯咖啡，讓網站能持續運作☕️",
+                    text="喜歡土豆的服務嗎？歡迎點擊贊助土豆一杯咖啡，讓網站能持續運作☕️",
                     size="xs",
                     color="#888888",
                     margin="md",
