@@ -289,7 +289,7 @@ class FlexMessageService:
                         size='xs',
                         color='#888888',
                         align='center',
-                        margin='md',
+                        margin='sm',
                         style='italic'
                     )
                 ]
