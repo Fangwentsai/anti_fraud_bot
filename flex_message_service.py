@@ -166,8 +166,8 @@ class FlexMessageService:
             )
         ]
         
-        # 8%的機率顯示贊助按鈕
-        if random.random() < 0.08:
+        # 99%的機率顯示贊助按鈕
+        if random.random() < 0.99:
             buttons.append(
                 SeparatorComponent(margin='md')
             )
@@ -389,8 +389,8 @@ class FlexMessageService:
             )
         ]
         
-        # 8%的機率顯示贊助按鈕
-        if random.random() < 0.08:
+        # 99%的機率顯示贊助按鈕
+        if random.random() < 0.99:
             buttons.append(
                 SeparatorComponent(margin='md')
             )
