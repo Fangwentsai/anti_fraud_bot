@@ -331,7 +331,9 @@ def _is_legitimate_subdomain(subdomain_part):
         'video', 'videos', 'media', 'cdn', 'static', 'assets',
         'dev', 'test', 'staging', 'beta', 'alpha', 'demo',
         'tw', 'taiwan', 'hk', 'hongkong', 'cn', 'china',
-        'en', 'english', 'zh', 'chinese'
+        'en', 'english', 'zh', 'chinese',
+        'playing', 'play', 'game', 'games', 'entertainment', 'fun',
+        'amp', 'article', 'articles', 'read', 'view', 'content'
     ]
     
     # 檢查是否為已知的合法前綴
@@ -489,30 +491,34 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                     domain_clean = domain[4:] if domain.startswith('www.') else domain
                     
                     # 檢查是否為合法子網域（必須是 *.safe_domain 的格式）
-                    if domain_clean.endswith('.' + safe_domain_clean) and domain_clean != safe_domain_clean:
-                        # 確保是真正的子網域，不是變形攻擊
-                        subdomain_part = domain_clean[:-len('.' + safe_domain_clean)]
-                        # 子網域部分不能包含可疑字元或過長
-                        if self._is_legitimate_subdomain(subdomain_part):
-                            site_description = SAFE_DOMAINS.get(safe_domain_key, "台灣常見的可靠網站")
-                            logger.info(f"檢測到合法子網域: {domain} -> {safe_domain_key}")
-                            return {
-                                "success": True,
-                                "message": "分析完成",
-                                "result": {
-                                    "risk_level": "低風險",
-                                    "fraud_type": "非詐騙相關",
-                                    "explanation": f"這個網站是 {safe_domain_key} 的子網域，{site_description}，可以安心使用。",
-                                    "suggestions": "這是正規網站的子網域，不必特別擔心。如有疑慮，建議您直接從官方管道進入該網站。",
-                                    "is_emerging": False,
-                                    "display_name": display_name,
-                                    "original_url": original_url,
-                                    "expanded_url": expanded_url,
-                                    "is_short_url": is_short_url,
-                                    "url_expanded_successfully": url_expanded_successfully
-                                },
-                                "raw_result": f"經過分析，這是已知可信任網站的子網域：{site_description}"
-                            }
+                    # 修改後的邏輯：更好地處理多層子域名
+                    if domain_clean.endswith('.' + safe_domain_clean):
+                        # 確保不是網域本身
+                        if domain_clean != safe_domain_clean:
+                            # 提取子域名部分
+                            subdomain_part = domain_clean[:-len('.' + safe_domain_clean)]
+                            
+                            # 檢查子域名部分是否合法
+                            if _is_legitimate_subdomain(subdomain_part):
+                                site_description = SAFE_DOMAINS.get(safe_domain_key, "台灣常見的可靠網站")
+                                logger.info(f"檢測到合法子網域: {domain} -> {safe_domain_key}")
+                                return {
+                                    "success": True,
+                                    "message": "分析完成",
+                                    "result": {
+                                        "risk_level": "低風險",
+                                        "fraud_type": "非詐騙相關",
+                                        "explanation": f"這個網站是 {safe_domain_key} 的子網域，{site_description}，可以安心使用。",
+                                        "suggestions": "這是正規網站的子網域，不必特別擔心。如有疑慮，建議您直接從官方管道進入該網站。",
+                                        "is_emerging": False,
+                                        "display_name": display_name,
+                                        "original_url": original_url,
+                                        "expanded_url": expanded_url,
+                                        "is_short_url": is_short_url,
+                                        "url_expanded_successfully": url_expanded_successfully
+                                    },
+                                    "raw_result": f"經過分析，這是已知可信任網站的子網域：{site_description}"
+                                }
             except Exception as e:
                 # URL解析失敗，繼續檢查下一個
                 continue
@@ -916,6 +922,7 @@ if handler:
                            f"請直接把您收到的可疑訊息或網址傳給我，我會立即為您分析風險程度。\n\n" \
                            f"💡 您可以：\n" \
                            f"• 轉傳可疑的文字訊息\n" \
+                           f"• ⚠️FB,IG不易判別，請提供貼文內網址⚠️\n" \
                            f"• 貼上可疑的網址連結\n" \
                            f"• 描述您遇到的可疑情況"
             
@@ -1544,56 +1551,6 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
         return True
     
     return False
-
-# 修正self引用問題
-def _is_legitimate_subdomain(subdomain_part):
-    """檢查子網域部分是否合法"""
-    # 合法的子網域特徵
-    if not subdomain_part or len(subdomain_part) > 20:  # 太長的子網域可疑
-        return False
-    
-    # 常見的合法子網域前綴
-    legitimate_prefixes = [
-        'www', 'mail', 'email', 'webmail', 'smtp', 'pop', 'imap',
-        'ftp', 'sftp', 'api', 'app', 'mobile', 'm', 'wap',
-        'admin', 'secure', 'ssl', 'login', 'auth', 'account',
-        'shop', 'store', 'buy', 'order', 'cart', 'checkout',
-        'news', 'blog', 'forum', 'support', 'help', 'service',
-        'event', 'events', 'promo', 'promotion', 'campaign',
-        'member', 'members', 'user', 'users', 'profile',
-        'search', 'find', 'discover', 'explore',
-        'download', 'upload', 'file', 'files', 'doc', 'docs',
-        'img', 'image', 'images', 'pic', 'pics', 'photo', 'photos',
-        'video', 'videos', 'media', 'cdn', 'static', 'assets',
-        'dev', 'test', 'staging', 'beta', 'alpha', 'demo',
-        'tw', 'taiwan', 'hk', 'hongkong', 'cn', 'china',
-        'en', 'english', 'zh', 'chinese'
-    ]
-    
-    # 檢查是否為已知的合法前綴
-    if subdomain_part.lower() in legitimate_prefixes:
-        return True
-    
-    # 檢查是否包含可疑字元或模式
-    suspicious_patterns = [
-        '-tw-', '-official-', '-secure-', '-login-', '-bank-',
-        'phishing', 'fake', 'scam', 'fraud', 'malware'
-    ]
-    
-    for pattern in suspicious_patterns:
-        if pattern in subdomain_part.lower():
-            return False
-    
-    # 檢查是否只包含字母、數字和連字符
-    import re
-    if not re.match(r'^[a-zA-Z0-9-]+$', subdomain_part):
-        return False
-    
-    # 不能以連字符開始或結束
-    if subdomain_part.startswith('-') or subdomain_part.endswith('-'):
-        return False
-    
-    return True
 
 # 初始化FlexMessageService
 flex_message_service = FlexMessageService()

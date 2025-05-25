@@ -517,7 +517,7 @@ class FlexMessageService:
                         height='sm',
                         action=URIAction(
                             label='☕ 贊助土豆',
-                            uri='https://buymeacoffee.com/todao_antifraud'
+                            uri='https://portaly.cc/todao-antifraud'
                         )
                     ),
                     ButtonComponent(
