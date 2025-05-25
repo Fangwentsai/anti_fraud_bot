@@ -93,8 +93,43 @@ class WeatherService:
 
     def detect_weather_query(self, message: str) -> Tuple[bool, Optional[str]]:
         """檢測是否為天氣相關詢問"""
-        # 檢查是否包含天氣關鍵詞
-        has_weather_keyword = any(keyword in message for keyword in self.weather_keywords)
+        # 常用時間詞 - 這些單獨出現時不足以判定為天氣查詢
+        common_time_words = ["今天", "明天", "後天", "現在"]
+        
+        # 明確的天氣關鍵詞 - 這些單獨出現就可判定為天氣查詢
+        explicit_weather_keywords = [
+            "天氣", "氣溫", "溫度", "下雨", "晴天", "陰天", "多雲", 
+            "颱風", "降雨", "濕度", "風速", "預報", "太陽", "寒流", "梅雨"
+        ]
+        
+        # 檢查是否有明確的天氣關鍵詞
+        has_explicit_weather_keyword = any(keyword in message for keyword in explicit_weather_keywords)
+        
+        # 檢查是否有常用時間詞
+        has_time_word = any(word in message for word in common_time_words)
+        
+        # 檢查是否為有效的天氣相關組合詞
+        valid_weather_combinations = [
+            "今天天氣", "明天天氣", "後天天氣", 
+            "今天下雨", "明天下雨", "後天下雨",
+            "今天溫度", "明天溫度", "後天溫度",
+            "今天氣溫", "明天氣溫", "後天氣溫",
+            "今天濕度", "明天濕度", "後天濕度",
+            "今天潮溼", "明天潮溼", "後天潮溼",
+            "今天潮濕", "明天潮濕", "後天潮濕",
+            "今天會下雨", "明天會下雨", "後天會下雨",
+            "今天會不會下雨", "明天會不會下雨", "後天會不會下雨"
+        ]
+        
+        has_valid_combination = any(combination in message for combination in valid_weather_combinations)
+        
+        # 判斷是否為天氣查詢:
+        # 1. 有明確的天氣關鍵詞
+        # 2. 或者有效的天氣組合詞
+        # 3. 但不僅僅是因為有常用時間詞
+        has_weather_keyword = has_explicit_weather_keyword or has_valid_combination
+        if not has_weather_keyword and has_time_word:
+            has_weather_keyword = False
         
         # 檢查是否包含地點
         mentioned_location = None
