@@ -277,28 +277,35 @@ class FlexMessageService:
                 ]
             ),
             footer=BoxComponent(
-                layout='horizontal',
-                spacing='md',
+                layout='vertical',
+                spacing='sm',
                 contents=[
                     ButtonComponent(
                         style='primary',
-                        color=self.colors["primary"],
                         height='sm',
                         action=MessageAction(
-                            label='再測一次',
+                            label='🔄 再測一次',
                             text='網域安全檢測'
                         ),
-                        flex=1
+                        color='#1E88E5'  # 藍色按鈕
                     ),
                     ButtonComponent(
-                        style='secondary',
-                        color=self.colors["secondary"],
+                        style='primary',
                         height='sm',
                         action=MessageAction(
-                            label='回到首頁',
+                            label='🏠 回到首頁',
                             text='土豆'
                         ),
-                        flex=1
+                        color='#26A69A'  # 綠色按鈕
+                    ),
+                    ButtonComponent(
+                        style='primary',
+                        height='sm',
+                        action=PostbackAction(
+                            label='📝 回報註記',
+                            data=f'action=report_feedback&user_id={safe_user_id}'
+                        ),
+                        color='#FB8C00'  # 橙色按鈕
                     )
                 ]
             ),
