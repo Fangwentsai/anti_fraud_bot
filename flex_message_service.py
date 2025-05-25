@@ -188,7 +188,7 @@ class FlexMessageService:
                     height='sm',
                     action=URIAction(
                         label='給我們鼓勵☕️',
-                        uri='https://buymeacoffee.com/todao_antifraud'
+                        uri='https://portaly.cc/todao-antifraud'
                     ),
                     color='#9C27B0'  # 紫色按鈕
                 )
@@ -411,7 +411,7 @@ class FlexMessageService:
                     height='sm',
                     action=URIAction(
                         label='給我們鼓勵☕️',
-                        uri='https://buymeacoffee.com/todao_antifraud'
+                        uri='https://portaly.cc/todao-antifraud'
                     ),
                     color='#9C27B0'  # 紫色按鈕
                 )
