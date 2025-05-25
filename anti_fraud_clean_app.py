@@ -1259,7 +1259,7 @@ if handler:
             chat_response = openai_client.chat.completions.create(
                 model=OPENAI_MODEL,
                 messages=[
-                 {"role": "system", "content": "你是一位名為「土豆」的AI聊天機器人，專門幫助50-60歲的長輩防範詐騙。你的說話風格要：\\n1. 非常簡單易懂，像鄰居朋友在聊天\\n2. 用溫暖親切的語氣，不要太正式\\n3. 當給建議時，一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號\\n4. 避免複雜的專業術語，用日常生活的話來解釋\\n5. 當用戶提到投資、轉帳、可疑訊息時，要特別關心並給出簡單明確的建議\\n6. 回應要簡短，不要太長篇大論"},
+                 {"role": "system", "content": "你是一位名為「土豆」的AI聊天機器人，專門幫助50-60歲的長輩防範詐騙。你的說話風格要：\n1. 非常簡單易懂，像鄰居朋友在聊天\n2. 用溫暖親切的語氣，不要太正式\n3. 當給建議時，一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號\n4. 避免複雜的專業術語，用日常生活的話來解釋\n5. 當用戶提到投資、轉帳、可疑訊息時，要特別關心並給出簡單明確的建議\n6. 回應要簡短，不要太長篇大論"},
                  {"role": "user", "content": cleaned_message}
                 ],
                 temperature=CHAT_TEMPERATURE,
@@ -1274,13 +1274,13 @@ if handler:
                     tips = get_anti_fraud_tips()
                     if tips:
                         random_tip = random.choice(tips)
-                        chat_reply += f"\\n\\n💡 小提醒：{random_tip}"
+                        chat_reply += f"\n\n💡 小提醒：{random_tip}"
                 
                 # 確保回覆不會太長
                 if len(chat_reply) > LINE_MESSAGE_SAFE_LENGTH:
                     chat_reply = chat_reply[:LINE_MESSAGE_SAFE_LENGTH] + "..."
                 
-                introduction = f"\\n\\n💫 我是您的專業防詐騙助手！經過全面測試，我能為您提供：\\n🔍 網站安全檢查\\n🎯 防詐騙知識測驗\\n📚 詐騙案例查詢\\n☁️ 天氣預報查詢\\n\\n有任何可疑訊息都歡迎直接傳給我分析喔！"
+                introduction = f"\n\n💫 我是您的專業防詐騙助手！經過全面測試，我能為您提供：\n🔍 網站安全檢查\n🎯 防詐騙知識測驗\n📚 詐騙案例查詢\n☁️ 天氣預報查詢\n\n有任何可疑訊息都歡迎直接傳給我分析喔！"
                 
                 # 如果是首次聊天，添加自我介紹
                 if user_id not in first_time_chatters:

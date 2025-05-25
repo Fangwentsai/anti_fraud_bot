@@ -33,7 +33,7 @@ WEATHER_HANDLER_FUNCTION = '''
                         line_bot_api.reply_message(reply_token, TextSendMessage(text=weather_text))
                     else:
                         # 發送錯誤訊息
-                        error_text = f"抱歉，無法處理您的天氣查詢。\\n\\n💡 您可以試著這樣問：\\n• 今天天氣如何\\n• 台北天氣\\n• 明天會下雨嗎"
+                        error_text = f"抱歉，無法處理您的天氣查詢。\n\n💡 您可以試著這樣問：\n• 今天天氣如何\n• 台北天氣\n• 明天會下雨嗎"
                         line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
             except Exception as e:
                 logger.error(f"處理天氣查詢時發生錯誤: {e}")
@@ -43,7 +43,7 @@ WEATHER_HANDLER_FUNCTION = '''
                     line_bot_api.reply_message(reply_token, TextSendMessage(text=weather_text))
                 else:
                     # 發送錯誤訊息
-                    error_text = f"抱歉，無法處理您的天氣查詢。\\n\\n💡 您可以試著這樣問：\\n• 今天天氣如何\\n• 台北天氣\\n• 明天會下雨嗎"
+                    error_text = f"抱歉，無法處理您的天氣查詢。\n\n💡 您可以試著這樣問：\n• 今天天氣如何\n• 台北天氣\n• 明天會下雨嗎"
                     line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
             
             return
