@@ -173,7 +173,7 @@ class FlexMessageService:
             )
             buttons.append(
                 TextComponent(
-                    text="喜歡我們的服務嗎？歡迎點擊下方贊助按鈕給我們一杯咖啡☕️",
+                    text="喜歡我們的服務嗎？歡迎點擊下方贊助按鈕支持我們一杯咖啡，讓網站能持續運作☕️",
                     size="xs",
                     color="#888888",
                     margin="md",
@@ -396,7 +396,7 @@ class FlexMessageService:
             )
             buttons.append(
                 TextComponent(
-                    text="喜歡我們的服務嗎？歡迎點擊下方贊助按鈕給我們一杯咖啡☕️",
+                    text="喜歡我們的服務嗎？歡迎點擊下方贊助按鈕支持我們一杯咖啡，讓網站能持續運作☕️",
                     size="xs",
                     color="#888888",
                     margin="md",
