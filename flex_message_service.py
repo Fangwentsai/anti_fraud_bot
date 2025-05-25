@@ -303,7 +303,7 @@ class FlexMessageService:
                         height='sm',
                         action=MessageAction(
                             label='🔄 再測一次',
-                            text='網域安全檢測'
+                            text='土豆 請幫我分析這則訊息'
                         ),
                         color='#1E88E5'  # 藍色按鈕
                     ),
