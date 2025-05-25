@@ -61,6 +61,26 @@ def detect_domain_spoofing(url_or_message, safe_domains):
             if domain in normalized_safe_domains or domain_without_www in normalized_safe_domains:
                 continue  # 這是正常的白名單網域，跳過
             
+            # 快速檢測：特別檢查-tw和-taiwan後綴域名（高風險）
+            domain_parts = domain_without_www.split('.')
+            base_domain = domain_parts[0]
+            
+            for safe_domain in safe_domains.keys():
+                safe_domain_lower = safe_domain.lower()
+                safe_parts = safe_domain_lower.split('.')
+                safe_base = safe_parts[0]
+                
+                # 檢查是否為基礎域名加上-tw或-taiwan（直接判定為高風險）
+                if base_domain == safe_base + '-tw' or base_domain == safe_base + '-taiwan':
+                    site_description = safe_domains.get(safe_domain, "知名網站")
+                    return {
+                        'is_spoofed': True,
+                        'original_domain': safe_domain,
+                        'spoofed_domain': domain,
+                        'spoofing_type': "插入額外字元攻擊",
+                        'risk_explanation': f"⚠️ 高風險警告！\n\n這個網址 {domain} 疑似模仿正牌的 {safe_domain} ({site_description})。\n\n詐騙集團常使用添加'-tw'或'-taiwan'字樣的手法製作假網站來騙取個人資料或信用卡資訊。\n\n🚨 千萬不要在這個網站輸入任何個人資料、密碼或信用卡號碼！"
+                    }
+            
             # 檢查每個白名單網域是否有相似性
             for safe_domain in safe_domains.keys():
                 safe_domain_lower = safe_domain.lower()
@@ -233,6 +253,18 @@ def _is_character_insertion(suspicious_domain, safe_domain, max_insertions=2):
     safe_base = safe_parts[0]  # 例如 google, pchome, cht, amazon
     suspicious_base = suspicious_parts[0]  # 例如 google-search, pchome-24h, cht-tw, amazoner
     
+    # 0. 優先檢查是否為-tw或-taiwan後綴的變形攻擊（高風險）
+    if suspicious_base.endswith('-tw') or suspicious_base.endswith('-taiwan'):
+        # 檢查去除後綴後是否與安全網域匹配
+        if suspicious_base.endswith('-tw'):
+            base_without_suffix = suspicious_base[:-3]  # 移除'-tw'
+        else:  # '-taiwan'
+            base_without_suffix = suspicious_base[:-8]  # 移除'-taiwan'
+        
+        # 檢查去除後綴後是否與安全網域匹配
+        if base_without_suffix == safe_base:
+            return True
+    
     # 1. 檢查字母後綴插入 (amazon -> amazoner, google -> googles, facebook -> facebooker)
     if suspicious_base.startswith(safe_base) and len(suspicious_base) > len(safe_base):
         added_part = suspicious_base[len(safe_base):]
@@ -325,6 +357,10 @@ def _is_domain_suffix_spoofing(suspicious_domain, safe_domain):
     
     safe_base = safe_domain.split('.')[0]  # 例如從 google.com 取得 google
     suspicious_base = suspicious_domain.split('.')[0]  # 例如從 google-tw.com 取得 google-tw
+    
+    # 檢查是否在基礎網域名稱後加了-tw或-taiwan（直接判定為高風險）
+    if suspicious_base == safe_base + '-tw' or suspicious_base == safe_base + '-taiwan':
+        return True
     
     # 檢查是否在基礎網域名稱後加了額外字元
     if suspicious_base.startswith(safe_base) and len(suspicious_base) > len(safe_base):

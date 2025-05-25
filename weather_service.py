@@ -409,7 +409,7 @@ class WeatherService:
                 # 這裡可以實作真實的 API 調用
                 pass
             
-            # 使用模擬資料
+            # 使用模擬資料;;;;;;;;'8=
             logger.warning("未設定中央氣象署API金鑰，使用模擬資料")
             
             current_time = get_taipei_time()

@@ -276,32 +276,28 @@ class FlexMessageService:
                     )
                 ]
             ),
-            footer=BoxComponent(
-                layout='horizontal',
-                spacing='md',
-                contents=[
-                    ButtonComponent(
-                        style='primary',
-                        color=self.colors["primary"],
-                        height='sm',
-                        action=MessageAction(
-                            label='再測一次',
-                            text='網域安全檢測'
-                        ),
-                        flex=1
-                    ),
-                    ButtonComponent(
-                        style='secondary',
-                        color=self.colors["secondary"],
-                        height='sm',
-                        action=MessageAction(
-                            label='回到首頁',
-                            text='土豆'
-                        ),
-                        flex=1
-                    )
-                ]
-            ),
+            # footer=BoxComponent(
+            #     layout='vertical',
+            #     spacing='sm',
+            #     contents=[
+            #         ButtonComponent(
+            #             style='primary',
+            #             height='sm',
+            #             action=URIAction(
+            #                 label='📞 立即撥打165專線',
+            #                 uri='tel:165'
+            #             )
+            #         ),
+            #         ButtonComponent(
+            #             style='secondary',
+            #             height='sm',
+            #             action=PostbackAction(
+            #                 label='🎮 玩土豆遊戲放鬆一下',
+            #                 data=f'action=potato_game&user_id={safe_user_id}'
+            #             )
+            #         )
+            #     ]
+            # )
         )
         
         return FlexSendMessage(alt_text=f"網域偽裝攻擊警告：{suspicious_domain}", contents=bubble)
@@ -1119,66 +1115,34 @@ class FlexMessageService:
         # 創建頁面導航按鈕
         footer_contents = []
         
-        # 檢查是否同時需要顯示「上一頁」和「下一頁」按鈕
-        if page > 1 and page < total_pages:
-            # 同時顯示「上一頁」和「下一頁」按鈕，並排在同一行
+        # 根據當前頁碼和總頁數設置導航按鈕
+        if page > 1:
+            # 不是第一頁，顯示「上一頁」按鈕
             footer_contents.append(
-                BoxComponent(
-                    layout="horizontal",
-                    spacing="md",
-                    contents=[
-                        ButtonComponent(
-                            style="secondary",
-                            action=MessageAction(
-                                label="⬅️ 上一頁",
-                                text=f"土豆 什麼是{fraud_type} 第{page-1}頁"
-                            ),
-                            color="#95a5a6",
-                            height="sm",
-                            flex=1
-                        ),
-                        ButtonComponent(
-                            style="primary",
-                            action=MessageAction(
-                                label="下一頁 ➡️",
-                                text=f"土豆 什麼是{fraud_type} 第{page+1}頁"
-                            ),
-                            color="#3498DB",
-                            height="sm",
-                            flex=1
-                        )
-                    ]
+                ButtonComponent(
+                    style="secondary",
+                    action=MessageAction(
+                        label="⬅️ 上一頁",
+                        text=f"土豆 什麼是{fraud_type} 第{page-1}頁"
+                    ),
+                    color="#95a5a6",
+                    height="sm"
                 )
             )
-        else:
-            # 只需要顯示其中一個按鈕的情況
-            if page > 1:
-                # 不是第一頁，顯示「上一頁」按鈕
-                footer_contents.append(
-                    ButtonComponent(
-                        style="secondary",
-                        action=MessageAction(
-                            label="⬅️ 上一頁",
-                            text=f"土豆 什麼是{fraud_type} 第{page-1}頁"
-                        ),
-                        color="#95a5a6",
-                        height="sm"
-                    )
+        
+        if page < total_pages:
+            # 不是最後一頁，顯示「下一頁」按鈕
+            footer_contents.append(
+                ButtonComponent(
+                    style="primary",
+                    action=MessageAction(
+                        label="下一頁 ➡️",
+                        text=f"土豆 什麼是{fraud_type} 第{page+1}頁"
+                    ),
+                    color="#3498DB",
+                    height="sm"
                 )
-            
-            if page < total_pages:
-                # 不是最後一頁，顯示「下一頁」按鈕
-                footer_contents.append(
-                    ButtonComponent(
-                        style="primary",
-                        action=MessageAction(
-                            label="下一頁 ➡️",
-                            text=f"土豆 什麼是{fraud_type} 第{page+1}頁"
-                        ),
-                        color="#3498DB",
-                        height="sm"
-                    )
-                )
+            )
         
         # 如果是最後一頁，添加「看其他分類」和「回到首頁」按鈕
         if page == total_pages:
