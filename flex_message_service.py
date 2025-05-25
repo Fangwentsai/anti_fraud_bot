@@ -110,6 +110,15 @@ class FlexMessageService:
                         color=self.colors["secondary"],
                         wrap=True,
                         margin='sm'
+                    ),
+                    SeparatorComponent(margin='md'),
+                    safe_text_component(
+                        "此為土豆分析結果，請自行評估結果",
+                        size='xs',
+                        color='#888888',
+                        align='center',
+                        margin='md',
+                        style='italic'
                     )
                 ]
             ),
@@ -273,6 +282,15 @@ class FlexMessageService:
                         color=self.colors["secondary"],
                         wrap=True,
                         margin='sm'
+                    ),
+                    SeparatorComponent(margin='md'),
+                    safe_text_component(
+                        "此為土豆分析結果，請自行評估結果",
+                        size='xs',
+                        color='#888888',
+                        align='center',
+                        margin='md',
+                        style='italic'
                     )
                 ]
             ),

@@ -182,7 +182,19 @@
         "pegatron.com": "和碩聯合科技 (電子代工)",
         "microsoft.com": "微軟 (軟體、作業系統、雲端服務)",
         "apple.com": "蘋果公司 (電子產品、軟體服務)",
-        "google.com": "Google (搜尋引擎、網路服務)"
+        "google.com": "Google (搜尋引擎、網路服務)",
+        "sony.com.tw": "索尼 (電子產品、遊戲、娛樂, 台灣官方網站)",
+        "samsung.com": "三星 (電子產品、手機、家電, 台灣官網 samsung.com/tw/)",
+        "bose.tw": "BOSE (音響設備, 台灣官方網站)",
+        "lg.com": "LG (電子產品、家電, 台灣官網 lg.com/tw/)",
+        "mi.com": "小米 (手機、智慧家庭、電子產品, 台灣官網 mi.com/tw/)",
+        "philips.com.tw": "飛利浦 (健康科技、家電、個人護理, 台灣官方網站)",
+        "panasonic.com.tw": "Panasonic 國際牌 (電子產品、家電, 台灣官方網站)",
+        "daikin.com.tw": "大金空調 (空調設備, 台灣總代理：和泰興業)",
+        "www.taiwan-hitachi.com.tw": "日立家電 (台灣) (冷氣、空調、冰箱、洗衣機等家電)",
+        "mitsubishielectric.com.tw": "三菱電機 (台灣) (空調、家電、產業機電系統)",
+        "openai.com": "OpenAI (人工智慧研究與應用)",
+        "adobe.com": "Adobe (創意設計軟體與雲端服務)"
     },
     "電信業者 / ISP": {
         "cht.com.tw": "中華電信",
@@ -365,7 +377,8 @@
         "zoom.us": "Zoom (視訊會議)",
         "wetransfer.com": "WeTransfer (大型檔案傳輸)",
         "speedtest.net": "Speedtest by Ookla (網路測速)",
-        "virustotal.com": "VirusTotal (檔案/網址掃描)"
+        "virustotal.com": "VirusTotal (檔案/網址掃描)",
+        "imgur.com": "Imgur (圖片分享與託管服務)"
     },
     "支付 / 點數": {
         "jkos.com": "街口支付",
