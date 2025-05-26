@@ -16,7 +16,7 @@ from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage, FlexSendMessage,
     PostbackEvent, QuickReply, QuickReplyButton, MessageAction,
     BubbleContainer, BoxComponent, TextComponent, SeparatorComponent,
-    ButtonComponent, URIAction, PostbackAction
+    ButtonComponent, URIAction, PostbackAction, ImageMessage
 )
 from linebot.v3 import WebhookHandler as V3WebhookHandler
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi
@@ -40,6 +40,10 @@ from flex_message_service import (
 from game_service import (
     start_potato_game, handle_potato_game_answer, is_game_trigger, get_user_game_state
 )
+
+# 添加圖片分析功能
+import image_handler
+from image_analysis_service import ANALYSIS_TYPES
 
 # 首先在頂部添加導入城市選擇器
 from city_selector import get_city_selector
@@ -111,6 +115,17 @@ def load_safe_domains():
         default_donation_domains = []
         return default_safe_domains, default_donation_domains
 
+# 用戶狀態管理
+def get_user_state(user_id):
+    """獲取用戶狀態"""
+    if user_id not in user_conversation_state:
+        user_conversation_state[user_id] = {"last_time": datetime.now()}
+    return user_conversation_state[user_id]
+
+def update_user_state(user_id, state):
+    """更新用戶狀態"""
+    user_conversation_state[user_id] = state
+
 # 設置日誌（需要在載入安全網域之前初始化）
 logging.basicConfig(level=getattr(logging, LOG_LEVEL), format=LOG_FORMAT)
 logger = logging.getLogger(__name__)
@@ -137,12 +152,15 @@ if LINE_CHANNEL_ACCESS_TOKEN and LINE_CHANNEL_SECRET:
     v3_api_client = ApiClient(v3_configuration)
     v3_messaging_api = MessagingApi(v3_api_client)
     
+    # 初始化圖片處理器
+    image_handler.init_image_handler(line_bot_api)
+    
     logger.info("LINE Bot API 初始化成功")
 else:
     line_bot_api = None
     handler = None
     v3_messaging_api = None
-    logger.warning("LINE Bot API 初始化失敗：缺少必要的環境變數")
+    logger.info("LINE Bot API 初始化失敗：缺少必要的環境變數")
 
 # OpenAI設定 - 使用新版本的客戶端初始化，添加錯誤處理
 if OPENAI_API_KEY:
@@ -681,7 +699,6 @@ if handler:
         # 個人和群組訊息都需要檢查是否包含觸發關鍵詞，或者用戶處於等待分析狀態
         if bot_trigger_keyword not in text_message and not waiting_for_analysis:
             logger.info(f"訊息不包含觸發關鍵詞 '{bot_trigger_keyword}'，也不在等待分析狀態，忽略此訊息")
-            return
 
         # 移除觸發關鍵詞，以便後續處理
         cleaned_message = text_message
@@ -695,6 +712,7 @@ if handler:
             reply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐小助手，記得用土豆開頭喔！\n" \
                         f"我用4大服務保護你：\n\n" \
                         f"🔍 網站安全檢查：\n立刻分析假冒、釣魚網站！\n" \
+                        f"📷 上傳截圖分析：\n不想輸入文字嗎？！直接截圖給我！\n" \
                         f"🎯 防詐騙測驗：\n玩問答提升你的防詐意識，輕鬆識破詐騙！\n" \
                         f"📚 詐騙案例：\n案例分析分享，了解9大詐騙類型。\n" \
                         f"☁️ 天氣預報：\n全台即時天氣隨時查（開發中）。\n" \
@@ -704,6 +722,7 @@ if handler:
             # 統一QuickReply按鈕（個人和群組完全一樣）
             quick_reply = QuickReply(items=[
                 QuickReplyButton(action=MessageAction(label="🔍 檢查網站安全", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
+                QuickReplyButton(action=MessageAction(label="📷 上傳截圖分析", text=f"{bot_trigger_keyword} 請幫我分析圖片：")),
                 QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text=f"{bot_trigger_keyword} 防詐騙測試")),
                 QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text=f"{bot_trigger_keyword} 詐騙類型列表")),
                 QuickReplyButton(action=MessageAction(label="☁️ 查詢天氣", text=f"{bot_trigger_keyword} 今天天氣"))
@@ -753,6 +772,14 @@ if handler:
                                 ),
                                 ButtonComponent(
                                     style="primary", 
+                                    color="#F39C12",
+                                    action=MessageAction(
+                                        label="📷 上傳截圖分析",
+                                        text=f"{bot_trigger_keyword} 請幫我分析圖片："
+                                    )
+                                ),
+                                ButtonComponent(
+                                    style="primary",
                                     color="#4ECDC4",
                                     action=MessageAction(
                                         label="🎯 防詐騙測驗",
@@ -796,7 +823,6 @@ if handler:
             except Exception as e:
                 logger.error(f"發送統一按鈕時發生未知錯誤: {e}")
             
-            return
 
         # 處理遊戲觸發 - 移到詐騙檢測前面
         if is_game_trigger(cleaned_message):
@@ -807,7 +833,6 @@ if handler:
                 line_bot_api.reply_message(reply_token, flex_message)
             else:
                 line_bot_api.reply_message(reply_token, TextSendMessage(text=error_message))
-            return
 
         # 檢查用戶詢問詐騙類型清單
         if any(keyword in cleaned_message for keyword in ["詐騙類型列表", "詐騙類型", "詐騙手法", "詐騙種類", "常見詐騙"]):
@@ -828,7 +853,6 @@ if handler:
                 logger.error(f"處理詐騙類型查詢時發生錯誤: {e}")
                 error_text = "抱歉，詐騙類型查詢功能暫時無法使用。\n\n💡 您可以：\n• 直接傳送可疑訊息給我分析\n• 說「防詐騙測試」進行知識測驗"
                 line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
-            return
 
         # 檢查是否詢問特定詐騙類型
         for fraud_type, info in fraud_types.items():
@@ -904,7 +928,6 @@ if handler:
                 logger.error(f"處理詐騙類型查詢時發生錯誤: {e}")
                 error_text = "抱歉，詐騙類型查詢功能暫時無法使用。\n\n💡 您可以：\n• 直接傳送可疑訊息給我分析\n• 說「防詐騙測試」進行知識測驗"
                 line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
-            return
 
         # 檢查是否為分析請求但沒有內容
         analysis_request_keywords = ["請幫我分析這則訊息", "幫我分析訊息", "請分析這則訊息", "請幫我分析", "分析這則訊息"]
@@ -927,7 +950,6 @@ if handler:
                            f"• 描述您遇到的可疑情況"
             
             line_bot_api.reply_message(reply_token, TextSendMessage(text=prompt_message))
-            return
 
         # 執行詐騙分析
         if should_perform_fraud_analysis(cleaned_message, user_id) or waiting_for_analysis:
@@ -1058,13 +1080,13 @@ if handler:
                     logger.error(f"發送錯誤訊息時發生未知錯誤: {e}")
             
             # 詐騙分析完成，直接返回，不繼續執行其他邏輯
-            return
 
         # 檢查是否詢問功能
         if any(keyword in cleaned_message for keyword in function_inquiry_keywords):
             reply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐騙，記得用土豆開頭喔！\n" \
                         f"我用4大服務保護你：\n\n" \
                         f"🔍 網站安全檢查：\n立刻分析假冒、釣魚網站！\n" \
+                        f"📷 上傳截圖分析：\n不想輸入文字嗎？！直接截圖給我！\n" \
                         f"🎯 防詐騙測驗：\n玩問答提升防詐意識，輕鬆識破詐騙！\n" \
                         f"📚 詐騙案例：\n案例分析分享，了解9大詐騙類型。\n" \
                         f"☁️ 天氣預報：\n全台即時天氣隨時查（開發中）。\n" \
@@ -1074,6 +1096,7 @@ if handler:
             # 統一QuickReply按鈕（個人和群組完全一樣）
             quick_reply = QuickReply(items=[
                 QuickReplyButton(action=MessageAction(label="🔍 檢查網站安全", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
+                QuickReplyButton(action=MessageAction(label="📷 上傳截圖分析", text=f"{bot_trigger_keyword} 請幫我分析圖片：")),
                 QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text=f"{bot_trigger_keyword} 防詐騙測試")),
                 QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text=f"{bot_trigger_keyword} 詐騙類型列表")),
                 QuickReplyButton(action=MessageAction(label="☁️ 查詢天氣", text=f"{bot_trigger_keyword} 今天天氣"))
@@ -1118,6 +1141,14 @@ if handler:
                                 ),
                                 ButtonComponent(
                                     style="primary", 
+                                    color="#F39C12",
+                                    action=MessageAction(
+                                        label="📷 上傳截圖分析",
+                                        text=f"{bot_trigger_keyword} 請幫我分析圖片："
+                                    )
+                                ),
+                                ButtonComponent(
+                                    style="primary",
                                     color="#4ECDC4",
                                     action=MessageAction(
                                         label="🎯 防詐騙測驗",
@@ -1161,7 +1192,6 @@ if handler:
             except Exception as e:
                 logger.error(f"發送統一按鈕時發生未知錯誤: {e}")
             
-            return
 
         
         # 處理天氣查詢
@@ -1260,7 +1290,6 @@ if handler:
                         # 舊版 API 作為備用
                         line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
             
-            return
 
         # 一般聊天回應
         logger.info(f"進入一般聊天模式: {cleaned_message}")
@@ -1307,6 +1336,44 @@ if handler:
             fallback_message = "不好意思，我現在有點狀況，不過如果您有可疑訊息需要分析，我隨時可以幫忙！ 😊"
             line_bot_api.reply_message(reply_token, TextSendMessage(text=fallback_message))
 
+        # 添加圖片分析命令處理
+        if "分析圖片" in cleaned_message or "檢查圖片" in cleaned_message:
+            # 設置用戶狀態，等待上傳圖片
+            user_state = get_user_state(user_id) or {}
+            
+            # 檢查是否有上下文信息
+            context_message = ""
+            analysis_type = "GENERAL"
+            
+            # 嘗試提取上下文信息
+            if "：" in cleaned_message:
+                context_part = cleaned_message.split("：", 1)[1].strip()
+                if context_part:
+                    context_message = context_part
+            
+            # 嘗試判斷分析類型
+            if "釣魚" in cleaned_message or "網站" in cleaned_message:
+                analysis_type = "PHISHING"
+            elif "文件" in cleaned_message or "合約" in cleaned_message:
+                analysis_type = "DOCUMENT"
+            elif "社交" in cleaned_message or "交友" in cleaned_message:
+                analysis_type = "SOCIAL_MEDIA"
+            
+            # 更新用戶狀態
+            user_state["image_analysis_context"] = context_message
+            user_state["image_analysis_type"] = analysis_type
+            update_user_state(user_id, user_state)
+            
+            # 提示用戶上傳圖片
+            reply_text = "請上傳您想要分析的圖片，我會檢查它是否含有詐騙內容。"
+            if context_message:
+                reply_text += f"\n\n我會根據您提供的上下文「{context_message}」進行分析。"
+            
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=reply_text)
+            )
+
     @handler.add(PostbackEvent)
     def handle_postback(event):
         """處理PostbackEvent（按鈕點擊事件）"""
@@ -1345,7 +1412,7 @@ if handler:
                         line_bot_api.reply_message(reply_token, TextSendMessage(text=error_message))
                         
                 elif action == 'potato_game_answer':
-                    # 处理防詐騙測試答案 - 修复action名称不匹配问题
+                    # 處理防詐騙測試答案
                     answer_index = int(params.get('answer', 0))
                     is_correct, result_flex = handle_potato_game_answer(user_id, answer_index)
                     line_bot_api.reply_message(reply_token, result_flex)
@@ -1355,6 +1422,7 @@ if handler:
                     reply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐小助手，記得用土豆開頭喔！\n" \
                                 f"我用4大服務保護你：\n\n" \
                                 f"🔍 網站安全檢查：\n立刻分析假冒、釣魚網站！\n" \
+                                f"📷 上傳截圖分析：\n不想輸入文字嗎？！直接截圖給我！\n" \
                                 f"🎯 防詐騙測驗：\n玩問答提升你的防詐意識，輕鬆識破詐騙！\n" \
                                 f"📚 詐騙案例：\n案例分析分享，了解9大詐騙類型。\n" \
                                 f"☁️ 天氣預報：\n全台即時天氣隨時查（開發中）。\n" \
@@ -1364,6 +1432,7 @@ if handler:
                     # 統一QuickReply按鈕
                     quick_reply = QuickReply(items=[
                         QuickReplyButton(action=MessageAction(label="🔍 檢查網站安全", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
+                        QuickReplyButton(action=MessageAction(label="📷 上傳截圖分析", text=f"{bot_trigger_keyword} 請幫我分析圖片：")),
                         QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text=f"{bot_trigger_keyword} 防詐騙測試")),
                         QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text=f"{bot_trigger_keyword} 詐騙類型列表")),
                         QuickReplyButton(action=MessageAction(label="☁️ 查詢天氣", text=f"{bot_trigger_keyword} 今天天氣"))
@@ -1412,6 +1481,14 @@ if handler:
                                         ),
                                         ButtonComponent(
                                             style="primary", 
+                                            color="#F39C12",
+                                            action=MessageAction(
+                                                label="📷 上傳截圖分析",
+                                                text=f"{bot_trigger_keyword} 請幫我分析圖片："
+                                            )
+                                        ),
+                                        ButtonComponent(
+                                            style="primary",
                                             color="#4ECDC4",
                                             action=MessageAction(
                                                 label="🎯 防詐騙測驗",
@@ -1472,6 +1549,55 @@ if handler:
         except Exception as e:
             logger.exception(f"處理postback事件時發生錯誤: {e}")
             line_bot_api.reply_message(reply_token, TextSendMessage(text="抱歉，處理您的請求時發生錯誤，請稍後再試！"))
+
+    @handler.add(MessageEvent, message=ImageMessage)
+    def handle_image_message(event):
+        """處理圖片訊息"""
+        try:
+            # 獲取用戶資料
+            user_id = event.source.user_id
+            profile = get_user_profile(user_id)
+            display_name = profile.display_name if profile else "未知用戶"
+            
+            # 檢查上下文（用戶可能提供了分析需求）
+            context_message = ""
+            analysis_type = "GENERAL"
+            
+            # 檢查是否有上下文信息
+            user_state = get_user_state(user_id)
+            if user_state and "image_analysis_context" in user_state:
+                context_message = user_state.get("image_analysis_context", "")
+                analysis_type = user_state.get("image_analysis_type", "GENERAL")
+                # 清除上下文
+                user_state.pop("image_analysis_context", None)
+                user_state.pop("image_analysis_type", None)
+                update_user_state(user_id, user_state)
+            
+            # 處理圖片
+            flex_message, raw_result = image_handler.handle_image_message(
+                event.message.id, user_id, display_name, context_message, analysis_type
+            )
+            
+            # 回覆分析結果
+            if flex_message:
+                line_bot_api.reply_message(event.reply_token, flex_message)
+            else:
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text="抱歉，無法分析此圖片，請稍後再試。")
+                )
+                
+        except LineBotApiError as e:
+            logger.error(f"處理圖片訊息時發生LINE API錯誤: {e}")
+        except Exception as e:
+            logger.exception(f"處理圖片訊息時發生錯誤: {e}")
+            try:
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text="處理圖片時發生錯誤，請稍後再試。")
+                )
+            except:
+                pass
 
 else:
     logger.warning("LINE Bot handler 未初始化，無法處理訊息事件")
