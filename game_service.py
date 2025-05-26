@@ -8,6 +8,7 @@ import json
 import logging
 import random
 import os
+import time
 from typing import Dict, List, Optional, Tuple
 from linebot.models import (
     FlexSendMessage, BubbleContainer, BoxComponent, TextComponent,
@@ -22,6 +23,8 @@ class GameService:
     
     def __init__(self):
         self.user_game_state = {}  # 用戶遊戲狀態
+        self.user_click_timestamps = {}  # 用戶點擊時間戳記錄
+        self.click_cooldown = 0.5  # 點擊冷卻時間（秒）
         self.game_questions = self.load_potato_game_questions()
         
     def load_potato_game_questions(self) -> List[Dict]:
@@ -202,8 +205,20 @@ class GameService:
         
         return FlexSendMessage(alt_text=header_title, contents=bubble)
     
-    def handle_game_answer(self, user_id: str, answer_index: int) -> Tuple[bool, str, Optional[str]]:
+    def handle_game_answer(self, user_id: str, answer_index: int) -> Tuple[Optional[bool], Optional[str], Optional[str]]:
         """處理遊戲答案"""
+        
+        # 防連點檢查
+        current_time = time.time()
+        last_click_time = self.user_click_timestamps.get(user_id, 0)
+        
+        if current_time - last_click_time < self.click_cooldown:
+            # 在冷卻時間內，忽略點擊
+            logger.info(f"用戶 {user_id} 在冷卻時間內重複點擊，忽略此次點擊")
+            return None, None, None
+        
+        # 更新點擊時間戳
+        self.user_click_timestamps[user_id] = current_time
         
         if user_id not in self.user_game_state:
             return False, "遊戲狀態不存在，請重新開始遊戲！", None
@@ -369,9 +384,13 @@ def start_potato_game(user_id: str) -> Tuple[Optional[FlexSendMessage], Optional
     flex_message = game_service.create_game_flex_message(question_data, user_id)
     return flex_message, None
 
-def handle_potato_game_answer(user_id: str, answer_index: int) -> Tuple[bool, FlexSendMessage]:
+def handle_potato_game_answer(user_id: str, answer_index: int) -> Tuple[Optional[bool], Optional[FlexSendMessage]]:
     """處理土豆遊戲答案的便捷函數"""
     is_correct, result_message, fraud_tip = game_service.handle_game_answer(user_id, answer_index)
+    
+    # 如果返回None，表示在冷卻時間內的重複點擊，直接忽略
+    if is_correct is None and result_message is None and fraud_tip is None:
+        return None, None
     
     # 如果result_message是字符串（錯誤訊息），創建錯誤的FlexMessage
     if isinstance(result_message, str) and not is_correct and ("遊戲狀態不存在" in result_message or "已經回答過" in result_message):

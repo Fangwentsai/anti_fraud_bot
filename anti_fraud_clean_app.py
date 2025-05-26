@@ -929,7 +929,44 @@ if handler:
         if is_analysis_request and (len(cleaned_message) < 20 or cleaned_message.rstrip("：:") in analysis_request_keywords):
             logger.info(f"檢測到分析請求但沒有提供具體內容: {cleaned_message}")
             
-            # 檢查是否是圖片分析請求
+            # 設置用戶狀態為等待分析
+            current_state["waiting_for_analysis"] = True
+            user_conversation_state[user_id] = current_state
+            
+            prompt_message = f"好的 {display_name}，我會幫您分析可疑訊息！\n\n" \
+                           f"請直接把您收到的可疑訊息或網址傳給我，我會立即為您分析風險程度。\n\n" \
+                           f"💡 您可以：\n" \
+                           f"• 轉傳可疑的文字訊息\n" \
+                           f"• ⚠️FB,IG不易判別，請提供貼文內網址\n" \
+                           f"• 貼上可疑的網址連結\n" \
+                           f"• 描述您遇到的可疑情況"
+            
+            # 使用新版 API 回覆
+            try:
+                if v3_messaging_api:
+                    from linebot.v3.messaging import TextMessage as V3TextMessage
+                    from linebot.v3.messaging import ReplyMessageRequest
+                    v3_messaging_api.reply_message(
+                        ReplyMessageRequest(
+                            reply_token=reply_token,
+                            messages=[V3TextMessage(text=prompt_message)]
+                        )
+                    )
+                else:
+                    # 舊版 API 作為備用
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text=prompt_message))
+            except LineBotApiError as e:
+                logger.error(f"發送分析提示訊息時發生LINE API錯誤: {e}")
+                # 如果連等待訊息都無法發送，則不繼續分析
+                return
+            except Exception as e:
+                logger.error(f"發送分析提示訊息時發生未知錯誤: {e}")
+                return
+            
+            # 重要：直接返回，不要繼續執行後續的詐騙分析邏輯
+            return
+
+        # 檢查是否是圖片分析請求
         if "分析圖片" in cleaned_message or "檢查圖片" in cleaned_message:
             # 直接回覆圖片分析提示訊息，不進入一般聊天模式
             image_analysis_prompt = f"📷 {display_name}，請上傳您想要分析的圖片！\n\n" \
@@ -1266,6 +1303,12 @@ if handler:
                     # 處理防詐騙測試答案
                     answer_index = int(params.get('answer', 0))
                     is_correct, result_flex = handle_potato_game_answer(user_id, answer_index)
+                    
+                    # 如果返回None，表示在冷卻時間內的重複點擊，直接忽略不回覆
+                    if is_correct is None and result_flex is None:
+                        logger.info(f"忽略用戶 {user_id} 在冷卻時間內的重複點擊")
+                        return  # 直接返回，不發送任何回覆
+                    
                     line_bot_api.reply_message(reply_token, result_flex)
                     
                 elif action == 'show_main_menu':
@@ -1530,6 +1573,12 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
     
     # 排除天氣查詢
     if is_weather_related(message):
+        return False
+    
+    # 排除純粹的分析請求（沒有具體內容要分析）
+    analysis_request_keywords = ["請幫我分析這則訊息", "幫我分析訊息", "請分析這則訊息", "請幫我分析", "分析這則訊息"]
+    if any(keyword in message and len(message.strip()) < 20 for keyword in analysis_request_keywords):
+        logger.info("檢測到純粹的分析請求（沒有具體內容），不觸發詐騙分析")
         return False
     
     # 檢查URL存在（最高優先級）
