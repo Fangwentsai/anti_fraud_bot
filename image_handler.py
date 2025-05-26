@@ -191,9 +191,6 @@ class ImageHandler:
         explanation = result.get("explanation", "無法分析圖片內容。")
         suggestions = result.get("suggestions", "請謹慎對待此圖片內容。")
         
-        # 簡化說明，讓50-60歲中老年人更容易理解
-        simplified_explanation = self._simplify_explanation(explanation, fraud_type)
-        
         # 根據風險等級選擇顏色
         header_color = "#3498DB"  # 默認藍色
         risk_emoji = "⚡"  # 默認表情
@@ -239,7 +236,7 @@ class ImageHandler:
         
         body_contents.append(
             TextComponent(
-                text=simplified_explanation,
+                text=explanation,
                 size="sm",
                 color="#555555",
                 wrap=True,
@@ -329,66 +326,6 @@ class ImageHandler:
         )
         
         return FlexSendMessage(alt_text=f"圖片分析結果：{risk_level}", contents=bubble)
-    
-    def _simplify_explanation(self, explanation: str, fraud_type: str) -> str:
-        """
-        簡化分析說明，讓50-60歲中老年人更容易理解
-        
-        Args:
-            explanation: 原始說明
-            fraud_type: 詐騙類型
-            
-        Returns:
-            str: 簡化後的說明（80-100字）
-        """
-        # 如果說明已經很短，直接返回
-        if len(explanation) <= 100:
-            return explanation
-        
-        # 詐騙關鍵詞對應的簡化說明
-        fraud_keywords = {
-            "投資": "這個圖片提到投資賺錢，要小心是詐騙。真正的投資不會保證獲利，也不會要求先付錢。",
-            "轉帳": "圖片要求轉帳或匯款，這很危險！正當的交易不會急著要你轉錢，先停下來想想。",
-            "中獎": "說你中獎了要先付手續費？這是典型詐騙手法！真正中獎不用先付錢。",
-            "釣魚": "這個網站可能是假的，想騙你的帳號密碼。不要在這種網站輸入個人資料。",
-            "假交友": "網路交友要小心，特別是很快就談錢的人。真心交友不會一開始就借錢或投資。",
-            "購物": "這個購物網站可能有問題，價格太便宜或要求特殊付款方式都要小心。",
-            "銀行": "假冒銀行的訊息很常見，真正的銀行不會用簡訊要你提供密碼或點連結。"
-        }
-        
-        # 檢查詐騙類型和說明內容是否包含關鍵詞
-        for keyword, simple_explanation in fraud_keywords.items():
-            if keyword in explanation or keyword in fraud_type:
-                return simple_explanation
-        
-        # 如果沒有匹配的關鍵詞，嘗試提取重點
-        # 移除技術術語，保留核心警告
-        simplified = explanation
-        
-        # 移除複雜的技術詞彙
-        tech_terms = ["API", "URL", "HTTP", "SSL", "域名", "伺服器", "資料庫", "演算法", "加密"]
-        for term in tech_terms:
-            simplified = simplified.replace(term, "網站")
-        
-        # 提取關鍵句子（包含警告詞的句子）
-        warning_words = ["小心", "注意", "危險", "風險", "詐騙", "假的", "不要", "避免", "謹慎"]
-        sentences = simplified.split("。")
-        key_sentences = []
-        
-        for sentence in sentences:
-            if any(word in sentence for word in warning_words) and len(sentence.strip()) > 5:
-                key_sentences.append(sentence.strip())
-                if len("。".join(key_sentences)) > 80:
-                    break
-        
-        if key_sentences:
-            result = "。".join(key_sentences[:2])  # 最多取前兩句
-            if not result.endswith("。"):
-                result += "。"
-            return result
-        
-        # 如果找不到關鍵句子，返回前80字
-        return explanation[:80] + "..." if len(explanation) > 80 else explanation
     
     def _get_image_analysis_footer_buttons(self) -> List:
         """取得圖片分析結果頁面的底部按鈕，有10%機率顯示贊助按鈕"""
