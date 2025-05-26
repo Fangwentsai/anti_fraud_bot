@@ -195,16 +195,18 @@ class ImageHandler:
         header_color = "#3498DB"  # 默認藍色
         risk_emoji = "⚡"  # 默認表情
         
-        if "極高" in risk_level or "高風險" in risk_level:
+        risk_level_lower = risk_level.lower()
+        
+        # 高風險 - 紅色
+        if any(keyword in risk_level_lower for keyword in ["極高", "高風險", "高"]):
             header_color = "#E74C3C"  # 紅色
             risk_emoji = "🚨"
-        elif "中高" in risk_level:
+        # 中風險 - 橙色
+        elif any(keyword in risk_level_lower for keyword in ["中高", "中風險", "中"]):
             header_color = "#F39C12"  # 橙色
             risk_emoji = "⚠️"
-        elif "中" in risk_level:
-            header_color = "#3498DB"  # 藍色
-            risk_emoji = "⚡"
-        elif "低" in risk_level or "無風險" in risk_level:
+        # 低風險 - 綠色
+        elif any(keyword in risk_level_lower for keyword in ["低風險", "低", "極低", "無風險"]):
             header_color = "#2ECC71"  # 綠色
             risk_emoji = "✅"
         

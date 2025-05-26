@@ -114,7 +114,6 @@ class FlexMessageService:
                     SeparatorComponent(margin='md'),
                     safe_text_component(
                         "土豆是自我學習的機器人，風險結果請自行評估",
-
                         size='xs',
                         color='#888888',
                         align='center',
@@ -683,17 +682,19 @@ class FlexMessageService:
 
     def _get_risk_color(self, risk_level: str) -> str:
         """根據風險等級取得對應顏色"""
-        color_map = {
-            "極高": self.colors["danger"],
-            "高": self.colors["warning"],
-            "中高": self.colors["warning"],
-            "中": "#FFA726",
-            "低": self.colors["success"],
-            "低風險": self.colors["success"],
-            "極低": self.colors["success"],
-            "無風險": self.colors["success"]
-        }
-        return color_map.get(risk_level, self.colors["warning"])
+        risk_level_lower = risk_level.lower()
+        
+        # 高風險 - 紅色
+        if any(keyword in risk_level_lower for keyword in ["極高", "高風險", "高"]):
+            return "#E74C3C"  # 紅色
+        # 中風險 - 橙色
+        elif any(keyword in risk_level_lower for keyword in ["中高", "中風險", "中"]):
+            return "#F39C12"  # 橙色
+        # 低風險 - 綠色
+        elif any(keyword in risk_level_lower for keyword in ["低風險", "低", "極低", "無風險"]):
+            return "#2ECC71"  # 綠色
+        else:
+            return "#3498DB"  # 默認藍色
 
     def _get_risk_emoji(self, risk_level: str) -> str:
         """根據風險等級取得對應emoji"""
