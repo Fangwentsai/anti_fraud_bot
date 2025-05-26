@@ -984,6 +984,104 @@ if handler:
                     except Exception as push_error:
                         logger.error(f"圖片分析提示訊息使用push_message也失敗: {push_error}")
             return
+
+        # 判斷是否需要進行詐騙分析
+        if should_perform_fraud_analysis(cleaned_message, user_id):
+            logger.info(f"執行詐騙分析: {cleaned_message}")
+            analysis_result = detect_fraud_with_chatgpt(cleaned_message, display_name, user_id)
+            
+            if analysis_result and analysis_result.get("success", False):
+                analysis_data = analysis_result.get("result", {})
+                
+                # 檢查是否是網域變形攻擊，如果是則使用專門的Flex Message
+                if analysis_data.get("is_domain_spoofing", False):
+                    spoofing_result = analysis_data.get("spoofing_result", {})
+                    flex_message = create_domain_spoofing_flex_message(spoofing_result, display_name, cleaned_message, user_id)
+                else:
+                    # 一般的詐騙分析，使用標準的Flex Message
+                    flex_message = create_analysis_flex_message(analysis_data, display_name, cleaned_message, user_id)
+                
+                # 發送Flex消息
+                if flex_message:
+                    try:
+                        if v3_messaging_api:
+                            from linebot.v3.messaging import FlexMessage as V3FlexMessage
+                            from linebot.v3.messaging import ReplyMessageRequest
+                            v3_messaging_api.reply_message(
+                                ReplyMessageRequest(
+                                    reply_token=reply_token,
+                                    messages=[V3FlexMessage(alt_text=flex_message.alt_text, contents=flex_message.contents)]
+                               )
+                            )
+                        else:
+                            line_bot_api.reply_message(reply_token, flex_message)
+                        logger.info(f"已發送詐騙分析Flex Message: {user_id}")
+                    except LineBotApiError as e:
+                        logger.error(f"發送Flex Message時發生錯誤: {e}")
+                        # 如果Flex消息發送失敗，發送基本文本消息
+                        risk_level = analysis_data.get("risk_level", "不確定")
+                        fraud_type = analysis_data.get("fraud_type", "未知")
+                        explanation = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
+                        suggestions = analysis_data.get("suggestions", "請隨時保持警惕。")
+                        
+                        text_response = f"🔍 風險分析結果\n\n風險等級：{risk_level}\n詐騙類型：{fraud_type}\n\n說明：{explanation}\n\n建議：{suggestions}"
+                        
+                        try:
+                            if v3_messaging_api:
+                                from linebot.v3.messaging import TextMessage as V3TextMessage
+                                from linebot.v3.messaging import ReplyMessageRequest
+                                v3_messaging_api.reply_message(
+                                    ReplyMessageRequest(
+                                        reply_token=reply_token,
+                                        messages=[V3TextMessage(text=text_response)]
+                                   )
+                                )
+                            else:
+                                line_bot_api.reply_message(reply_token, TextSendMessage(text=text_response))
+                        except Exception as text_error:
+                            logger.error(f"發送文本回覆也失敗: {text_error}")
+                else:
+                    # 如果Flex消息創建失敗，發送基本文本消息
+                    risk_level = analysis_data.get("risk_level", "不確定")
+                    fraud_type = analysis_data.get("fraud_type", "未知")
+                    explanation = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
+                    suggestions = analysis_data.get("suggestions", "請隨時保持警惕。")
+                    
+                    text_response = f"🔍 風險分析結果\n\n風險等級：{risk_level}\n詐騙類型：{fraud_type}\n\n說明：{explanation}\n\n建議：{suggestions}"
+                    
+                    try:
+                        if v3_messaging_api:
+                            from linebot.v3.messaging import TextMessage as V3TextMessage
+                            from linebot.v3.messaging import ReplyMessageRequest
+                            v3_messaging_api.reply_message(
+                                ReplyMessageRequest(
+                                    reply_token=reply_token,
+                                    messages=[V3TextMessage(text=text_response)]
+                               )
+                            )
+                        else:
+                            line_bot_api.reply_message(reply_token, TextSendMessage(text=text_response))
+                    except Exception as text_error:
+                        logger.error(f"發送文本回覆失敗: {text_error}")
+            else:
+                # 分析失敗的情況，發送錯誤消息
+                error_message = analysis_result.get("message", "分析失敗，請稍後再試") if analysis_result else "分析失敗，請稍後再試"
+                try:
+                    if v3_messaging_api:
+                        from linebot.v3.messaging import TextMessage as V3TextMessage
+                        from linebot.v3.messaging import ReplyMessageRequest
+                        v3_messaging_api.reply_message(
+                            ReplyMessageRequest(
+                                reply_token=reply_token,
+                                messages=[V3TextMessage(text=error_message)]
+                           )
+                        )
+                    else:
+                        line_bot_api.reply_message(reply_token, TextSendMessage(text=error_message))
+                except Exception as error_send_error:
+                    logger.error(f"發送錯誤訊息失敗: {error_send_error}")
+            
+            return
         
         logger.info(f"進入一般聊天模式: {cleaned_message}")
         try:
