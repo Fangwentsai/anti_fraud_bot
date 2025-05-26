@@ -1319,34 +1319,34 @@ class FlexMessageService:
             ])
         
         # 創建詐騙詳情Flex Message
-        bubble = BubbleContainer(
+    bubble = BubbleContainer(
             size="mega",
-            header=BoxComponent(
-                layout="vertical",
-                contents=[
-                    TextComponent(
+        header=BoxComponent(
+            layout="vertical",
+            contents=[
+                TextComponent(
                         text=f"{fraud_type}",
-                        weight="bold",
+                    weight="bold",
                         size="xl",
                         color="#ffffff"
-                    ),
-                    TextComponent(
+                ),
+                TextComponent(
                         text="以下是此類詐騙的詳細說明與防範方法",
-                        size="sm",
+                    size="sm",
                         color="#ffffff",
                         margin="sm",
                         wrap=True
-                    )
-                ],
+                )
+            ],
                 background_color=header_color,
-                padding_all="lg"
-            ),
-            body=BoxComponent(
-                layout="vertical",
+            padding_all="lg"
+        ),
+        body=BoxComponent(
+            layout="vertical",
                 contents=body_contents,
                 padding_all="lg"
-            ),
-            footer=BoxComponent(
+        ),
+        footer=BoxComponent(
                 layout="vertical",
                 contents=footer_contents,
                 padding_all="lg"
@@ -1429,9 +1429,10 @@ class FlexMessageService:
                 padding_all="lg",
                 contents=type_contents
             )
-        )
-        
-        return FlexSendMessage(alt_text="詐騙類型列表", contents=bubble)
+            # 移除footer部分
+    )
+    
+    return FlexSendMessage(alt_text="詐騙類型列表", contents=bubble)
 
 
 # 創建全域服務實例
