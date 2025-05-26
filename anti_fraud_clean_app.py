@@ -1344,10 +1344,22 @@ if handler:
                 try:
                     if v3_messaging_api:
                         from linebot.v3.messaging import ReplyMessageRequest
+                        from linebot.v3.messaging import FlexMessage as V3FlexMessage
+                        
+                        # 將 FlexSendMessage 轉換為 v3 格式
+                        if hasattr(flex_message, 'contents'):
+                            v3_flex_message = V3FlexMessage(
+                                alt_text=flex_message.alt_text,
+                                contents=flex_message.contents
+                            )
+                        else:
+                            # 如果已經是 v3 格式，直接使用
+                            v3_flex_message = flex_message
+                        
                         v3_messaging_api.reply_message(
                             ReplyMessageRequest(
                                 reply_token=reply_token,
-                                messages=[flex_message]
+                                messages=[v3_flex_message]
                            )
                         )
                         logger.info(f"使用v3 API回覆圖片分析成功: {user_id}")
@@ -1361,11 +1373,21 @@ if handler:
                         try:
                             if v3_messaging_api:
                                 from linebot.v3.messaging import PushMessageRequest
+                                from linebot.v3.messaging import FlexMessage as V3FlexMessage
+                                
+                                # 將 FlexSendMessage 轉換為 v3 格式
+                                if hasattr(flex_message, 'contents'):
+                                    v3_flex_message = V3FlexMessage(
+                                        alt_text=flex_message.alt_text,
+                                        contents=flex_message.contents
+                                    )
+                                else:
+                                    v3_flex_message = flex_message
                                 
                                 v3_messaging_api.push_message(
                                     PushMessageRequest(
                                         to=user_id,
-                                        messages=[flex_message]
+                                        messages=[v3_flex_message]
                                    )
                                 )
                             else:
