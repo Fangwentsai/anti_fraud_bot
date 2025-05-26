@@ -710,12 +710,11 @@ if handler:
         if not cleaned_message.strip():
             # 土豆的熱情自我介紹
             reply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐小助手，記得用土豆開頭喔！\n" \
-                        f"我用4大服務保護你：\n\n" \
+                        f"讓我用4大服務保護你：\n\n" \
                         f"🔍 網站安全檢查：\n立刻分析假冒、釣魚網站！\n" \
                         f"📷 上傳截圖分析：\n不想輸入文字嗎？！直接截圖給我！\n" \
                         f"🎯 防詐騙測驗：\n玩問答提升你的防詐意識，輕鬆識破詐騙！\n" \
                         f"📚 詐騙案例：\n案例分析分享，了解9大詐騙類型。\n" \
-                        f"☁️ 天氣預報：\n全台即時天氣隨時查（開發中）。\n" \
                         f"💬 日常閒聊：\n陪你談天說地 甚至可以輸入：\n土豆 蔥爆牛肉怎麼做😂\n\n" \
                         f"💡 點擊下方按鈕，或直接告訴我你需要什麼！"
                 
@@ -725,7 +724,6 @@ if handler:
                 QuickReplyButton(action=MessageAction(label="📷 上傳截圖分析", text=f"{bot_trigger_keyword} 請幫我分析圖片：")),
                 QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text=f"{bot_trigger_keyword} 防詐騙測試")),
                 QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text=f"{bot_trigger_keyword} 詐騙類型列表")),
-                QuickReplyButton(action=MessageAction(label="☁️ 查詢天氣", text=f"{bot_trigger_keyword} 今天天氣"))
             ])
             
             # 統一使用mention功能（個人和群組完全一樣）
@@ -791,15 +789,8 @@ if handler:
                                     color="#45B7D1", 
                                     action=MessageAction(
                                         label="📚 詐騙案例",
+
                                         text=f"{bot_trigger_keyword} 詐騙類型列表"
-                                    )
-                                ),
-                                ButtonComponent(
-                                    style="primary",
-                                    color="#96CEB4",
-                                    action=MessageAction(
-                                        label="☁️ 查詢天氣", 
-                                        text=f"{bot_trigger_keyword} 今天天氣"
                                     )
                                 )
                             ]
@@ -946,10 +937,10 @@ if handler:
                                   f"🔍 可疑網站截圖\n" \
                                   f"💬 詐騙對話截圖\n" \
                                   f"📱 可疑簡訊截圖\n" \
-                                  f"📧 釣魚郵件截圖\n" \
+                                  f"📧 釣魚郵件截圖" \
                                   f"💰 投資廣告截圖\n" \
                                   f"🎯 其他可疑內容截圖\n\n" \
-                                  f"請直接上傳圖片，我會立即為您分析！"
+                                  f"請直接上傳圖片，大約10-15秒就能立即為您分析！"
             
             try:
                 if v3_messaging_api:
@@ -1112,7 +1103,7 @@ if handler:
                 if len(chat_reply) > LINE_MESSAGE_SAFE_LENGTH:
                     chat_reply = chat_reply[:LINE_MESSAGE_SAFE_LENGTH] + "..."
                 
-                introduction = f"\n\n💫 我是您的專業防詐騙助手！經過全面測試，我能為您提供：\n🔍 網站安全檢查\n🎯 防詐騙知識測驗\n📚 詐騙案例查詢\n☁️ 天氣預報查詢\n\n有任何可疑訊息都歡迎直接傳給我分析喔！"
+                introduction = f"\n\n💫 我是您的專業防詐騙助手！經過全面測試，我能為您提供：\n🔍 網站安全檢查\n🎯 防詐騙知識測驗\n📚 詐騙案例查詢\n\n有任何可疑訊息都歡迎直接傳給我分析喔！"
                 
                 # 如果是首次聊天，添加自我介紹
                 if user_id not in first_time_chatters:
@@ -1280,12 +1271,11 @@ if handler:
                 elif action == 'show_main_menu':
                     # 顯示土豆主選單
                     reply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐小助手，記得用土豆開頭喔！\n" \
-                                f"我用4大服務保護你：\n\n" \
+                                f"讓我用4大服務保護你：\n\n" \
                                 f"🔍 網站安全檢查：\n立刻分析假冒、釣魚網站！\n" \
                                 f"📷 上傳截圖分析：\n不想輸入文字嗎？！直接截圖給我！\n" \
                                 f"🎯 防詐騙測驗：\n玩問答提升你的防詐意識，輕鬆識破詐騙！\n" \
                                 f"📚 詐騙案例：\n案例分析分享，了解9大詐騙類型。\n" \
-                                f"☁️ 天氣預報：\n全台即時天氣隨時查（開發中）。\n" \
                                 f"💬 日常閒聊：\n陪你談天說地 甚至可以輸入：\n土豆 蔥爆牛肉怎麼做😂\n\n" \
                                 f"💡 點擊下方按鈕，或直接告訴我你需要什麼！"
                     
@@ -1295,7 +1285,6 @@ if handler:
                         QuickReplyButton(action=MessageAction(label="📷 上傳截圖分析", text=f"{bot_trigger_keyword} 請幫我分析圖片：")),
                         QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text=f"{bot_trigger_keyword} 防詐騙測試")),
                         QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text=f"{bot_trigger_keyword} 詐騙類型列表")),
-                        QuickReplyButton(action=MessageAction(label="☁️ 查詢天氣", text=f"{bot_trigger_keyword} 今天天氣"))
                     ])
                     
                     # 統一使用mention功能
@@ -1361,14 +1350,6 @@ if handler:
                                             action=MessageAction(
                                                 label="📚 詐騙案例",
                                                 text=f"{bot_trigger_keyword} 詐騙類型列表"
-                                            )
-                                        ),
-                                        ButtonComponent(
-                                            style="primary",
-                                            color="#96CEB4",
-                                            action=MessageAction(
-                                                label="☁️ 查詢天氣", 
-                                                text=f"{bot_trigger_keyword} 今天天氣"
                                             )
                                         )
                                     ]
@@ -1551,16 +1532,6 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
     if is_weather_related(message):
         return False
     
-    # 排除純粹的分析請求（沒有具體內容要分析）
-    analysis_request_keywords = ["請幫我分析這則訊息", "幫我分析訊息", "請分析這則訊息", "請幫我分析", "分析這則訊息"]
-    if any(keyword in message and len(message) < 20 for keyword in analysis_request_keywords):
-        return False
-    
-    # 排除一般遊戲討論（而非真正的遊戲觸發）
-    game_chat_patterns = ["遊戲推薦", "遊戲好玩", "什麼遊戲", "遊戲有趣"]
-    if any(pattern in message_lower for pattern in game_chat_patterns):
-        return False
-    
     # 檢查URL存在（最高優先級）
     import re
     url_pattern = re.compile(r'https?://[^\\s]+|www\\.[^\\s]+|[a-zA-Z0-9][a-zA-Z0-9-]*\\.[a-zA-Z]{2,}(?:\\.[a-zA-Z]{2,})?')
@@ -1568,7 +1539,7 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
         logger.info("檢測到URL，觸發詐騙分析")
         return True
     
-    # 檢查明確的分析請求（但要有具體內容）
+    # 檢查明確的分析請求（包含具體內容的分析請求）
     explicit_analysis_requests = [
         "這是詐騙嗎", "這可靠嗎", "這是真的嗎", 
         "這安全嗎", "可以相信嗎", "有問題嗎", "是騙人的嗎"
@@ -1576,6 +1547,21 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
     if any(request in message_lower for request in explicit_analysis_requests):
         logger.info("檢測到明確分析請求")
         return True
+    
+    # 檢查包含「請幫我分析」等分析請求關鍵詞，且有具體內容要分析
+    analysis_request_patterns = [
+        "請幫我分析", "幫我分析", "請分析", "分析一下", "幫忙分析",
+        "請檢查", "幫我檢查", "檢查一下", "幫忙檢查"
+    ]
+    
+    # 如果包含分析請求關鍵詞，且訊息長度超過分析請求本身，就觸發分析
+    for pattern in analysis_request_patterns:
+        if pattern in message:
+            # 移除分析請求關鍵詞後，檢查是否還有實質內容
+            remaining_content = message.replace(pattern, "").strip()
+            if len(remaining_content) > 3:  # 有實質內容要分析
+                logger.info(f"檢測到分析請求關鍵詞：{pattern}，且有具體內容")
+                return True
     
     # 檢查分析關鍵詞+疑問詞的組合
     analysis_keywords = ["分析", "詐騙", "安全", "可疑", "風險", "網站", "連結", "投資", "賺錢"]
