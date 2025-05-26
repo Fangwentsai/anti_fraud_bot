@@ -42,10 +42,21 @@ ANALYSIS_PROMPTS = [
 
 # ===== 短網址域名列表 =====
 SHORT_URL_DOMAINS = [
+    # 國際短網址服務
     'bit.ly', 'tinyurl.com', 'goo.gl', 't.co', 'ow.ly', 
     'is.gd', 'buff.ly', 'adf.ly', 'short.link', 'tiny.cc',
     'rebrand.ly', 'clickmeter.com', 'smarturl.it', 'linktr.ee',
-    'reurl.cc', 'pse.is', '0rz.tw', 'tinyurl.tw'
+    'cutt.ly', 'shorturl.at', 'v.gd', 'x.co', 'lnkd.in',
+    'youtu.be', 'amzn.to', 'fb.me', 'git.io', 'aka.ms',
+    
+    # 台灣短網址服務
+    'reurl.cc', 'pse.is', '0rz.tw', 'tinyurl.tw', 'lihi.cc',
+    'lihi1.com', 'lihi2.com', 'lihi3.com', 'lihi4.com',
+    'short.link', 'url.tw', 'myppt.cc', 'myurl.com.tw',
+    
+    # 中國短網址服務（詐騙常用）
+    'dwz.cn', 'suo.im', 'mrw.so', 'url.cn', 'sina.lt',
+    't.cn', 'weibo.cn', 'tb.cn', 'tmall.com', 'taobao.com'
 ]
 
 # ===== 詢問機器人工作原理的關鍵詞 =====

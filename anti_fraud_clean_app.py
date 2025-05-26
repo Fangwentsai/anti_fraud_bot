@@ -232,15 +232,34 @@ def expand_short_url(url):
     # 嘗試展開短網址
     try:
         session = requests.Session()
-        response = session.head(url, allow_redirects=True, timeout=5)
-        expanded_url = response.url
+        # 設置User-Agent避免被阻擋
+        session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        })
         
-        if expanded_url != url:
+        # 先嘗試HEAD請求
+        try:
+            response = session.head(url, allow_redirects=True, timeout=10)
+            expanded_url = response.url
+        except:
+            # 如果HEAD失敗，嘗試GET請求
+            response = session.get(url, allow_redirects=True, timeout=10, stream=True)
+            expanded_url = response.url
+            response.close()  # 立即關閉連接，不下載內容
+        
+        if expanded_url != url and expanded_url:
             logger.info(f"成功展開短網址: {url} -> {expanded_url}")
             return url, expanded_url, True, True
         else:
-            logger.warning(f"URL可能不是短網址或無法展開: {url}")
+            logger.warning(f"短網址無法展開或已失效: {url}")
             return url, url, True, False
+            
+    except requests.exceptions.Timeout:
+        logger.warning(f"展開短網址超時: {url}")
+        return url, url, True, False
+    except requests.exceptions.ConnectionError:
+        logger.warning(f"展開短網址連接失敗: {url}")
+        return url, url, True, False
     except Exception as e:
         logger.error(f"展開短網址時出錯: {e}")
         return url, url, True, False
@@ -543,7 +562,19 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         # 如果是短網址但無法展開，提高風險評估
         special_notes = ""
         if is_short_url and not url_expanded_successfully:
-            special_notes = "這是個短網址，但我們無法展開查看真正的目的地，這種情況要特別小心。短網址常被詐騙者利用來隱藏真實的惡意網站。除非您非常確定這個連結安全，否則不建議點擊。"
+            special_notes = """⚠️ 特別注意：這是一個短網址，但我們無法展開查看真正的目的地。
+
+可能的原因：
+1. 網址已失效或過期
+2. 網站暫時無法訪問
+3. 可能是惡意網址被封鎖
+
+這種情況特別危險，因為：
+• 短網址常被詐騙者用來隱藏真實的惡意網站
+• 無法驗證真正的目的地
+• 可能是釣魚網站或惡意軟體下載點
+
+建議立即停止點擊，除非您非常確定這個連結的來源安全。"""
             logger.warning(f"無法展開的短網址: {original_url}，建議提高警覺")
         
         openai_prompt = f"""
@@ -559,8 +590,8 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         請按照以下固定格式回答，每一行都必須包含：
         
         風險等級：[極高/高/中高/中/低/極低/無風險]
-        詐騙類型：[具體的詐騙類型，如：釣魚網站、假交友詐騙、投資詐騙等]
-        說明：[用簡單易懂的話解釋為什麼有風險或沒有風險，像鄰居朋友在聊天的語氣，避免複雜術語]
+        詐騙類型：[具體的詐騙類型，如：釣魚網站、假交友詐騙、投資詐騙、失效短網址等]
+        說明：[用簡單易懂的話解釋為什麼有風險或沒有風險，像鄰居朋友在聊天的語氣，避免複雜術語。如果是無法展開的短網址，請特別說明這種情況的危險性]
         建議：[用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號，給出簡單明確的防範建議]
         新興手法：[是/否]
         """
@@ -599,21 +630,26 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
             parsed_result["is_short_url"] = is_short_url
             parsed_result["url_expanded_successfully"] = url_expanded_successfully
             
-            # 如果是短網址但無法展開，提高風險等級
+            # 如果是短網址但無法展開，提高風險等級並加強說明
             if is_short_url and not url_expanded_successfully:
-                if parsed_result["risk_level"] == "低風險":
-                    parsed_result["risk_level"] = "中風險"
-                    parsed_result["explanation"] = f"{parsed_result['explanation']}\n\n⚠️ 此外，這是一個短網址但無法展開查看真正的目的地，這點也要特別小心。"
+                # 將風險等級提升到高風險
+                if parsed_result["risk_level"] in ["低風險", "中風險", "極低風險"]:
+                    parsed_result["risk_level"] = "高風險"
                 
-                if "短網址" not in parsed_result["explanation"]:
-                    parsed_result["explanation"] = f"{parsed_result['explanation']}\n\n⚠️ 要注意這是一個短網址(像是縮短過的網址)，無法看到真正要去的網站，這種情況要特別小心。"
+                # 更新詐騙類型
+                if "失效" not in parsed_result["fraud_type"] and "短網址" not in parsed_result["fraud_type"]:
+                    parsed_result["fraud_type"] = "失效短網址風險"
                 
-                if "短網址" not in parsed_result["suggestions"]:
-                    parsed_result["suggestions"] = f"{parsed_result['suggestions']}\n• 遇到短網址時，最好先詢問傳送連結的人是什麼內容，或者乾脆不要點擊。"
+                # 加強說明
+                base_explanation = parsed_result["explanation"]
+                parsed_result["explanation"] = f"⚠️ 這是一個短網址，但我們無法展開查看真正的目的地。\n\n可能原因：\n• 網址已失效或過期\n• 網站暫時無法訪問\n• 可能是惡意網址被封鎖\n\n{base_explanation}\n\n💡 無法驗證的短網址特別危險，因為不知道會連到哪個網站，建議不要點擊。"
+                
+                # 加強建議
+                parsed_result["suggestions"] = f"🚫 立即停止點擊這個短網址\n🔍 詢問傳送者這個連結的具體內容\n⚠️ 如果不確定來源，直接刪除或忽略\n🛡️ 遇到失效短網址要特別小心，可能是詐騙陷阱\n\n原建議：{parsed_result['suggestions']}"
             
             # 如果是短網址且成功展開，在結果中加入說明
-            if is_short_url and url_expanded_successfully:
-                parsed_result["explanation"] = f"{parsed_result['explanation']}\n\n這個連結是短網址，已經幫您展開查看真正的目的地是: {expanded_url}"
+            elif is_short_url and url_expanded_successfully:
+                parsed_result["explanation"] = f"{parsed_result['explanation']}\n\n✅ 這個短網址已成功展開，真正的目的地是：{expanded_url}\n我們已經根據真實網站進行分析。"
             
             # 檢查解析結果，確保所有必要欄位都有值
             if not parsed_result.get("explanation") or parsed_result["explanation"] == "無法解析分析結果。":
