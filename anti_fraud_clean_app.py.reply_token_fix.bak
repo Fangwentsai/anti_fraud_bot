@@ -824,8 +824,7 @@ if handler:
                 logger.error(f"發送統一按鈕時發生未知錯誤: {e}")
             
 
-        
-            return# 處理遊戲觸發 - 移到詐騙檢測前面
+        # 處理遊戲觸發 - 移到詐騙檢測前面
         if is_game_trigger(cleaned_message):
             logger.info(f"檢測到防詐騙測試觸發: {cleaned_message}")
             flex_message, error_message = start_potato_game(user_id)
@@ -959,7 +958,7 @@ if handler:
                         ReplyMessageRequest(
                             reply_token=reply_token,
                             messages=[V3TextMessage(text=prompt_message)]
-                       )
+                        )
                     )
                 else:
                     # 舊版 API 作為備用
@@ -1102,7 +1101,6 @@ if handler:
             
             # 詐騙分析完成，直接返回，不繼續執行其他邏輯
 
-            return
         # 檢查是否詢問功能
         if any(keyword in cleaned_message for keyword in function_inquiry_keywords):
             reply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐騙，記得用土豆開頭喔！\n" \
@@ -1216,9 +1214,6 @@ if handler:
             
 
         
-        
-            return
-        
         # 處理天氣查詢
         if is_weather_related(cleaned_message):
             logger.info(f"檢測到天氣查詢: {cleaned_message}")
@@ -1239,7 +1234,7 @@ if handler:
                             ReplyMessageRequest(
                 reply_token=reply_token,
                             messages=[city_selector]
-                       )
+                        )
             )
                     else:
                         # 舊版 API 作為備用
@@ -1260,7 +1255,7 @@ if handler:
                             ReplyMessageRequest(
                 reply_token=reply_token,
                             messages=[weather_flex]
-                       )
+                        )
             )
                     else:
                         # 舊版 API 作為備用
@@ -1275,7 +1270,7 @@ if handler:
                                 ReplyMessageRequest(
                 reply_token=reply_token,
                                 messages=[V3TextMessage(text=weather_text)]
-                           )
+                            )
             )
                         else:
                             # 舊版 API 作為備用
@@ -1290,7 +1285,7 @@ if handler:
                                 ReplyMessageRequest(
                 reply_token=reply_token,
                                 messages=[V3TextMessage(text=error_text)]
-                           )
+                            )
             )
                         else:
                             # 舊版 API 作為備用
@@ -1306,7 +1301,7 @@ if handler:
                             ReplyMessageRequest(
                 reply_token=reply_token,
                             messages=[V3TextMessage(text=weather_text)]
-                       )
+                        )
             )
                     else:
                         # 舊版 API 作為備用
@@ -1321,16 +1316,13 @@ if handler:
                             ReplyMessageRequest(
                 reply_token=reply_token,
                             messages=[V3TextMessage(text=error_text)]
-                       )
+                        )
             )
                     else:
                         # 舊版 API 作為備用
                         line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
             
 
-        
-            return
-        
         # 一般聊天回應
         logger.info(f"進入一般聊天模式: {cleaned_message}")
         try:
@@ -1375,7 +1367,7 @@ if handler:
                             ReplyMessageRequest(
                                 reply_token=reply_token,
                                 messages=[V3TextMessage(text=chat_reply)]
-                           )
+                            )
                         )
                         logger.info(f"使用v3 API回覆成功: {user_id}")
                     else:
@@ -1394,7 +1386,7 @@ if handler:
                                     PushMessageRequest(
                                         to=user_id,
                                         messages=[V3TextMessage(text=chat_reply)]
-                                   )
+                                    )
                                 )
                             else:
                                 line_bot_api.push_message(user_id, TextSendMessage(text=chat_reply))
@@ -1413,7 +1405,7 @@ if handler:
                             ReplyMessageRequest(
                                 reply_token=reply_token,
                                 messages=[V3TextMessage(text=fallback_message)]
-                           )
+                            )
                         )
                     else:
                         # 舊版 API 作為備用
@@ -1431,7 +1423,7 @@ if handler:
                                     PushMessageRequest(
                                         to=user_id,
                                         messages=[V3TextMessage(text=fallback_message)]
-                                   )
+                                    )
                                 )
                             else:
                                 line_bot_api.push_message(user_id, TextSendMessage(text=fallback_message))
@@ -1452,7 +1444,7 @@ if handler:
                         ReplyMessageRequest(
                             reply_token=reply_token,
                             messages=[V3TextMessage(text=fallback_message)]
-                       )
+                        )
                     )
                 else:
                     # 舊版 API 作為備用
@@ -1470,15 +1462,51 @@ if handler:
                                 PushMessageRequest(
                                     to=user_id,
                                     messages=[V3TextMessage(text=fallback_message)]
-                               )
+                                )
                             )
                         else:
                             line_bot_api.push_message(user_id, TextSendMessage(text=fallback_message))
                         logger.info(f"錯誤fallback訊息使用push_message成功: {user_id}")
                     except Exception as push_error:
                         logger.error(f"發送錯誤fallback訊息時使用push_message也失敗: {push_error}")
-        # 處理詐騙分析完成後直接返回，避免繼續執行其他邏輯
-        return
+
+        # 添加圖片分析命令處理
+        if "分析圖片" in cleaned_message or "檢查圖片" in cleaned_message:
+            # 設置用戶狀態，等待上傳圖片
+            user_state = get_user_state(user_id) or {}
+            
+            # 檢查是否有上下文信息
+            context_message = ""
+            analysis_type = "GENERAL"
+            
+            # 嘗試提取上下文信息
+            if "：" in cleaned_message:
+                context_part = cleaned_message.split("：", 1)[1].strip()
+                if context_part:
+                    context_message = context_part
+            
+            # 嘗試判斷分析類型
+            if "釣魚" in cleaned_message or "網站" in cleaned_message:
+                analysis_type = "PHISHING"
+            elif "文件" in cleaned_message or "合約" in cleaned_message:
+                analysis_type = "DOCUMENT"
+            elif "社交" in cleaned_message or "交友" in cleaned_message:
+                analysis_type = "SOCIAL_MEDIA"
+            
+            # 更新用戶狀態
+            user_state["image_analysis_context"] = context_message
+            user_state["image_analysis_type"] = analysis_type
+            update_user_state(user_id, user_state)
+            
+            # 提示用戶上傳圖片
+            reply_text = "請上傳您想要分析的圖片，我會檢查它是否含有詐騙內容。"
+            if context_message:
+                reply_text += f"\n\n我會根據您提供的上下文「{context_message}」進行分析。"
+            
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=reply_text)
+            )
 
     @handler.add(PostbackEvent)
     def handle_postback(event):
@@ -1695,7 +1723,7 @@ if handler:
                             ReplyMessageRequest(
                                 reply_token=reply_token,
                                 messages=[flex_message]
-                           )
+                            )
                         )
                         logger.info(f"使用v3 API回覆圖片分析成功: {user_id}")
                     else:
@@ -1713,7 +1741,7 @@ if handler:
                                     PushMessageRequest(
                                         to=user_id,
                                         messages=[flex_message]
-                                   )
+                                    )
                                 )
                             else:
                                 line_bot_api.push_message(user_id, flex_message)
@@ -1732,7 +1760,7 @@ if handler:
                             ReplyMessageRequest(
                                 reply_token=reply_token,
                                 messages=[V3TextMessage(text=error_message)]
-                           )
+                            )
                         )
                     else:
                         # 舊版 API 作為備用
@@ -1753,7 +1781,7 @@ if handler:
                                     PushMessageRequest(
                                         to=user_id,
                                         messages=[V3TextMessage(text=error_message)]
-                                   )
+                                    )
                                 )
                             else:
                                 line_bot_api.push_message(user_id, TextSendMessage(text=error_message))
@@ -1777,11 +1805,12 @@ if handler:
                             ReplyMessageRequest(
                                 reply_token=event.reply_token,
                                 messages=[V3TextMessage(text=error_message)]
-                           )
+                            )
                         )
                     else:
                         # 舊版 API 作為備用
-                        line_bot_api.reply_message(reply_token,
+                        line_bot_api.reply_message(
+                            event.reply_token,
                             TextSendMessage(text=error_message)
                         )
                 except LineBotApiError as e:
@@ -1797,7 +1826,7 @@ if handler:
                                     PushMessageRequest(
                                         to=user_id,
                                         messages=[V3TextMessage(text=error_message)]
-                                   )
+                                    )
                                 )
                             else:
                                 line_bot_api.push_message(user_id, TextSendMessage(text=error_message))

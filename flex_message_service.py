@@ -138,19 +138,19 @@ class FlexMessageService:
         
         # 基本按鈕
         buttons = [
-            ButtonComponent(
-                style='primary',
-                height='sm',
+                    ButtonComponent(
+                        style='primary',
+                        height='sm',
                 action=MessageAction(
                     label='🔄 再測一次',
                     text='土豆 請幫我分析這則訊息：'
                 ),
                 color='#2E86C1'
-            ),
-            ButtonComponent(
+                    ),
+                    ButtonComponent(
                 style='primary',
-                height='sm',
-                action=PostbackAction(
+                        height='sm',
+                        action=PostbackAction(
                     label='🏠 回到首頁',
                     data=f'action=show_main_menu&user_id={user_id}'
                 ),
@@ -281,23 +281,23 @@ class FlexMessageService:
                         margin='md',
                         spacing='sm',
                         contents=[
-                            safe_text_component(
+                    safe_text_component(
                                 f"🔴 可疑網域: {suspicious_domain}",
-                                size='sm',
-                                color=self.colors["danger"],
+                        size='sm',
+                        color=self.colors["danger"],
                                 wrap=True
-                            ),
-                            safe_text_component(
+                    ),
+                    safe_text_component(
                                 f"🟢 正版網域: {legitimate_domain}",
                                 size='sm',
                                 color='#43A047',
                                 wrap=True
-                            ),
-                            safe_text_component(
+                    ),
+                    safe_text_component(
                                 f"📝 說明: {suspicious_explanation}",
-                                size='sm',
+                        size='sm',
                                 color=self.colors["secondary"],
-                                wrap=True,
+                        wrap=True,
                                 margin='sm'
                             )
                         ]
@@ -314,10 +314,10 @@ class FlexMessageService:
                         margin='sm',
                         spacing='sm',
                         contents=[
-                            safe_text_component(
+                    safe_text_component(
                                 "🚫 千萬不要點擊可疑網址或提供任何個人資料",
-                                size='sm',
-                                color=self.colors["secondary"],
+                        size='sm',
+                        color=self.colors["secondary"],
                                 wrap=True
                             ),
                             safe_text_component(
@@ -361,16 +361,16 @@ class FlexMessageService:
         
         # 基本按鈕
         buttons = [
-            ButtonComponent(
-                style='primary',
-                height='sm',
+                    ButtonComponent(
+                        style='primary',
+                        height='sm',
                 action=MessageAction(
                     label='🔄 再測一次',
                     text='土豆 請幫我分析這則訊息'
                 ),
                 color='#1E88E5'  # 藍色按鈕
-            ),
-            ButtonComponent(
+                    ),
+                    ButtonComponent(
                 style='primary',
                 height='sm',
                 action=MessageAction(
@@ -381,8 +381,8 @@ class FlexMessageService:
             ),
             ButtonComponent(
                 style='primary',
-                height='sm',
-                action=PostbackAction(
+                        height='sm',
+                        action=PostbackAction(
                     label='📝 回報註記',
                     data=f'action=report_feedback&user_id={user_id}'
                 ),
@@ -570,21 +570,21 @@ class FlexMessageService:
         
         # 只取第一天的資料，簡化顯示
         day_data = forecast[0] if forecast else {}
-        date = day_data.get("date", "")
-        weekday = day_data.get("weekday", "")
-        weather = day_data.get("weather", "")
-        temp = day_data.get("temperature", {})
-        rain_prob = day_data.get("rain_probability", "")
-        
-        weather_emoji = self._get_weather_emoji(weather)
-        
+            date = day_data.get("date", "")
+            weekday = day_data.get("weekday", "")
+            weather = day_data.get("weather", "")
+            temp = day_data.get("temperature", {})
+            rain_prob = day_data.get("rain_probability", "")
+            
+            weather_emoji = self._get_weather_emoji(weather)
+            
         # 創建更簡潔的天氣預報內容
         body_contents = [
             BoxComponent(
                 layout="horizontal",
                 margin="md",
                 contents=[
-                    TextComponent(
+                TextComponent(
                         text=weather_emoji,
                         size="3xl",
                         align="center",
@@ -596,19 +596,19 @@ class FlexMessageService:
                         flex=2,
                         spacing="sm",
                         contents=[
-                            TextComponent(
+                TextComponent(
                                 text=f"{temp.get('low', '')}°C - {temp.get('high', '')}°C",
                                 size="xl",
                                 weight="bold",
                                 color="#555555"
-                            ),
-                            TextComponent(
+                ),
+                TextComponent(
                                 text=weather,
                                 size="md",
                                 color="#888888"
-                            ),
-                            TextComponent(
-                                text=f"降雨機率：{rain_prob}",
+                ),
+                TextComponent(
+                    text=f"降雨機率：{rain_prob}",
                                 size="sm",
                                 color="#aaaaaa"
                             )
@@ -621,7 +621,7 @@ class FlexMessageService:
                 layout="horizontal",
                 margin="md",
                 contents=[
-                    TextComponent(
+            TextComponent(
                         text=f"{date} {weekday}",
                         size="xs",
                         color="#aaaaaa",
@@ -1240,19 +1240,19 @@ class FlexMessageService:
                     layout="horizontal",
                     spacing="md",
                     contents=[
-                        ButtonComponent(
-                            style="secondary",
+            ButtonComponent(
+                style="secondary",
                             action=MessageAction(
                                 label="⬅️ 上一頁",
                                 text=f"土豆 什麼是{fraud_type} 第{page-1}頁"
                             ),
                             color="#95a5a6",
-                            height="sm",
+                height="sm",
                             flex=1
                         ),
                         ButtonComponent(
                             style="primary",
-                            action=MessageAction(
+                action=MessageAction(
                                 label="下一頁 ➡️",
                                 text=f"土豆 什麼是{fraud_type} 第{page+1}頁"
                             ),
@@ -1319,34 +1319,34 @@ class FlexMessageService:
             ])
         
         # 創建詐騙詳情Flex Message
-        bubble = BubbleContainer(
+    bubble = BubbleContainer(
             size="mega",
-            header=BoxComponent(
-                layout="vertical",
-                contents=[
-                    TextComponent(
+        header=BoxComponent(
+            layout="vertical",
+            contents=[
+                TextComponent(
                         text=f"{fraud_type}",
-                        weight="bold",
+                    weight="bold",
                         size="xl",
                         color="#ffffff"
-                    ),
-                    TextComponent(
+                ),
+                TextComponent(
                         text="以下是此類詐騙的詳細說明與防範方法",
-                        size="sm",
+                    size="sm",
                         color="#ffffff",
                         margin="sm",
                         wrap=True
-                    )
-                ],
+                )
+            ],
                 background_color=header_color,
-                padding_all="lg"
-            ),
-            body=BoxComponent(
-                layout="vertical",
+            padding_all="lg"
+        ),
+        body=BoxComponent(
+            layout="vertical",
                 contents=body_contents,
                 padding_all="lg"
-            ),
-            footer=BoxComponent(
+        ),
+        footer=BoxComponent(
                 layout="vertical",
                 contents=footer_contents,
                 padding_all="lg"
@@ -1404,9 +1404,9 @@ class FlexMessageService:
         bubble = BubbleContainer(
             size="mega",
             header=BoxComponent(
-                layout="vertical",
-                contents=[
-                    TextComponent(
+            layout="vertical",
+            contents=[
+                TextComponent(
                         text="📚 常見詐騙類型一覽",
                         weight="bold",
                         size="xl",
@@ -1430,9 +1430,9 @@ class FlexMessageService:
                 contents=type_contents
             )
             # 移除footer部分
-        )
-        
-        return FlexSendMessage(alt_text="詐騙類型列表", contents=bubble)
+    )
+    
+    return FlexSendMessage(alt_text="詐騙類型列表", contents=bubble)
 
 
 # 創建全域服務實例
