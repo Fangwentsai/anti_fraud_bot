@@ -735,6 +735,7 @@ if handler:
         # 個人和群組訊息都需要檢查是否包含觸發關鍵詞，或者用戶處於等待分析狀態
         if bot_trigger_keyword not in text_message and not waiting_for_analysis:
             logger.info(f"訊息不包含觸發關鍵詞 '{bot_trigger_keyword}'，也不在等待分析狀態，忽略此訊息")
+            return  # 添加return語句，確保忽略此訊息
 
         # 移除觸發關鍵詞，以便後續處理
         cleaned_message = text_message
@@ -852,7 +853,9 @@ if handler:
             
 
         
-            return# 處理遊戲觸發 - 移到詐騙檢測前面
+            return  # 處理完空訊息後返回
+
+        # 處理遊戲觸發 - 移到詐騙檢測前面
         if is_game_trigger(cleaned_message):
             logger.info(f"檢測到防詐騙測試觸發: {cleaned_message}")
             flex_message, error_message = start_potato_game(user_id)
@@ -861,7 +864,7 @@ if handler:
                 line_bot_api.reply_message(reply_token, flex_message)
             else:
                 line_bot_api.reply_message(reply_token, TextSendMessage(text=error_message))
-            return
+            return  # 處理遊戲觸發 - 移到詐騙檢測前面
 
         # 檢查用戶詢問詐騙類型清單
         if any(keyword in cleaned_message for keyword in ["詐騙類型列表", "詐騙類型", "詐騙手法", "詐騙種類", "常見詐騙"]):
@@ -1622,7 +1625,8 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
     
     # 檢查URL存在（最高優先級）
     import re
-    url_pattern = re.compile(r'https?://[^\s]+|www\.[^\s]+|[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?')
+    # 使用與detect_fraud_with_chatgpt相同的正則表達式
+    url_pattern = re.compile(r'(https?://[^\s\u4e00-\u9fff，。！？；：]+|www\.[^\s\u4e00-\u9fff，。！？；：]+|[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?(?:/[^\s\u4e00-\u9fff，。！？；：]*)?)')
     if url_pattern.search(message):
         logger.info("檢測到URL，觸發詐騙分析")
         return True
