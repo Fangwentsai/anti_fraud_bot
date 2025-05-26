@@ -110,45 +110,90 @@ class FlexMessageService:
                         color=self.colors["secondary"],
                         wrap=True,
                         margin='sm'
+                    ),
+                    SeparatorComponent(margin='md'),
+                    safe_text_component(
+                        "土豆是自我學習的機器人，風險結果請自行評估",
+                        size='xs',
+                        color='#888888',
+                        align='center',
+                        margin='md',
+                        style='italic'
                     )
                 ]
             ),
             footer=BoxComponent(
                 layout='vertical',
                 spacing='sm',
-                contents=[
-                    ButtonComponent(
-                        style='primary',
-                        height='sm',
-                        action=MessageAction(
-                            label='🔄 再測一次',
-                            text='土豆 請幫我分析這則訊息：'
-                        ),
-                        color='#2E86C1'
-                    ),
-                    ButtonComponent(
-                        style='primary',
-                        height='sm',
-                        action=PostbackAction(
-                            label='🏠 回到首頁',
-                            data=f'action=show_main_menu&user_id={safe_user_id}'
-                        ),
-                        color='#27AE60'
-                    ),
-                    ButtonComponent(
-                        style='primary',
-                        height='sm',
-                        action=PostbackAction(
-                            label='📝 回報註記',
-                            data=f'action=report_feedback&user_id={safe_user_id}'
-                        ),
-                        color='#E67E22'
-                    )
-                ]
+                contents=self._get_analysis_footer_buttons(safe_user_id)
             )
         )
         
         return FlexSendMessage(alt_text=f"詐騙風險分析：{risk_level}", contents=bubble)
+
+    def _get_analysis_footer_buttons(self, user_id: str) -> List:
+        """取得分析結果頁面的底部按鈕，有10%機率顯示贊助按鈕"""
+        import random
+        
+        # 基本按鈕
+        buttons = [
+                    ButtonComponent(
+                        style='primary',
+                        height='sm',
+                action=MessageAction(
+                    label='🔄 再測一次',
+                    text='土豆 請幫我分析這則訊息：'
+                ),
+                color='#2E86C1'
+                    ),
+                    ButtonComponent(
+                style='primary',
+                        height='sm',
+                        action=PostbackAction(
+                    label='🏠 回到首頁',
+                    data=f'action=show_main_menu&user_id={user_id}'
+                ),
+                color='#27AE60'
+            ),
+            ButtonComponent(
+                style='primary',
+                height='sm',
+                action=PostbackAction(
+                    label='📝 回報註記',
+                    data=f'action=report_feedback&user_id={user_id}'
+                ),
+                color='#E67E22'
+            )
+        ]
+        
+        # 10%的機率顯示贊助按鈕
+        if random.random() < 0.10:
+            buttons.append(
+                SeparatorComponent(margin='md')
+            )
+            buttons.append(
+                TextComponent(
+                    text="喜歡土豆的服務嗎？歡迎點擊贊助土豆一杯咖啡，讓網站能持續運作☕️",
+                    size="xs",
+                    color="#888888",
+                    margin="md",
+                    align="center",
+                    wrap=True
+                )
+            )
+            buttons.append(
+                ButtonComponent(
+                    style='primary',
+                    height='sm',
+                    action=URIAction(
+                        label='給我們鼓勵☕️',
+                        uri='https://portaly.cc/todao-antifraud'
+                    ),
+                    color='#9C27B0'  # 紫色按鈕
+                )
+            )
+        
+        return buttons
 
     def create_domain_spoofing_flex_message(self, spoofing_result: Dict, display_name: str,
                                           message_to_analyze: str, user_id: Optional[str] = None) -> FlexSendMessage:
@@ -230,77 +275,148 @@ class FlexMessageService:
                         size='md',
                         margin='md'
                     ),
+                    BoxComponent(
+                        layout='vertical',
+                        margin='md',
+                        spacing='sm',
+                        contents=[
                     safe_text_component(
-                        f"可疑網域：{suspicious_domain}",
+                                f"🔴 可疑網域: {suspicious_domain}",
                         size='sm',
                         color=self.colors["danger"],
-                        wrap=True,
-                        margin='sm',
-                        weight='bold'
+                                wrap=True
                     ),
                     safe_text_component(
-                        suspicious_explanation,
-                        size='xs',
-                        color=self.colors["danger"],
-                        wrap=True,
-                        margin='xs'
+                                f"🟢 正版網域: {legitimate_domain}",
+                                size='sm',
+                                color='#43A047',
+                                wrap=True
                     ),
                     safe_text_component(
-                        f"正版網域：{legitimate_domain}",
+                                f"📝 說明: {suspicious_explanation}",
                         size='sm',
-                        color=self.colors["success"],
+                                color=self.colors["secondary"],
                         wrap=True,
-                        margin='sm',
-                        weight='bold'
-                    ),
-                    safe_text_component(
-                        legitimate_description,
-                        size='xs',
-                        color=self.colors["success"],
-                        wrap=True,
-                        margin='xs'
+                                margin='sm'
+                            )
+                        ]
                     ),
                     SeparatorComponent(margin='md'),
                     safe_text_component(
-                        "🛡️ 緊急建議",
+                        "🛡️ 防範建議",
                         weight='bold',
                         size='md',
                         margin='md'
                     ),
+                    BoxComponent(
+                        layout='vertical',
+                        margin='sm',
+                        spacing='sm',
+                        contents=[
                     safe_text_component(
-                        "🚫 立即停止使用此網站\n🔍 確認網址拼寫是否正確\n🌐 直接搜尋正版網站名稱\n🛡️ 如已輸入資料請立即更改密碼\n💳 檢查信用卡及銀行帳戶異常",
+                                "🚫 千萬不要點擊可疑網址或提供任何個人資料",
                         size='sm',
                         color=self.colors["secondary"],
-                        wrap=True,
-                        margin='sm'
+                                wrap=True
+                            ),
+                            safe_text_component(
+                                f"🔍 若需使用{legitimate_domain}，請直接搜尋官方網站",
+                                size='sm',
+                                color=self.colors["secondary"],
+                                wrap=True
+                            ),
+                            safe_text_component(
+                                "📞 可撥打165反詐騙專線確認或諮詢",
+                                size='sm',
+                                color=self.colors["secondary"],
+                                wrap=True
+                            )
+                        ]
+                    ),
+                    SeparatorComponent(margin='md'),
+                    safe_text_component(
+                        "土豆是自我學習的機器人，風險結果請自行評估",
+
+                        size='xs',
+                        color='#888888',
+                        align='center',
+                        margin='sm',
+                        style='italic'
                     )
                 ]
             ),
-            # footer=BoxComponent(
-            #     layout='vertical',
-            #     spacing='sm',
-            #     contents=[
-            #         ButtonComponent(
-            #             style='primary',
-            #             height='sm',
-            #             action=URIAction(
-            #                 label='📞 立即撥打165專線',
-            #                 uri='tel:165'
-            #             )
-            #         ),
-            #         ButtonComponent(
-            #             style='secondary',
-            #             height='sm',
-            #             action=PostbackAction(
-            #                 label='🎮 玩土豆遊戲放鬆一下',
-            #                 data=f'action=potato_game&user_id={safe_user_id}'
-            #             )
-            #         )
-            #     ]
-            # )
+            footer=BoxComponent(
+                layout='vertical',
+                spacing='sm',
+                contents=self._get_domain_spoofing_footer_buttons(safe_user_id)
+            ),
         )
         
         return FlexSendMessage(alt_text=f"網域偽裝攻擊警告：{suspicious_domain}", contents=bubble)
+
+    def _get_domain_spoofing_footer_buttons(self, user_id: str) -> List:
+        """取得網域變形警告頁面的底部按鈕，有10%機率顯示贊助按鈕"""
+        import random
+        
+        # 基本按鈕
+        buttons = [
+                    ButtonComponent(
+                        style='primary',
+                        height='sm',
+                action=MessageAction(
+                    label='🔄 再測一次',
+                    text='土豆 請幫我分析這則訊息'
+                ),
+                color='#1E88E5'  # 藍色按鈕
+                    ),
+                    ButtonComponent(
+                style='primary',
+                height='sm',
+                action=MessageAction(
+                    label='🏠 回到首頁',
+                    text='土豆'
+                ),
+                color='#26A69A'  # 綠色按鈕
+            ),
+            ButtonComponent(
+                style='primary',
+                        height='sm',
+                        action=PostbackAction(
+                    label='📝 回報註記',
+                    data=f'action=report_feedback&user_id={user_id}'
+                ),
+                color='#FB8C00'  # 橙色按鈕
+            )
+        ]
+        
+        # 10%的機率顯示贊助按鈕
+        if random.random() < 0.10:
+            buttons.append(
+                SeparatorComponent(margin='md')
+            )
+            buttons.append(
+                TextComponent(
+                    text="喜歡土豆的服務嗎？歡迎點擊贊助土豆一杯咖啡，讓網站能持續運作☕️",
+                    size="xs",
+                    color="#888888",
+                    margin="md",
+                    align="center",
+                    wrap=True
+                )
+            )
+            buttons.append(
+                ButtonComponent(
+                    style='primary',
+                    height='sm',
+                    action=URIAction(
+                        label='給我們鼓勵☕️',
+                        uri='https://portaly.cc/todao-antifraud'
+                    ),
+                    color='#9C27B0'  # 紫色按鈕
+                )
+            )
+        
+        return buttons
 
     def _generate_suspicious_domain_explanation(self, suspicious_domain: str, legitimate_domain: str, attack_type: str) -> str:
         """生成可疑網域的說明文字"""
@@ -400,7 +516,7 @@ class FlexMessageService:
                         height='sm',
                         action=URIAction(
                             label='☕ 贊助土豆',
-                            uri='https://buymeacoffee.com/todao_antifraud'
+                            uri='https://portaly.cc/todao-antifraud'
                         )
                     ),
                     ButtonComponent(
@@ -467,7 +583,7 @@ class FlexMessageService:
                 layout="horizontal",
                 margin="md",
                 contents=[
-                    TextComponent(
+                TextComponent(
                         text=weather_emoji,
                         size="3xl",
                         align="center",
@@ -479,19 +595,19 @@ class FlexMessageService:
                         flex=2,
                         spacing="sm",
                         contents=[
-                            TextComponent(
+                TextComponent(
                                 text=f"{temp.get('low', '')}°C - {temp.get('high', '')}°C",
                                 size="xl",
                                 weight="bold",
                                 color="#555555"
-                            ),
-                            TextComponent(
+                ),
+                TextComponent(
                                 text=weather,
                                 size="md",
                                 color="#888888"
-                            ),
-                            TextComponent(
-                                text=f"降雨機率：{rain_prob}",
+                ),
+                TextComponent(
+                    text=f"降雨機率：{rain_prob}",
                                 size="sm",
                                 color="#aaaaaa"
                             )
@@ -504,7 +620,7 @@ class FlexMessageService:
                 layout="horizontal",
                 margin="md",
                 contents=[
-                    TextComponent(
+            TextComponent(
                         text=f"{date} {weekday}",
                         size="xs",
                         color="#aaaaaa",
@@ -566,17 +682,19 @@ class FlexMessageService:
 
     def _get_risk_color(self, risk_level: str) -> str:
         """根據風險等級取得對應顏色"""
-        color_map = {
-            "極高": self.colors["danger"],
-            "高": self.colors["warning"],
-            "中高": self.colors["warning"],
-            "中": "#FFA726",
-            "低": self.colors["success"],
-            "低風險": self.colors["success"],
-            "極低": self.colors["success"],
-            "無風險": self.colors["success"]
-        }
-        return color_map.get(risk_level, self.colors["warning"])
+        risk_level_lower = risk_level.lower()
+        
+        # 高風險 - 紅色
+        if any(keyword in risk_level_lower for keyword in ["極高", "高風險", "高"]):
+            return "#E74C3C"  # 紅色
+        # 中風險 - 橙色
+        elif any(keyword in risk_level_lower for keyword in ["中高", "中風險", "中"]):
+            return "#F39C12"  # 橙色
+        # 低風險 - 綠色
+        elif any(keyword in risk_level_lower for keyword in ["低風險", "低", "極低", "無風險"]):
+            return "#2ECC71"  # 綠色
+        else:
+            return "#3498DB"  # 默認藍色
 
     def _get_risk_emoji(self, risk_level: str) -> str:
         """根據風險等級取得對應emoji"""
@@ -1115,34 +1233,66 @@ class FlexMessageService:
         # 創建頁面導航按鈕
         footer_contents = []
         
-        # 根據當前頁碼和總頁數設置導航按鈕
-        if page > 1:
-            # 不是第一頁，顯示「上一頁」按鈕
+        # 檢查是否同時需要顯示「上一頁」和「下一頁」按鈕
+        if page > 1 and page < total_pages:
+            # 同時顯示「上一頁」和「下一頁」按鈕，並排在同一行
             footer_contents.append(
-                ButtonComponent(
-                    style="secondary",
-                    action=MessageAction(
-                        label="⬅️ 上一頁",
-                        text=f"土豆 什麼是{fraud_type} 第{page-1}頁"
-                    ),
-                    color="#95a5a6",
-                    height="sm"
+                BoxComponent(
+                    layout="horizontal",
+                    spacing="md",
+                    contents=[
+            ButtonComponent(
+                style="secondary",
+                            action=MessageAction(
+                                label="⬅️ 上一頁",
+                                text=f"土豆 什麼是{fraud_type} 第{page-1}頁"
+                            ),
+                            color="#95a5a6",
+                height="sm",
+                            flex=1
+                        ),
+                        ButtonComponent(
+                            style="primary",
+                action=MessageAction(
+                                label="下一頁 ➡️",
+                                text=f"土豆 什麼是{fraud_type} 第{page+1}頁"
+                            ),
+                            color="#3498DB",
+                            height="sm",
+                            flex=1
+                        )
+                    ]
                 )
             )
-        
-        if page < total_pages:
-            # 不是最後一頁，顯示「下一頁」按鈕
-            footer_contents.append(
-                ButtonComponent(
-                    style="primary",
-                    action=MessageAction(
-                        label="下一頁 ➡️",
-                        text=f"土豆 什麼是{fraud_type} 第{page+1}頁"
-                    ),
-                    color="#3498DB",
-                    height="sm"
+        else:
+            # 只需要顯示其中一個按鈕的情況
+            if page > 1:
+                # 不是第一頁，顯示「上一頁」按鈕
+                footer_contents.append(
+                    ButtonComponent(
+                        style="secondary",
+                        action=MessageAction(
+                            label="⬅️ 上一頁",
+                            text=f"土豆 什麼是{fraud_type} 第{page-1}頁"
+                        ),
+                        color="#95a5a6",
+                        height="sm"
+                    )
                 )
-            )
+            
+            if page < total_pages:
+                # 不是最後一頁，顯示「下一頁」按鈕
+                footer_contents.append(
+                    ButtonComponent(
+                        style="primary",
+                        action=MessageAction(
+                            label="下一頁 ➡️",
+                            text=f"土豆 什麼是{fraud_type} 第{page+1}頁"
+                        ),
+                        color="#3498DB",
+                        height="sm"
+                    )
+                )
         
         # 如果是最後一頁，添加「看其他分類」和「回到首頁」按鈕
         if page == total_pages:
@@ -1170,34 +1320,34 @@ class FlexMessageService:
             ])
         
         # 創建詐騙詳情Flex Message
-        bubble = BubbleContainer(
+    bubble = BubbleContainer(
             size="mega",
-            header=BoxComponent(
-                layout="vertical",
-                contents=[
-                    TextComponent(
+        header=BoxComponent(
+            layout="vertical",
+            contents=[
+                TextComponent(
                         text=f"{fraud_type}",
-                        weight="bold",
+                    weight="bold",
                         size="xl",
                         color="#ffffff"
-                    ),
-                    TextComponent(
+                ),
+                TextComponent(
                         text="以下是此類詐騙的詳細說明與防範方法",
-                        size="sm",
+                    size="sm",
                         color="#ffffff",
                         margin="sm",
                         wrap=True
-                    )
-                ],
+                )
+            ],
                 background_color=header_color,
-                padding_all="lg"
-            ),
-            body=BoxComponent(
-                layout="vertical",
+            padding_all="lg"
+        ),
+        body=BoxComponent(
+            layout="vertical",
                 contents=body_contents,
                 padding_all="lg"
-            ),
-            footer=BoxComponent(
+        ),
+        footer=BoxComponent(
                 layout="vertical",
                 contents=footer_contents,
                 padding_all="lg"
@@ -1255,9 +1405,9 @@ class FlexMessageService:
         bubble = BubbleContainer(
             size="mega",
             header=BoxComponent(
-                layout="vertical",
-                contents=[
-                    TextComponent(
+            layout="vertical",
+            contents=[
+                TextComponent(
                         text="📚 常見詐騙類型一覽",
                         weight="bold",
                         size="xl",
@@ -1279,11 +1429,10 @@ class FlexMessageService:
                 spacing="md",
                 padding_all="lg",
                 contents=type_contents
-            )
-            # 移除footer部分
         )
-        
-        return FlexSendMessage(alt_text="詐騙類型列表", contents=bubble)
+    )
+    
+    return FlexSendMessage(alt_text="詐騙類型列表", contents=bubble)
 
 
 # 創建全域服務實例
