@@ -1056,6 +1056,99 @@ if handler:
             return
 
         # 判斷是否需要進行詐騙分析
+        # 如果用戶處於等待分析狀態，強制進行詐騙分析
+        if waiting_for_analysis:
+            logger.info(f"用戶處於等待分析狀態，強制執行詐騙分析: {cleaned_message}")
+            # 清除等待分析狀態
+            current_state["waiting_for_analysis"] = False
+            user_conversation_state[user_id] = current_state
+            
+            # 強制進行詐騙分析
+            analysis_result = detect_fraud_with_chatgpt(cleaned_message, display_name, user_id)
+            
+            if analysis_result and analysis_result.get("success", False):
+                analysis_data = analysis_result.get("result", {})
+                
+                # 檢查是否是網域變形攻擊，如果是則使用專門的Flex Message
+                if analysis_data.get("is_domain_spoofing", False):
+                    spoofing_result = analysis_data.get("spoofing_result", {})
+                    
+                    # 將假冒網域的結果轉換為統一的分析數據格式
+                    unified_analysis_data = {
+                        "risk_level": "極高",  # 假冒網域一律是極高風險
+                        "fraud_type": "網域偽裝攻擊",
+                        "explanation": f"⚠️ 詐騙集團可能假冒此網域騙取您的信用卡或銀行帳戶個資，請務必小心！\n\n🔴 可疑網域: {spoofing_result.get('spoofed_domain', '未知')}\n🟢 正版網域: {spoofing_result.get('original_domain', '未知')}\n📝 說明: {spoofing_result.get('risk_explanation', '這是一個可疑的假冒網域')}",
+                        "suggestions": "🚫 千萬不要點擊可疑網址或提供任何個人資料\n🔍 若需使用正版網站，請直接搜尋官方網站\n📞 可撥打165反詐騙專線確認或諮詢"
+                    }
+                    
+                    # 使用統一的 Flex Message 創建方法
+                    flex_message = create_analysis_flex_message(unified_analysis_data, display_name, cleaned_message, user_id)
+                else:
+                    # 一般的詐騙分析，使用標準的Flex Message
+                    flex_message = create_analysis_flex_message(analysis_data, display_name, cleaned_message, user_id)
+                
+                # 發送Flex消息
+                if flex_message:
+                    try:
+                        # 直接使用舊版 API，與圖片分析保持一致
+                        line_bot_api.reply_message(reply_token, flex_message)
+                        logger.info(f"使用舊版API回覆等待分析成功: {user_id}")
+                    except LineBotApiError as e:
+                        logger.error(f"發送等待分析Flex Message時發生錯誤: {e}")
+                        if "Invalid reply token" in str(e):
+                            # 如果是無效的回覆令牌，嘗試使用push_message作為備用
+                            try:
+                                line_bot_api.push_message(user_id, flex_message)
+                                logger.info(f"等待分析回覆令牌無效，改用push_message成功: {user_id}")
+                            except Exception as push_error:
+                                logger.error(f"等待分析使用push_message也失敗: {push_error}")
+                        else:
+                            # 如果Flex消息發送失敗，發送基本文本消息
+                            risk_level = analysis_data.get("risk_level", "不確定")
+                            fraud_type = analysis_data.get("fraud_type", "未知")
+                            explanation = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
+                            suggestions = analysis_data.get("suggestions", "請隨時保持警惕。")
+                            
+                            text_response = f"🔍 風險分析結果\n\n風險等級：{risk_level}\n詐騙類型：{fraud_type}\n\n說明：{explanation}\n\n建議：{suggestions}"
+                            
+                            try:
+                                line_bot_api.reply_message(reply_token, TextSendMessage(text=text_response))
+                            except Exception as text_error:
+                                logger.error(f"發送等待分析文本回覆也失敗: {text_error}")
+                else:
+                    # 如果Flex消息創建失敗，發送基本文本消息
+                    risk_level = analysis_data.get("risk_level", "不確定")
+                    fraud_type = analysis_data.get("fraud_type", "未知")
+                    explanation = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
+                    suggestions = analysis_data.get("suggestions", "請隨時保持警惕。")
+                    
+                    text_response = f"🔍 風險分析結果\n\n風險等級：{risk_level}\n詐騙類型：{fraud_type}\n\n說明：{explanation}\n\n建議：{suggestions}"
+                    
+                    try:
+                        line_bot_api.reply_message(reply_token, TextSendMessage(text=text_response))
+                    except Exception as text_error:
+                        logger.error(f"發送等待分析文本回覆失敗: {text_error}")
+            else:
+                # 分析失敗的情況，發送錯誤消息
+                error_message = analysis_result.get("message", "分析失敗，請稍後再試") if analysis_result else "分析失敗，請稍後再試"
+                try:
+                    if v3_messaging_api:
+                        from linebot.v3.messaging import TextMessage as V3TextMessage
+                        from linebot.v3.messaging import ReplyMessageRequest
+                        v3_messaging_api.reply_message(
+                            ReplyMessageRequest(
+                                reply_token=reply_token,
+                                messages=[V3TextMessage(text=error_message)]
+                           )
+                        )
+                    else:
+                        line_bot_api.reply_message(reply_token, TextSendMessage(text=error_message))
+                except Exception as error_send_error:
+                    logger.error(f"發送等待分析錯誤訊息失敗: {error_send_error}")
+            
+            return  # 處理完等待分析後返回
+        
+        # 正常的詐騙分析判斷
         if should_perform_fraud_analysis(cleaned_message, user_id):
             logger.info(f"執行詐騙分析: {cleaned_message}")
             analysis_result = detect_fraud_with_chatgpt(cleaned_message, display_name, user_id)
