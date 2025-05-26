@@ -1014,54 +1014,34 @@ if handler:
                 # 發送Flex消息
                 if flex_message:
                     try:
-                        if v3_messaging_api:
-                            from linebot.v3.messaging import FlexMessage as V3FlexMessage
-                            from linebot.v3.messaging import ReplyMessageRequest
-                            
-                            # 將 BubbleContainer 轉換為字典格式
-                            if hasattr(flex_message.contents, 'as_json_dict'):
-                                contents_dict = flex_message.contents.as_json_dict()
-                            else:
-                                # 如果沒有 as_json_dict 方法，嘗試直接轉換
-                                import json
-                                contents_dict = json.loads(str(flex_message.contents))
-                            
-                            v3_messaging_api.reply_message(
-                                ReplyMessageRequest(
-                                    reply_token=reply_token,
-                                    messages=[V3FlexMessage(alt_text=flex_message.alt_text, contents=contents_dict)]
-                               )
-                            )
-                        else:
-                            line_bot_api.reply_message(reply_token, flex_message)
-                        logger.info(f"已發送詐騙分析Flex Message: {user_id}")
+                        # 直接使用舊版 API，與圖片分析保持一致
+                        line_bot_api.reply_message(reply_token, flex_message)
+                        logger.info(f"使用舊版API回覆網頁分析成功: {user_id}")
                     except LineBotApiError as e:
                         logger.error(f"發送Flex Message時發生錯誤: {e}")
-                        # 如果Flex消息發送失敗，發送基本文本消息
-                        risk_level = analysis_data.get("risk_level", "不確定")
-                        fraud_type = analysis_data.get("fraud_type", "未知")
-                        explanation = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
-                        suggestions = analysis_data.get("suggestions", "請隨時保持警惕。")
-                        
-                        text_response = f"🔍 風險分析結果\n\n風險等級：{risk_level}\n詐騙類型：{fraud_type}\n\n說明：{explanation}\n\n建議：{suggestions}"
-                        
-                        try:
-                            if v3_messaging_api:
-                                from linebot.v3.messaging import TextMessage as V3TextMessage
-                                from linebot.v3.messaging import ReplyMessageRequest
-                                v3_messaging_api.reply_message(
-                                    ReplyMessageRequest(
-                                        reply_token=reply_token,
-                                        messages=[V3TextMessage(text=text_response)]
-                                   )
-                                )
-                            else:
+                        if "Invalid reply token" in str(e):
+                            # 如果是無效的回覆令牌，嘗試使用push_message作為備用
+                            try:
+                                line_bot_api.push_message(user_id, flex_message)
+                                logger.info(f"網頁分析回覆令牌無效，改用push_message成功: {user_id}")
+                            except Exception as push_error:
+                                logger.error(f"網頁分析使用push_message也失敗: {push_error}")
+                        else:
+                            # 如果Flex消息發送失敗，發送基本文本消息
+                            risk_level = analysis_data.get("risk_level", "不確定")
+                            fraud_type = analysis_data.get("fraud_type", "未知")
+                            explanation = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
+                            suggestions = analysis_data.get("suggestions", "請隨時保持警惕。")
+                            
+                            text_response = f"🔍 風險分析結果\n\n風險等級：{risk_level}\n詐騙類型：{fraud_type}\n\n說明：{explanation}\n\n建議：{suggestions}"
+                            
+                            try:
                                 line_bot_api.reply_message(reply_token, TextSendMessage(text=text_response))
-                        except Exception as text_error:
-                            logger.error(f"發送文本回覆也失敗: {text_error}")
+                            except Exception as text_error:
+                                logger.error(f"發送文本回覆也失敗: {text_error}")
                     except Exception as e:
-                        logger.error(f"轉換Flex Message格式時發生錯誤: {e}")
-                        # 如果轉換失敗，發送基本文本消息
+                        logger.error(f"發送Flex Message時發生未知錯誤: {e}")
+                        # 如果發生未知錯誤，發送基本文本消息
                         risk_level = analysis_data.get("risk_level", "不確定")
                         fraud_type = analysis_data.get("fraud_type", "未知")
                         explanation = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
@@ -1070,17 +1050,7 @@ if handler:
                         text_response = f"🔍 風險分析結果\n\n風險等級：{risk_level}\n詐騙類型：{fraud_type}\n\n說明：{explanation}\n\n建議：{suggestions}"
                         
                         try:
-                            if v3_messaging_api:
-                                from linebot.v3.messaging import TextMessage as V3TextMessage
-                                from linebot.v3.messaging import ReplyMessageRequest
-                                v3_messaging_api.reply_message(
-                                    ReplyMessageRequest(
-                                        reply_token=reply_token,
-                                        messages=[V3TextMessage(text=text_response)]
-                                   )
-                                )
-                            else:
-                                line_bot_api.reply_message(reply_token, TextSendMessage(text=text_response))
+                            line_bot_api.reply_message(reply_token, TextSendMessage(text=text_response))
                         except Exception as text_error:
                             logger.error(f"發送文本回覆也失敗: {text_error}")
                 else:
@@ -1093,17 +1063,7 @@ if handler:
                     text_response = f"🔍 風險分析結果\n\n風險等級：{risk_level}\n詐騙類型：{fraud_type}\n\n說明：{explanation}\n\n建議：{suggestions}"
                     
                     try:
-                        if v3_messaging_api:
-                            from linebot.v3.messaging import TextMessage as V3TextMessage
-                            from linebot.v3.messaging import ReplyMessageRequest
-                            v3_messaging_api.reply_message(
-                                ReplyMessageRequest(
-                                    reply_token=reply_token,
-                                    messages=[V3TextMessage(text=text_response)]
-                               )
-                            )
-                        else:
-                            line_bot_api.reply_message(reply_token, TextSendMessage(text=text_response))
+                        line_bot_api.reply_message(reply_token, TextSendMessage(text=text_response))
                     except Exception as text_error:
                         logger.error(f"發送文本回覆失敗: {text_error}")
             else:
