@@ -21,6 +21,9 @@ from image_analysis_service import (
     ANALYSIS_TYPES
 )
 
+# 導入統一的 Flex Message 服務
+from flex_message_service import create_analysis_flex_message
+
 # 設置日誌
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -63,8 +66,8 @@ class ImageHandler:
             # 分析圖片
             result = self._analyze_image_content(image_content, context_message, analysis_type)
             
-            # 創建Flex訊息
-            flex_message = self._create_analysis_flex_message(result, display_name)
+            # 使用統一的 Flex Message 創建方法
+            flex_message = create_analysis_flex_message(result, display_name, "圖片分析", user_id)
             
             return flex_message, result.get("raw_result", "")
             
@@ -91,8 +94,8 @@ class ImageHandler:
             # 分析圖片URL
             result = analyze_image_from_url(image_url, analysis_type, context_message)
             
-            # 創建Flex訊息
-            flex_message = self._create_analysis_flex_message(result, display_name)
+            # 使用統一的 Flex Message 創建方法
+            flex_message = create_analysis_flex_message(result, display_name, "圖片分析", user_id)
             
             return flex_message, result.get("raw_result", "")
             
@@ -172,218 +175,6 @@ class ImageHandler:
             "YouTube", "頻道", "訂閱", "追蹤", "按讚", "分享", "留言", "直播", "私訊", "限時動態"
         ]
         return any(keyword in text for keyword in social_keywords)
-    
-    def _create_analysis_flex_message(self, result: Dict, display_name: str) -> FlexSendMessage:
-        """
-        創建圖片分析結果的Flex訊息
-        
-        Args:
-            result: 分析結果
-            display_name: 用戶顯示名稱
-            
-        Returns:
-            FlexSendMessage: 格式化的Flex訊息
-        """
-        # 獲取分析結果
-        success = result.get("success", False)
-        risk_level = result.get("risk_level", "無法判定")
-        fraud_type = result.get("fraud_type", "未知")
-        explanation = result.get("explanation", "無法分析圖片內容。")
-        suggestions = result.get("suggestions", "請謹慎對待此圖片內容。")
-        
-        # 根據風險等級選擇顏色
-        header_color = "#3498DB"  # 默認藍色
-        risk_emoji = "⚡"  # 默認表情
-        
-        risk_level_lower = risk_level.lower()
-        
-        # 高風險 - 紅色
-        if any(keyword in risk_level_lower for keyword in ["極高", "高風險", "高"]):
-            header_color = "#E74C3C"  # 紅色
-            risk_emoji = "🚨"
-        # 中風險 - 橙色
-        elif any(keyword in risk_level_lower for keyword in ["中高", "中風險", "中"]):
-            header_color = "#F39C12"  # 橙色
-            risk_emoji = "⚠️"
-        # 低風險 - 綠色
-        elif any(keyword in risk_level_lower for keyword in ["低風險", "低", "極低", "無風險"]):
-            header_color = "#2ECC71"  # 綠色
-            risk_emoji = "✅"
-        
-        # 創建主體內容
-        body_contents = []
-        
-        # 添加詐騙類型
-        body_contents.append(
-            TextComponent(
-                text=f"📊 分析類型：{fraud_type}",
-                size="md",
-                weight="bold",
-                margin="md"
-            )
-        )
-        
-        # 添加分隔線
-        body_contents.append(SeparatorComponent(margin="md"))
-        
-        # 添加解釋
-        body_contents.append(
-            TextComponent(
-                text="🔍 分析結果：",
-                size="md",
-                weight="bold",
-                margin="md"
-            )
-        )
-        
-        body_contents.append(
-            TextComponent(
-                text=explanation,
-                size="sm",
-                color="#555555",
-                wrap=True,
-                margin="sm"
-            )
-        )
-        
-        # 添加分隔線
-        body_contents.append(SeparatorComponent(margin="md"))
-        
-        # 添加建議
-        body_contents.append(
-            TextComponent(
-                text="💡 防範建議：",
-                size="md",
-                weight="bold",
-                margin="md"
-            )
-        )
-        
-        # 處理建議（確保每行都有emoji）
-        suggestion_lines = []
-        for line in suggestions.split("\n"):
-            line = line.strip()
-            if line:
-                # 檢查是否已經有emoji
-                if not any(c in line[:2] for c in ["🚫", "🔍", "🌐", "🛡️", "💡", "⚠️", "✅", "⚡", "📱", "📝", "🔒", "🔐", "📲", "💬", "📞", "🔔"]):
-                    line = "💡 " + line
-                suggestion_lines.append(line)
-        
-        body_contents.append(
-            TextComponent(
-                text="\n".join(suggestion_lines),
-                size="sm",
-                color="#555555",
-                wrap=True,
-                margin="sm"
-            )
-        )
-        
-        # 添加免責聲明
-        body_contents.append(SeparatorComponent(margin="md"))
-        body_contents.append(
-            TextComponent(
-                text="此分析結果僅供參考，請自行判斷信息真實性。",
-                size="xs",
-                color="#AAAAAA",
-                align="center",
-                margin="md"
-            )
-        )
-        
-        # 創建底部按鈕（包含 10% 機率的贊助按鈕）
-        footer_contents = self._get_image_analysis_footer_buttons()
-        
-        # 創建Flex訊息
-        bubble = BubbleContainer(
-            direction="ltr",
-            header=BoxComponent(
-                layout="vertical",
-                contents=[
-                    TextComponent(
-                        text=f"{risk_emoji} 圖片風險分析：{risk_level}",
-                        weight="bold",
-                        color="#ffffff",
-                        size="xl"
-                    ),
-                    TextComponent(
-                        text="防詐騙圖片檢測",
-                        color="#ffffff",
-                        size="md"
-                    )
-                ],
-                background_color=header_color,
-                padding_all="20px"
-            ),
-            body=BoxComponent(
-                layout="vertical",
-                contents=body_contents,
-                padding_all="20px"
-            ),
-            footer=BoxComponent(
-                layout="vertical",
-                contents=footer_contents,
-                padding_all="20px"
-            )
-        )
-        
-        return FlexSendMessage(alt_text=f"圖片分析結果：{risk_level}", contents=bubble)
-    
-    def _get_image_analysis_footer_buttons(self) -> List:
-        """取得圖片分析結果頁面的底部按鈕，有10%機率顯示贊助按鈕"""
-        import random
-        
-        # 基本按鈕
-        footer_contents = [
-            ButtonComponent(
-                style="primary",
-                action=MessageAction(
-                    label="🔄 分析其他圖片",
-                    text="土豆 請幫我分析圖片"
-                ),
-                color="#3498DB",
-                height="sm"
-            ),
-            ButtonComponent(
-                style="secondary",
-                action=MessageAction(
-                    label="🏠 回到首頁",
-                    text="土豆"
-                ),
-                color="#95a5a6",
-                height="sm",
-                margin="md"
-            )
-        ]
-        
-        # 10%的機率顯示贊助按鈕
-        if random.random() < 0.10:
-            footer_contents.append(
-                SeparatorComponent(margin='md')
-            )
-            footer_contents.append(
-                TextComponent(
-                    text="喜歡土豆的服務嗎？歡迎點擊贊助土豆一杯咖啡，讓網站能持續運作☕️",
-                    size="xs",
-                    color="#888888",
-                    margin="md",
-                    align="center",
-                    wrap=True
-                )
-            )
-            footer_contents.append(
-                ButtonComponent(
-                    style='primary',
-                    height='sm',
-                    action=URIAction(
-                        label='給我們鼓勵☕️',
-                        uri='https://portaly.cc/todao-antifraud'
-                    ),
-                    color='#9C27B0'  # 紫色按鈕
-                )
-            )
-        
-        return footer_contents
     
     def _create_error_flex_message(self, error_message: str, display_name: str) -> FlexSendMessage:
         """
