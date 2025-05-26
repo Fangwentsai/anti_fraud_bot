@@ -8,7 +8,7 @@ import os
 import logging
 import requests
 from io import BytesIO
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any, Tuple, Optional, List
 from linebot import LineBotApi
 from linebot.models import (
     FlexSendMessage, BubbleContainer, BoxComponent, TextComponent, 
@@ -277,35 +277,6 @@ class ImageHandler:
             )
         )
         
-        # 添加提取的文字（如果有）
-        extracted_text = result.get("extracted_text", "")
-        if extracted_text and extracted_text != "圖片中沒有可辨識的文字":
-            # 添加分隔線
-            body_contents.append(SeparatorComponent(margin="md"))
-            
-            body_contents.append(
-                TextComponent(
-                    text="📄 圖片文字內容：",
-                    size="md",
-                    weight="bold",
-                    margin="md"
-                )
-            )
-            
-            # 限制文字長度
-            if len(extracted_text) > 300:
-                extracted_text = extracted_text[:297] + "..."
-            
-            body_contents.append(
-                TextComponent(
-                    text=extracted_text,
-                    size="xs",
-                    color="#888888",
-                    wrap=True,
-                    margin="sm"
-                )
-            )
-        
         # 添加免責聲明
         body_contents.append(SeparatorComponent(margin="md"))
         body_contents.append(
@@ -318,28 +289,8 @@ class ImageHandler:
             )
         )
         
-        # 創建底部按鈕
-        footer_contents = [
-            ButtonComponent(
-                style="primary",
-                action=MessageAction(
-                    label="🔄 分析其他圖片",
-                    text="土豆 請幫我分析圖片"
-                ),
-                color="#3498DB",
-                height="sm"
-            ),
-            ButtonComponent(
-                style="secondary",
-                action=MessageAction(
-                    label="🏠 回到首頁",
-                    text="土豆"
-                ),
-                color="#95a5a6",
-                height="sm",
-                margin="md"
-            )
-        ]
+        # 創建底部按鈕（包含 10% 機率的贊助按鈕）
+        footer_contents = self._get_image_analysis_footer_buttons()
         
         # 創建Flex訊息
         bubble = BubbleContainer(
@@ -375,6 +326,62 @@ class ImageHandler:
         )
         
         return FlexSendMessage(alt_text=f"圖片分析結果：{risk_level}", contents=bubble)
+    
+    def _get_image_analysis_footer_buttons(self) -> List:
+        """取得圖片分析結果頁面的底部按鈕，有10%機率顯示贊助按鈕"""
+        import random
+        
+        # 基本按鈕
+        footer_contents = [
+            ButtonComponent(
+                style="primary",
+                action=MessageAction(
+                    label="🔄 分析其他圖片",
+                    text="土豆 請幫我分析圖片"
+                ),
+                color="#3498DB",
+                height="sm"
+            ),
+            ButtonComponent(
+                style="secondary",
+                action=MessageAction(
+                    label="🏠 回到首頁",
+                    text="土豆"
+                ),
+                color="#95a5a6",
+                height="sm",
+                margin="md"
+            )
+        ]
+        
+        # 10%的機率顯示贊助按鈕
+        if random.random() < 0.10:
+            footer_contents.append(
+                SeparatorComponent(margin='md')
+            )
+            footer_contents.append(
+                TextComponent(
+                    text="喜歡土豆的服務嗎？歡迎點擊贊助土豆一杯咖啡，讓網站能持續運作☕️",
+                    size="xs",
+                    color="#888888",
+                    margin="md",
+                    align="center",
+                    wrap=True
+                )
+            )
+            footer_contents.append(
+                ButtonComponent(
+                    style='primary',
+                    height='sm',
+                    action=URIAction(
+                        label='給我們鼓勵☕️',
+                        uri='https://portaly.cc/todao-antifraud'
+                    ),
+                    color='#9C27B0'  # 紫色按鈕
+                )
+            )
+        
+        return footer_contents
     
     def _create_error_flex_message(self, error_message: str, display_name: str) -> FlexSendMessage:
         """
