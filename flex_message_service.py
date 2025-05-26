@@ -569,21 +569,21 @@ class FlexMessageService:
         
         # 只取第一天的資料，簡化顯示
         day_data = forecast[0] if forecast else {}
-        date = day_data.get("date", "")
-        weekday = day_data.get("weekday", "")
-        weather = day_data.get("weather", "")
-        temp = day_data.get("temperature", {})
-        rain_prob = day_data.get("rain_probability", "")
-        
-        weather_emoji = self._get_weather_emoji(weather)
-        
+            date = day_data.get("date", "")
+            weekday = day_data.get("weekday", "")
+            weather = day_data.get("weather", "")
+            temp = day_data.get("temperature", {})
+            rain_prob = day_data.get("rain_probability", "")
+            
+            weather_emoji = self._get_weather_emoji(weather)
+            
         # 創建更簡潔的天氣預報內容
         body_contents = [
             BoxComponent(
                 layout="horizontal",
                 margin="md",
                 contents=[
-                    TextComponent(
+                TextComponent(
                         text=weather_emoji,
                         size="3xl",
                         align="center",
@@ -595,19 +595,19 @@ class FlexMessageService:
                         flex=2,
                         spacing="sm",
                         contents=[
-                            TextComponent(
+                TextComponent(
                                 text=f"{temp.get('low', '')}°C - {temp.get('high', '')}°C",
                                 size="xl",
                                 weight="bold",
                                 color="#555555"
-                            ),
-                            TextComponent(
+                ),
+                TextComponent(
                                 text=weather,
                                 size="md",
                                 color="#888888"
-                            ),
-                            TextComponent(
-                                text=f"降雨機率：{rain_prob}",
+                ),
+                TextComponent(
+                    text=f"降雨機率：{rain_prob}",
                                 size="sm",
                                 color="#aaaaaa"
                             )
@@ -620,7 +620,7 @@ class FlexMessageService:
                 layout="horizontal",
                 margin="md",
                 contents=[
-                    TextComponent(
+            TextComponent(
                         text=f"{date} {weekday}",
                         size="xs",
                         color="#aaaaaa",
@@ -1320,34 +1320,34 @@ class FlexMessageService:
             ])
         
         # 創建詐騙詳情Flex Message
-        bubble = BubbleContainer(
+    bubble = BubbleContainer(
             size="mega",
-            header=BoxComponent(
-                layout="vertical",
-                contents=[
-                    TextComponent(
+        header=BoxComponent(
+            layout="vertical",
+            contents=[
+                TextComponent(
                         text=f"{fraud_type}",
-                        weight="bold",
+                    weight="bold",
                         size="xl",
                         color="#ffffff"
-                    ),
-                    TextComponent(
+                ),
+                TextComponent(
                         text="以下是此類詐騙的詳細說明與防範方法",
-                        size="sm",
+                    size="sm",
                         color="#ffffff",
                         margin="sm",
                         wrap=True
-                    )
-                ],
+                )
+            ],
                 background_color=header_color,
-                padding_all="lg"
-            ),
-            body=BoxComponent(
-                layout="vertical",
+            padding_all="lg"
+        ),
+        body=BoxComponent(
+            layout="vertical",
                 contents=body_contents,
                 padding_all="lg"
-            ),
-            footer=BoxComponent(
+        ),
+        footer=BoxComponent(
                 layout="vertical",
                 contents=footer_contents,
                 padding_all="lg"
@@ -1429,10 +1429,10 @@ class FlexMessageService:
                 spacing="md",
                 padding_all="lg",
                 contents=type_contents
-            )
         )
-        
-        return FlexSendMessage(alt_text="詐騙類型列表", contents=bubble)
+    )
+    
+    return FlexSendMessage(alt_text="詐騙類型列表", contents=bubble)
 
 
 # 創建全域服務實例
