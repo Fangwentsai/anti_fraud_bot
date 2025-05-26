@@ -34,7 +34,7 @@
             "epa.gov.tw": "行政院環境保護署",
             "tipo.gov.tw": "經濟部智慧財產局",
             "ftc.gov.tw": "公平交易委員會",
-
+            "sa.gov.tw": "教育部體育署",
             "www.water.gov.tw": "台灣自來水公司",
             "www.water.gov.taipei": "臺北自來水事業處",
 
@@ -73,7 +73,7 @@
             "www.clcatv.com.tw": "台數科 | 佳聯有線電視 (台中市大里、太平、霧峰)",
             "www.ttcatv.com.tw": "台數科 | 大屯有線電視 (台中市沙鹿、龍井、大肚、梧棲、清水)",
             "www.tbcs.com.tw": "台數科 | 台灣數位寬頻有線電視 (台中市豐原、后里、神岡、大雅、潭子)",
-            "www.sycatv.com.tw": "台數科 | 新永安有線電視 (台南市新營、柳營、鹽水、後壁、白河、東山、下營、六甲、官田、大內、山上、玉井、楠西、南化、左鎮)",
+            "www.sycatv.com.tw": "台數科 | 新永安有線電視 (台南市新營、柳營、鹽水、後壁、白河、東山、下營、六甲、官田、大内、山上、玉井、楠西、南化、左鎮)",
             "www.dycatv.com.tw": "台數科 | 大揚有線電視 (嘉義縣)",
 
             "www.twt.com.tw": "天外天數位有線電視 (新北市三重、蘆洲)",
@@ -185,7 +185,8 @@
             "upmedia.mg": "上報 (網路媒體, 國際、政治)",
             "taisounds.com": "太報 (網路媒體)",
             "readr.tw": "READr (報導者旗下, 數據新聞)",
-            "coolloud.org.tw": "苦勞網 (社運、勞工議題)"
+            "coolloud.org.tw": "苦勞網 (社運、勞工議題)",
+            "tw.sports.yahoo.com": "Yahoo奇摩運動"
         },
         "科技公司": {
             "asus.com": "華碩 (電腦硬體、手機)",
@@ -555,6 +556,33 @@
             "www.camus.fr/zh/": "卡慕干邑 (法國干邑白蘭地品牌, 國際中文站)",
             "www.bacardi.com": "百加得 (蘭姆酒等烈酒品牌)",
             "www.absolut.com/zh-tw/": "絕對伏特加 (瑞典伏特加品牌, 台灣)"
+        },
+        "運動相關": {
+            "cpbl.com.tw": "中華職棒大聯盟 (CPBL)",
+            "pleagueofficial.com": "P. LEAGUE+ (台灣男子職業籃球聯盟)",
+            "t1league.basketball": "T1 LEAGUE (台灣男子職業籃球聯盟)",
+            "wsbl.ctba.org.tw": "女子超級籃球聯賽 (WSBL)",
+            "tvl.ctvba.org.tw": "企業甲級男女排球聯賽 (TVL)",
+            "sportslottery.com.tw": "台灣運彩",
+            "sa.gov.tw": "教育部體育署 (已列於政府機關，此處備註)",
+            "tpenoc.net": "中華奧林匹克委員會",
+            "nba.com": "美國國家籃球協會 (NBA)",
+            "mlb.com": "美國職棒大聯盟 (MLB)",
+            "npb.jp": "日本野球機構 (日本職棒 NPB)",
+            "koreabaseball.com": "韓國棒球委員會 (KBO)",
+            "fifa.com": "國際足球總會 (FIFA)",
+            "uefa.com": "歐洲足球總會聯盟 (UEFA)",
+            "olympics.com": "奧林匹克運動會 (IOC 國際奧會)",
+            "premierleague.com": "英格蘭足球超級联赛 (Premier League)",
+            "laliga.com": "西班牙足球甲級聯賽 (La Liga)",
+            "legaseriea.it": "義大利足球甲級聯賽 (Serie A)",
+            "bundesliga.com": "德國足球甲級聯賽 (Bundesliga)",
+            "ligue1.com": "法國足球甲級聯賽 (Ligue 1)",
+            "ufc.com": "終極格鬥冠軍賽 (UFC)",
+            "formula1.com": "一級方程式賽車 (F1)",
+            "espn.com": "ESPN (國際運動媒體)",
+            "bleacherreport.com": "Bleacher Report (美國運動新聞網站)",
+            "cbssports.com": "CBS Sports (美國運動新聞網站)"
         }
     },
 
