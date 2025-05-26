@@ -1326,15 +1326,108 @@ if handler:
                     if len(chat_reply + introduction) <= LINE_MESSAGE_SAFE_LENGTH:
                         chat_reply += introduction
                 
-                line_bot_api.reply_message(reply_token, TextSendMessage(text=chat_reply))
+                # 嘗試使用新版API
+                try:
+                    if v3_messaging_api:
+                        from linebot.v3.messaging import TextMessage as V3TextMessage
+                        v3_messaging_api.reply_message(
+                            reply_token=reply_token,
+                            messages=[V3TextMessage(text=chat_reply)]
+                        )
+                        logger.info(f"使用v3 API回覆成功: {user_id}")
+                    else:
+                        # 舊版 API 作為備用
+                        line_bot_api.reply_message(reply_token, TextSendMessage(text=chat_reply))
+                except LineBotApiError as e:
+                    logger.error(f"使用LINE API回覆時發生錯誤: {e}")
+                    if "Invalid reply token" in str(e):
+                        # 如果是無效的回覆令牌，嘗試使用push_message作為備用
+                        try:
+                            if v3_messaging_api:
+                                from linebot.v3.messaging import TextMessage as V3TextMessage
+                                from linebot.v3.messaging import PushMessageRequest
+                                
+                                v3_messaging_api.push_message(
+                                    PushMessageRequest(
+                                        to=user_id,
+                                        messages=[V3TextMessage(text=chat_reply)]
+                                    )
+                                )
+                            else:
+                                line_bot_api.push_message(user_id, TextSendMessage(text=chat_reply))
+                            logger.info(f"回覆令牌無效，改用push_message成功: {user_id}")
+                        except Exception as push_error:
+                            logger.error(f"使用push_message也失敗: {push_error}")
             else:
                 fallback_message = "我現在有點忙，不過如果您有可疑訊息需要分析，我隨時可以幫忙喔！ 😊"
-                line_bot_api.reply_message(reply_token, TextSendMessage(text=fallback_message))
+                
+                # 嘗試使用新版API
+                try:
+                    if v3_messaging_api:
+                        from linebot.v3.messaging import TextMessage as V3TextMessage
+                        v3_messaging_api.reply_message(
+                            reply_token=reply_token,
+                            messages=[V3TextMessage(text=fallback_message)]
+                        )
+                    else:
+                        # 舊版 API 作為備用
+                        line_bot_api.reply_message(reply_token, TextSendMessage(text=fallback_message))
+                except LineBotApiError as e:
+                    logger.error(f"發送fallback訊息時發生LINE API錯誤: {e}")
+                    if "Invalid reply token" in str(e):
+                        # 如果是無效的回覆令牌，嘗試使用push_message作為備用
+                        try:
+                            if v3_messaging_api:
+                                from linebot.v3.messaging import TextMessage as V3TextMessage
+                                from linebot.v3.messaging import PushMessageRequest
+                                
+                                v3_messaging_api.push_message(
+                                    PushMessageRequest(
+                                        to=user_id,
+                                        messages=[V3TextMessage(text=fallback_message)]
+                                    )
+                                )
+                            else:
+                                line_bot_api.push_message(user_id, TextSendMessage(text=fallback_message))
+                            logger.info(f"fallback訊息使用push_message成功: {user_id}")
+                        except Exception as push_error:
+                            logger.error(f"發送fallback訊息時使用push_message也失敗: {push_error}")
                 
         except Exception as e:
             logger.exception(f"生成聊天回應時發生錯誤: {e}")
             fallback_message = "不好意思，我現在有點狀況，不過如果您有可疑訊息需要分析，我隨時可以幫忙！ 😊"
-            line_bot_api.reply_message(reply_token, TextSendMessage(text=fallback_message))
+            
+            # 嘗試使用新版API
+            try:
+                if v3_messaging_api:
+                    from linebot.v3.messaging import TextMessage as V3TextMessage
+                    v3_messaging_api.reply_message(
+                        reply_token=reply_token,
+                        messages=[V3TextMessage(text=fallback_message)]
+                    )
+                else:
+                    # 舊版 API 作為備用
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text=fallback_message))
+            except LineBotApiError as e:
+                logger.error(f"發送錯誤fallback訊息時發生LINE API錯誤: {e}")
+                if "Invalid reply token" in str(e):
+                    # 如果是無效的回覆令牌，嘗試使用push_message作為備用
+                    try:
+                        if v3_messaging_api:
+                            from linebot.v3.messaging import TextMessage as V3TextMessage
+                            from linebot.v3.messaging import PushMessageRequest
+                            
+                            v3_messaging_api.push_message(
+                                PushMessageRequest(
+                                    to=user_id,
+                                    messages=[V3TextMessage(text=fallback_message)]
+                                )
+                            )
+                        else:
+                            line_bot_api.push_message(user_id, TextSendMessage(text=fallback_message))
+                        logger.info(f"錯誤fallback訊息使用push_message成功: {user_id}")
+                    except Exception as push_error:
+                        logger.error(f"發送錯誤fallback訊息時使用push_message也失敗: {push_error}")
 
         # 添加圖片分析命令處理
         if "分析圖片" in cleaned_message or "檢查圖片" in cleaned_message:
@@ -1558,6 +1651,7 @@ if handler:
             user_id = event.source.user_id
             profile = get_user_profile(user_id)
             display_name = profile.display_name if profile else "未知用戶"
+            reply_token = event.reply_token
             
             # 檢查上下文（用戶可能提供了分析需求）
             context_message = ""
@@ -1580,22 +1674,115 @@ if handler:
             
             # 回覆分析結果
             if flex_message:
-                line_bot_api.reply_message(event.reply_token, flex_message)
+                # 使用新版 API 回覆
+                try:
+                    if v3_messaging_api:
+                        v3_messaging_api.reply_message(
+                            reply_token=reply_token,
+                            messages=[flex_message]
+                        )
+                        logger.info(f"使用v3 API回覆圖片分析成功: {user_id}")
+                    else:
+                        # 舊版 API 作為備用
+                        line_bot_api.reply_message(reply_token, flex_message)
+                except LineBotApiError as e:
+                    logger.error(f"使用LINE API回覆圖片分析時發生錯誤: {e}")
+                    if "Invalid reply token" in str(e):
+                        # 如果是無效的回覆令牌，嘗試使用push_message作為備用
+                        try:
+                            if v3_messaging_api:
+                                from linebot.v3.messaging import PushMessageRequest
+                                
+                                v3_messaging_api.push_message(
+                                    PushMessageRequest(
+                                        to=user_id,
+                                        messages=[flex_message]
+                                    )
+                                )
+                            else:
+                                line_bot_api.push_message(user_id, flex_message)
+                            logger.info(f"圖片分析回覆令牌無效，改用push_message成功: {user_id}")
+                        except Exception as push_error:
+                            logger.error(f"圖片分析使用push_message也失敗: {push_error}")
             else:
-                line_bot_api.reply_message(
-                    event.reply_token,
-                    TextSendMessage(text="抱歉，無法分析此圖片，請稍後再試。")
-                )
+                error_message = "抱歉，無法分析此圖片，請稍後再試。"
+                
+                # 使用新版 API 回覆
+                try:
+                    if v3_messaging_api:
+                        from linebot.v3.messaging import TextMessage as V3TextMessage
+                        v3_messaging_api.reply_message(
+                            reply_token=reply_token,
+                            messages=[V3TextMessage(text=error_message)]
+                        )
+                    else:
+                        # 舊版 API 作為備用
+                        line_bot_api.reply_message(
+                            reply_token,
+                            TextSendMessage(text=error_message)
+                        )
+                except LineBotApiError as e:
+                    logger.error(f"使用LINE API回覆圖片錯誤訊息時發生錯誤: {e}")
+                    if "Invalid reply token" in str(e):
+                        # 如果是無效的回覆令牌，嘗試使用push_message作為備用
+                        try:
+                            if v3_messaging_api:
+                                from linebot.v3.messaging import TextMessage as V3TextMessage
+                                from linebot.v3.messaging import PushMessageRequest
+                                
+                                v3_messaging_api.push_message(
+                                    PushMessageRequest(
+                                        to=user_id,
+                                        messages=[V3TextMessage(text=error_message)]
+                                    )
+                                )
+                            else:
+                                line_bot_api.push_message(user_id, TextSendMessage(text=error_message))
+                            logger.info(f"圖片錯誤訊息回覆令牌無效，改用push_message成功: {user_id}")
+                        except Exception as push_error:
+                            logger.error(f"圖片錯誤訊息使用push_message也失敗: {push_error}")
                 
         except LineBotApiError as e:
             logger.error(f"處理圖片訊息時發生LINE API錯誤: {e}")
         except Exception as e:
             logger.exception(f"處理圖片訊息時發生錯誤: {e}")
             try:
-                line_bot_api.reply_message(
-                    event.reply_token,
-                    TextSendMessage(text="處理圖片時發生錯誤，請稍後再試。")
-                )
+                error_message = "處理圖片時發生錯誤，請稍後再試。"
+                
+                # 使用新版 API 回覆
+                try:
+                    if v3_messaging_api:
+                        from linebot.v3.messaging import TextMessage as V3TextMessage
+                        v3_messaging_api.reply_message(
+                            reply_token=event.reply_token,
+                            messages=[V3TextMessage(text=error_message)]
+                        )
+                    else:
+                        # 舊版 API 作為備用
+                        line_bot_api.reply_message(
+                            event.reply_token,
+                            TextSendMessage(text=error_message)
+                        )
+                except LineBotApiError as e:
+                    logger.error(f"使用LINE API回覆最終錯誤訊息時發生錯誤: {e}")
+                    if "Invalid reply token" in str(e):
+                        # 如果是無效的回覆令牌，嘗試使用push_message作為備用
+                        try:
+                            if v3_messaging_api:
+                                from linebot.v3.messaging import TextMessage as V3TextMessage
+                                from linebot.v3.messaging import PushMessageRequest
+                                
+                                v3_messaging_api.push_message(
+                                    PushMessageRequest(
+                                        to=user_id,
+                                        messages=[V3TextMessage(text=error_message)]
+                                    )
+                                )
+                            else:
+                                line_bot_api.push_message(user_id, TextSendMessage(text=error_message))
+                            logger.info(f"最終錯誤訊息回覆令牌無效，改用push_message成功: {user_id}")
+                        except Exception as push_error:
+                            logger.error(f"最終錯誤訊息使用push_message也失敗: {push_error}")
             except:
                 pass
 

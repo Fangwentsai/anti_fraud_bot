@@ -89,7 +89,7 @@ class ImageAnalysisService:
             
             # 調用 OpenAI API 進行圖片分析
             response = self.client.chat.completions.create(
-                model="gpt-4-vision-preview",
+                model="gpt-4.1-mini",
                 messages=[
                     {
                         "role": "system",
@@ -345,7 +345,7 @@ class ImageAnalysisService:
 風險評估：[高/中/低] - [簡短說明]"""
             
             response = self.client.chat.completions.create(
-                model="gpt-4-vision-preview",
+                model="gpt-4.1-mini",
                 messages=[
                     {
                         "role": "system",
@@ -418,7 +418,7 @@ class ImageAnalysisService:
             base64_image = base64.b64encode(buffered.getvalue()).decode("utf-8")
             
             response = self.client.chat.completions.create(
-                model="gpt-4-vision-preview",
+                model="gpt-4.1-mini",
                 messages=[
                     {
                         "role": "system",
