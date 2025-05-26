@@ -1349,9 +1349,9 @@ if handler:
                         # 將 FlexSendMessage 轉換為 v3 格式
                         if hasattr(flex_message, 'contents') and hasattr(flex_message, 'alt_text'):
                             # 檢查 contents 是否為 BubbleContainer 或其他 Flex 容器
-                            if hasattr(flex_message.contents, 'as_json_dict'):
+                            if hasattr(flex_message.contents, 'to_dict'):
                                 # 如果是 LINE SDK 對象，轉換為字典
-                                contents_dict = flex_message.contents.as_json_dict()
+                                contents_dict = flex_message.contents.to_dict()
                             else:
                                 # 如果已經是字典，直接使用
                                 contents_dict = flex_message.contents
@@ -1386,9 +1386,9 @@ if handler:
                                 # 將 FlexSendMessage 轉換為 v3 格式
                                 if hasattr(flex_message, 'contents') and hasattr(flex_message, 'alt_text'):
                                     # 檢查 contents 是否為 BubbleContainer 或其他 Flex 容器
-                                    if hasattr(flex_message.contents, 'as_json_dict'):
+                                    if hasattr(flex_message.contents, 'to_dict'):
                                         # 如果是 LINE SDK 對象，轉換為字典
-                                        contents_dict = flex_message.contents.as_json_dict()
+                                        contents_dict = flex_message.contents.to_dict()
                                     else:
                                         # 如果已經是字典，直接使用
                                         contents_dict = flex_message.contents
