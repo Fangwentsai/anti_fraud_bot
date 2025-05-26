@@ -1347,18 +1347,10 @@ if handler:
                         from linebot.v3.messaging import FlexMessage as V3FlexMessage
                         
                         # 將 FlexSendMessage 轉換為 v3 格式
-                        if hasattr(flex_message, 'contents') and hasattr(flex_message, 'alt_text'):
-                            # 檢查 contents 是否為 BubbleContainer 或其他 Flex 容器
-                            if hasattr(flex_message.contents, 'to_dict'):
-                                # 如果是 LINE SDK 對象，轉換為字典
-                                contents_dict = flex_message.contents.to_dict()
-                            else:
-                                # 如果已經是字典，直接使用
-                                contents_dict = flex_message.contents
-                            
+                        if hasattr(flex_message, 'contents'):
                             v3_flex_message = V3FlexMessage(
                                 alt_text=flex_message.alt_text,
-                                contents=contents_dict
+                                contents=flex_message.contents
                             )
                         else:
                             # 如果已經是 v3 格式，直接使用
@@ -1384,21 +1376,12 @@ if handler:
                                 from linebot.v3.messaging import FlexMessage as V3FlexMessage
                                 
                                 # 將 FlexSendMessage 轉換為 v3 格式
-                                if hasattr(flex_message, 'contents') and hasattr(flex_message, 'alt_text'):
-                                    # 檢查 contents 是否為 BubbleContainer 或其他 Flex 容器
-                                    if hasattr(flex_message.contents, 'to_dict'):
-                                        # 如果是 LINE SDK 對象，轉換為字典
-                                        contents_dict = flex_message.contents.to_dict()
-                                    else:
-                                        # 如果已經是字典，直接使用
-                                        contents_dict = flex_message.contents
-                                    
+                                if hasattr(flex_message, 'contents'):
                                     v3_flex_message = V3FlexMessage(
                                         alt_text=flex_message.alt_text,
-                                        contents=contents_dict
+                                        contents=flex_message.contents
                                     )
                                 else:
-                                    # 如果已經是 v3 格式，直接使用
                                     v3_flex_message = flex_message
                                 
                                 v3_messaging_api.push_message(
