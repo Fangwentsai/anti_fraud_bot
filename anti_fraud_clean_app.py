@@ -825,6 +825,7 @@ if handler:
                 line_bot_api.reply_message(reply_token, flex_message)
             else:
                 line_bot_api.reply_message(reply_token, TextSendMessage(text=error_message))
+            return
 
         # 檢查用戶詢問詐騙類型清單
         if any(keyword in cleaned_message for keyword in ["詐騙類型列表", "詐騙類型", "詐騙手法", "詐騙種類", "常見詐騙"]):
@@ -845,6 +846,7 @@ if handler:
                 logger.error(f"處理詐騙類型查詢時發生錯誤: {e}")
                 error_text = "抱歉，詐騙類型查詢功能暫時無法使用。\n\n💡 您可以：\n• 直接傳送可疑訊息給我分析\n• 說「防詐騙測試」進行知識測驗"
                 line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
+            return
 
         # 檢查是否詢問特定詐騙類型
         for fraud_type, info in fraud_types.items():
@@ -920,6 +922,7 @@ if handler:
                 logger.error(f"處理詐騙類型查詢時發生錯誤: {e}")
                 error_text = "抱歉，詐騙類型查詢功能暫時無法使用。\n\n💡 您可以：\n• 直接傳送可疑訊息給我分析\n• 說「防詐騙測試」進行知識測驗"
                 line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
+            return
 
         # 檢查是否為分析請求但沒有內容
         analysis_request_keywords = ["請幫我分析這則訊息", "幫我分析訊息", "請分析這則訊息", "請幫我分析", "分析這則訊息"]
@@ -1583,7 +1586,7 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
     
     # 檢查URL存在（最高優先級）
     import re
-    url_pattern = re.compile(r'https?://[^\\s]+|www\\.[^\\s]+|[a-zA-Z0-9][a-zA-Z0-9-]*\\.[a-zA-Z]{2,}(?:\\.[a-zA-Z]{2,})?')
+    url_pattern = re.compile(r'https?://[^\s]+|www\.[^\s]+|[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?')
     if url_pattern.search(message):
         logger.info("檢測到URL，觸發詐騙分析")
         return True
