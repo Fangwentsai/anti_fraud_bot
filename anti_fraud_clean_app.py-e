@@ -1231,11 +1231,9 @@ if handler:
                     # 使用新版 API 回覆
                     if v3_messaging_api:
                         v3_messaging_api.reply_message(
-                            ReplyMessageRequest(
-                reply_token=reply_token,
+                            reply_token=reply_token,
                             messages=[city_selector]
                         )
-            )
                     else:
                         # 舊版 API 作為備用
                         line_bot_api.reply_message(reply_token, city_selector)
@@ -1252,11 +1250,9 @@ if handler:
                     # 使用新版 API 回覆
                     if v3_messaging_api:
                         v3_messaging_api.reply_message(
-                            ReplyMessageRequest(
-                reply_token=reply_token,
+                            reply_token=reply_token,
                             messages=[weather_flex]
                         )
-            )
                     else:
                         # 舊版 API 作為備用
                         line_bot_api.reply_message(reply_token, weather_flex)
@@ -1267,11 +1263,9 @@ if handler:
                         # 使用新版 API 回覆
                         if v3_messaging_api:
                             v3_messaging_api.reply_message(
-                                ReplyMessageRequest(
-                reply_token=reply_token,
+                                reply_token=reply_token,
                                 messages=[V3TextMessage(text=weather_text)]
                             )
-            )
                         else:
                             # 舊版 API 作為備用
                             line_bot_api.reply_message(reply_token, TextSendMessage(text=weather_text))
@@ -1282,11 +1276,9 @@ if handler:
                         # 使用新版 API 回覆
                         if v3_messaging_api:
                             v3_messaging_api.reply_message(
-                                ReplyMessageRequest(
-                reply_token=reply_token,
+                                reply_token=reply_token,
                                 messages=[V3TextMessage(text=error_text)]
                             )
-            )
                         else:
                             # 舊版 API 作為備用
                             line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
@@ -1298,11 +1290,9 @@ if handler:
                     # 使用新版 API 回覆
                     if v3_messaging_api:
                         v3_messaging_api.reply_message(
-                            ReplyMessageRequest(
-                reply_token=reply_token,
+                            reply_token=reply_token,
                             messages=[V3TextMessage(text=weather_text)]
                         )
-            )
                     else:
                         # 舊版 API 作為備用
                         line_bot_api.reply_message(reply_token, TextSendMessage(text=weather_text))
@@ -1313,11 +1303,9 @@ if handler:
                     # 使用新版 API 回覆
                     if v3_messaging_api:
                         v3_messaging_api.reply_message(
-                            ReplyMessageRequest(
-                reply_token=reply_token,
+                            reply_token=reply_token,
                             messages=[V3TextMessage(text=error_text)]
                         )
-            )
                     else:
                         # 舊版 API 作為備用
                         line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
