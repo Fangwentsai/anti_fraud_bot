@@ -2128,17 +2128,17 @@ def parse_health_product_analysis(analysis_result, display_name="朋友"):
         # 構建詐騙分析格式的結果
         fraud_result["risk_level"] = result["risk_level"]
         
-        # 構建解釋文本
-        explanation = f"關於「{result['product_name']}」的客觀分析：\n\n"
-        explanation += f"🔍 原理：{result['principle']}\n\n"
-        explanation += f"📊 科學依據：{result['scientific_basis']}\n\n"
-        explanation += f"⚠️ 潛在風險：{result['potential_risks']}"
+        # 構建精簡的解釋文本
+        explanation = f"「{result['product_name']}」科學分析：\n\n"
+        explanation += f"🔍 原理：{result['principle'][:120]}{'...' if len(result['principle']) > 120 else ''}\n\n"
+        explanation += f"📊 科學依據：{result['scientific_basis'][:120]}{'...' if len(result['scientific_basis']) > 120 else ''}\n\n"
+        explanation += f"⚠️ 潛在風險：{result['potential_risks'][:120]}{'...' if len(result['potential_risks']) > 120 else ''}"
         
         fraud_result["explanation"] = explanation
         
-        # 構建建議文本
-        suggestions = f"💡 替代方案：{result['alternatives']}\n\n"
-        suggestions += f"🛒 消費建議：{result['consumer_advice']}"
+        # 構建精簡的建議文本
+        suggestions = f"💡 替代方案：{result['alternatives'][:120]}{'...' if len(result['alternatives']) > 120 else ''}\n\n"
+        suggestions += f"🛒 建議：{result['consumer_advice'][:120]}{'...' if len(result['consumer_advice']) > 120 else ''}"
         
         fraud_result["suggestions"] = suggestions
         
@@ -2159,7 +2159,7 @@ if __name__ == '__main__':
     # 檢查環境變數
     validate_environment()
     
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 5001))
     
     logger.info(f"啟動防詐騙機器人服務，端口: {port}")
     app.run(host='0.0.0.0', port=port, debug=False) 

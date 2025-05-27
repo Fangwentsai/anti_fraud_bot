@@ -49,7 +49,7 @@ class FlexMessageService:
             is_emerging = analysis_data.get("is_emerging", False)
             
             # 檢查是否為健康產品分析結果
-            is_health_product_analysis = "關於「" in explanation and "的客觀分析" in explanation
+            is_health_product_analysis = "「" in explanation and "」科學分析" in explanation
             
             # 根據風險等級選擇顏色
             risk_color = self._get_risk_color(risk_level)
@@ -199,18 +199,8 @@ class FlexMessageService:
                             "height": "sm",
                             "action": {
                                 "type": "postback",
-                                "label": "查看詐騙案例",
-                                "data": "action=start_potato_game"
-                            }
-                        },
-                        {
-                            "type": "button",
-                            "style": "secondary",
-                            "height": "sm",
-                            "action": {
-                                "type": "postback",
-                                "label": "回報註記",
-                                "data": "action=report_feedback"
+                                "label": "🏠 回到首頁",
+                                "data": "action=show_main_menu"
                             }
                         },
                         {
@@ -223,11 +213,6 @@ class FlexMessageService:
                     "flex": 0
                 }
             }
-            
-            # 根據分析類型調整按鈕文本
-            if is_health_product_analysis:
-                bubble["footer"]["contents"][0]["action"]["label"] = "查看更多減重知識"
-                bubble["footer"]["contents"][1]["action"]["label"] = "諮詢專業意見"
             
             # 如果是新型詐騙手法，添加標記
             if is_emerging:
