@@ -1061,7 +1061,7 @@ if handler:
             return
 
         # 檢查圖片分析請求
-        if "分析圖片" in cleaned_message or "檢查圖片" in cleaned_message:
+        if "分析圖片" in cleaned_message or "檢查圖片" in cleaned_message or "請幫我分析圖片" in cleaned_message:
             image_analysis_prompt = f"📷 {display_name}，請點擊左下角鍵盤後上傳您想分析的圖片！\n\n" \
                                   f"我可以分析以下類型的圖片：\n" \
                                   f"🔍 可疑網站或購物平台截圖\n" \
