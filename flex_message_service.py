@@ -39,116 +39,225 @@ class FlexMessageService:
             "info": "#2196F3"
         }
 
-    def create_analysis_flex_message(self, analysis_data: Dict, display_name: str, 
-                                   message_to_analyze: str, user_id: Optional[str] = None) -> FlexSendMessage:
-        """創建詐騙分析結果的 Flex Message"""
-        
-        # 安全地獲取數據，並提供預設值
-        risk_level = str(analysis_data.get("risk_level", "不確定")).strip() or "不確定"
-        fraud_type = str(analysis_data.get("fraud_type", "未知")).strip() or "未知"
-        explanation = str(analysis_data.get("explanation", "分析結果不完整")).strip() or "分析結果不完整"
-        suggestions = str(analysis_data.get("suggestions", "請保持警覺")).strip() or "請保持警覺"
-        display_name = str(display_name).strip() or "用戶"
-        
-        # 確保用戶ID有值
-        safe_user_id = user_id if user_id else "unknown"
-        
-        # 根據風險等級選擇顏色
-        risk_color = self._get_risk_color(risk_level)
-        risk_emoji = self._get_risk_emoji(risk_level)
-        
-        # 創建 Flex Message 內容
-        bubble = BubbleContainer(
-            direction='ltr',
-            header=BoxComponent(
-                layout='vertical',
-                padding_all='20px',
-                background_color=risk_color,
-                spacing='md',
-                contents=[
-                    safe_text_component(
-                        f"{risk_emoji} 詐騙風險分析",
-                        weight='bold',
-                        color='#ffffff',
-                        size='xl'
-                    ),
-                    safe_text_component(
-                        f"風險等級：{risk_level}",
-                        color='#ffffff',
-                        size='md'
-                    )
-                ]
-            ),
-            body=BoxComponent(
-                layout='vertical',
-                padding_all='20px',
-                spacing='md',
-                contents=[
-                    safe_text_component(
-                        f"詐騙類型：{fraud_type}",
-                        size='md',
-                        weight='bold',
-                        margin='md'
-                    ),
-                    safe_text_component(
-                        explanation,
-                        size='sm',
-                        color=self.colors["secondary"],
-                        wrap=True,
-                        margin='md'
-                    ),
-                    SeparatorComponent(margin='md'),
-                    safe_text_component(
-                        "🛡️ 防範建議",
-                        weight='bold',
-                        size='md',
-                        margin='md'
-                    ),
-                    safe_text_component(
-                        suggestions if "\n" in suggestions else suggestions.replace("。", "。\n").replace("，", "，\n"),
-                        size='sm',
-                        color=self.colors["secondary"],
-                        wrap=True,
-                        margin='sm'
-                    )
-                ]
-            ),
-            footer=BoxComponent(
-                layout='vertical',
-                spacing='sm',
-                contents=[
-                    ButtonComponent(
-                        style='primary',
-                        height='sm',
-                        action=MessageAction(
-                            label='🔄 再測一次',
-                            text='土豆 請幫我分析這則訊息：'
-                        ),
-                        color='#2E86C1'
-                    ),
-                    ButtonComponent(
-                        style='primary',
-                        height='sm',
-                        action=PostbackAction(
-                            label='🏠 回到首頁',
-                            data=f'action=show_main_menu&user_id={safe_user_id}'
-                        ),
-                        color='#27AE60'
-                    ),
-                    ButtonComponent(
-                        style='primary',
-                        height='sm',
-                        action=PostbackAction(
-                            label='📝 回報註記',
-                            data=f'action=report_feedback&user_id={safe_user_id}'
-                        ),
-                        color='#E67E22'
-                    )
-                ]
+    def create_analysis_flex_message(self, analysis_data, display_name="朋友", original_message="", user_id=None):
+        """創建詐騙分析Flex Message"""
+        try:
+            risk_level = analysis_data.get("risk_level", "未知")
+            fraud_type = analysis_data.get("fraud_type", "未知類型")
+            explanation = analysis_data.get("explanation", "無法獲取詳細分析。")
+            suggestions = analysis_data.get("suggestions", "請謹慎處理此訊息。")
+            is_emerging = analysis_data.get("is_emerging", False)
+            
+            # 檢查是否為健康產品分析結果
+            is_health_product_analysis = "關於「" in explanation and "的客觀分析" in explanation
+            
+            # 根據風險等級選擇顏色
+            risk_color = self._get_risk_color(risk_level)
+            
+            # 設定標題
+            if is_health_product_analysis:
+                title = "🔬 產品科學分析"
+            else:
+                title = "🔍 詐騙風險分析"
+            
+            # 建立Flex Message
+            bubble = {
+                "type": "bubble",
+                "size": "mega",
+                "header": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": title,
+                            "weight": "bold",
+                            "size": "xl",
+                            "color": "#FFFFFF"
+                        }
+                    ],
+                    "backgroundColor": risk_color,
+                    "paddingAll": "20px"
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "box",
+                            "layout": "vertical",
+                            "margin": "lg",
+                            "spacing": "sm",
+                            "contents": [
+                                {
+                                    "type": "box",
+                                    "layout": "baseline",
+                                    "spacing": "sm",
+                                    "contents": [
+                                        {
+                                            "type": "text",
+                                            "text": "風險等級",
+                                            "color": "#aaaaaa",
+                                            "size": "sm",
+                                            "flex": 2
+                                        },
+                                        {
+                                            "type": "text",
+                                            "text": risk_level,
+                                            "wrap": True,
+                                            "color": risk_color,
+                                            "size": "sm",
+                                            "flex": 5,
+                                            "weight": "bold"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "box",
+                                    "layout": "baseline",
+                                    "spacing": "sm",
+                                    "contents": [
+                                        {
+                                            "type": "text",
+                                            "text": "類型",
+                                            "color": "#aaaaaa",
+                                            "size": "sm",
+                                            "flex": 2
+                                        },
+                                        {
+                                            "type": "text",
+                                            "text": fraud_type,
+                                            "wrap": True,
+                                            "color": "#666666",
+                                            "size": "sm",
+                                            "flex": 5
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "separator",
+                            "margin": "xxl"
+                        },
+                        {
+                            "type": "box",
+                            "layout": "vertical",
+                            "margin": "xxl",
+                            "spacing": "sm",
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": "分析說明",
+                                    "weight": "bold",
+                                    "size": "md",
+                                    "margin": "md"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": explanation,
+                                    "size": "sm",
+                                    "color": "#555555",
+                                    "wrap": True,
+                                    "margin": "md"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "box",
+                            "layout": "vertical",
+                            "margin": "xxl",
+                            "spacing": "sm",
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": "專家建議",
+                                    "weight": "bold",
+                                    "size": "md",
+                                    "margin": "md"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": suggestions,
+                                    "size": "sm",
+                                    "color": "#555555",
+                                    "wrap": True,
+                                    "margin": "md"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "footer": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "spacing": "sm",
+                    "contents": [
+                        {
+                            "type": "button",
+                            "style": "primary",
+                            "height": "sm",
+                            "action": {
+                                "type": "postback",
+                                "label": "查看詐騙案例",
+                                "data": "action=start_potato_game"
+                            }
+                        },
+                        {
+                            "type": "button",
+                            "style": "secondary",
+                            "height": "sm",
+                            "action": {
+                                "type": "postback",
+                                "label": "回報註記",
+                                "data": "action=report_feedback"
+                            }
+                        },
+                        {
+                            "type": "box",
+                            "layout": "vertical",
+                            "contents": [],
+                            "margin": "sm"
+                        }
+                    ],
+                    "flex": 0
+                }
+            }
+            
+            # 根據分析類型調整按鈕文本
+            if is_health_product_analysis:
+                bubble["footer"]["contents"][0]["action"]["label"] = "查看更多減重知識"
+                bubble["footer"]["contents"][1]["action"]["label"] = "諮詢專業意見"
+            
+            # 如果是新型詐騙手法，添加標記
+            if is_emerging:
+                bubble["body"]["contents"].append({
+                    "type": "box",
+                    "layout": "vertical",
+                    "margin": "md",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "⚠️ 新興詐騙手法",
+                            "color": "#FF0000",
+                            "size": "sm",
+                            "weight": "bold",
+                            "align": "center"
+                        }
+                    ]
+                })
+            
+            # 將Bubble轉為Flex Message
+            flex_message = FlexSendMessage(
+                alt_text=f"風險分析：{risk_level} - {fraud_type}",
+                contents=bubble
             )
-        )
-        
-        return FlexSendMessage(alt_text=f"詐騙風險分析：{risk_level}", contents=bubble)
+            
+            return flex_message
+            
+        except Exception as e:
+            logger.error(f"創建詐騙分析Flex Message時出錯: {e}")
+            return None
 
     def create_domain_spoofing_flex_message(self, spoofing_result: Dict, display_name: str,
                                           message_to_analyze: str, user_id: Optional[str] = None) -> FlexSendMessage:
@@ -1293,10 +1402,9 @@ class FlexMessageService:
 flex_message_service = FlexMessageService()
 
 # 提供便捷的函數接口
-def create_analysis_flex_message(analysis_data: Dict, display_name: str, 
-                                message_to_analyze: str, user_id: Optional[str] = None) -> FlexSendMessage:
-    """創建詐騙分析結果的 Flex Message"""
-    return flex_message_service.create_analysis_flex_message(analysis_data, display_name, message_to_analyze, user_id)
+def create_analysis_flex_message(analysis_data, display_name="朋友", original_message="", user_id=None):
+    """創建詐騙分析Flex Message"""
+    return flex_message_service.create_analysis_flex_message(analysis_data, display_name, original_message, user_id)
 
 def create_domain_spoofing_flex_message(spoofing_result: Dict, display_name: str,
                                       message_to_analyze: str, user_id: Optional[str] = None) -> FlexSendMessage:
