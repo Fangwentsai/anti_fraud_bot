@@ -848,7 +848,7 @@ if handler:
         if not cleaned_message.strip():
             reply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐小助手，記得用土豆開頭喔！\n" \
                         f"讓我用4大服務保護你：\n\n" \
-                        f"🔍 文字安全檢查：\n立刻分析假冒文字、詐騙訊息或釣魚網站！\n" \
+                        f"🔍 文字或網站分析：\n立刻分析假冒文字、詐騙訊息或釣魚網站！\n" \
                         f"📷 上傳截圖分析：\n不想輸入文字嗎？！直接截圖給我！\n" \
                         f"🎯 防詐騙測驗：\n玩問答提升你的防詐意識，輕鬆識破詐騙！\n" \
                         f"📚 詐騙案例：\n案例分析分享，了解9大詐騙類型。\n" \
@@ -856,7 +856,7 @@ if handler:
                         f"💡 點擊下方按鈕，或直接告訴我你需要什麼！"
                 
             quick_reply = QuickReply(items=[
-                QuickReplyButton(action=MessageAction(label="🔍 文字安全檢查", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
+                QuickReplyButton(action=MessageAction(label="🔍 文字或網站分析", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
                 QuickReplyButton(action=MessageAction(label="📷 上傳截圖分析", text=f"{bot_trigger_keyword} 請幫我分析圖片：")),
                 QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text=f"{bot_trigger_keyword} 防詐騙測試")),
                 QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text=f"{bot_trigger_keyword} 詐騙類型列表")),
@@ -897,7 +897,7 @@ if handler:
                                     style="primary",
                                     color="#FF6B6B",
                                     action=MessageAction(
-                                        label="🔍 文字安全檢查",
+                                        label="🔍 文字或網站分析",
                                         text=f"{bot_trigger_keyword} 請幫我分析這則訊息："
                                     )
                                 ),
@@ -1087,7 +1087,7 @@ if handler:
                            f"💡 您可以：\n" \
                            f"• 轉傳收到的可疑的文字訊息\n" \
                            f"• 了解最新具療效的醫學知識(如Onda超微波減脂、高壓氧艙)\n" \
-                           f"• ⚠️FB、IG不易判別，請提供貼文內網址(或使用截圖！)\n" \
+                           f"• ⚠️FB、IG不易判別，請提供貼文內網址(或使用截圖)\n" \
                            f"• 貼上可疑的網址連結\n" \
                            f"• 描述您遇到的可疑情況"
             
@@ -1295,7 +1295,7 @@ if handler:
                     if len(chat_reply) > LINE_MESSAGE_SAFE_LENGTH:
                         chat_reply = chat_reply[:LINE_MESSAGE_SAFE_LENGTH] + "..."
                     
-                    introduction = f"\n\n💫 我是您的專業防詐騙助手！經過全面測試，我能為您提供：\n🔍 文字安全檢查\n🎯 防詐騙知識測驗\n📚 詐騙案例查詢\n\n有任何可疑訊息都歡迎直接傳給我分析喔！"
+                    introduction = f"\n\n💫 我是您的專業防詐騙助手！經過全面測試，我能為您提供：\n🔍 文字或網站分析\n🎯 防詐騙知識測驗\n📚 詐騙案例查詢\n\n有任何可疑訊息都歡迎直接傳給我分析喔！"
                     
                     if user_id not in first_time_chatters and not need_fraud_prevention_tips:
                         first_time_chatters.add(user_id)
@@ -1452,7 +1452,7 @@ if handler:
                 elif action == 'show_main_menu':
                     reply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐小助手，記得用土豆開頭喔！\n" \
                                 f"讓我用4大服務保護你：\n\n" \
-                                f"🔍 文字安全檢查：\n立刻分析假冒文字、詐騙訊息或釣魚網站！\n" \
+                                f"🔍 文字或網站分析：\n立刻分析假冒文字、詐騙訊息或釣魚網站！\n" \
                                 f"📷 上傳截圖分析：\n不想輸入文字嗎？！直接截圖給我！\n" \
                                 f"🎯 防詐騙測驗：\n玩問答提升你的防詐意識，輕鬆識破詐騙！\n" \
                                 f"📚 詐騙案例：\n案例分析分享，了解9大詐騙類型。\n" \
@@ -1460,7 +1460,7 @@ if handler:
                                 f"💡 點擊下方按鈕，或直接告訴我你需要什麼！"
                     
                     quick_reply = QuickReply(items=[
-                        QuickReplyButton(action=MessageAction(label="🔍 文字安全檢查", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
+                        QuickReplyButton(action=MessageAction(label="🔍 文字或網站分析", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
                         QuickReplyButton(action=MessageAction(label="📷 上傳截圖分析", text=f"{bot_trigger_keyword} 請幫我分析圖片：")),
                         QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text=f"{bot_trigger_keyword} 防詐騙測試")),
                         QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text=f"{bot_trigger_keyword} 詐騙類型列表")),
@@ -1501,7 +1501,7 @@ if handler:
                                             style="primary",
                                             color="#FF6B6B",
                                             action=MessageAction(
-                                                label="🔍 文字安全檢查",
+                                                label="🔍 文字或網站分析",
                                                 text=f"{bot_trigger_keyword} 請幫我分析這則訊息："
                                             )
                                         ),
