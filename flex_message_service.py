@@ -60,7 +60,7 @@ class FlexMessageService:
             
             # 設定標題
             if is_health_product_analysis:
-                title = "🔬 產品科學分析"
+                title = "🔬 健康科學分析"
             else:
                 title = "🔍 詐騙風險分析"
             
