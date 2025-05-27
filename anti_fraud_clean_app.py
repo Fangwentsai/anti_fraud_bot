@@ -856,7 +856,7 @@ if handler:
                         f"💡 點擊下方按鈕，或直接告訴我你需要什麼！"
                 
             quick_reply = QuickReply(items=[
-                QuickReplyButton(action=MessageAction(label="🔍 檢查網站安全", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
+                QuickReplyButton(action=MessageAction(label="🔍 文字安全檢查", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
                 QuickReplyButton(action=MessageAction(label="📷 上傳截圖分析", text=f"{bot_trigger_keyword} 請幫我分析圖片：")),
                 QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text=f"{bot_trigger_keyword} 防詐騙測試")),
                 QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text=f"{bot_trigger_keyword} 詐騙類型列表")),
@@ -897,7 +897,7 @@ if handler:
                                     style="primary",
                                     color="#FF6B6B",
                                     action=MessageAction(
-                                        label="🔍 檢查網站安全",
+                                        label="🔍 文字安全檢查",
                                         text=f"{bot_trigger_keyword} 請幫我分析這則訊息："
                                     )
                                 ),
@@ -1460,7 +1460,7 @@ if handler:
                                 f"💡 點擊下方按鈕，或直接告訴我你需要什麼！"
                     
                     quick_reply = QuickReply(items=[
-                        QuickReplyButton(action=MessageAction(label="🔍 檢查網站安全", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
+                        QuickReplyButton(action=MessageAction(label="🔍 文字安全檢查", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
                         QuickReplyButton(action=MessageAction(label="📷 上傳截圖分析", text=f"{bot_trigger_keyword} 請幫我分析圖片：")),
                         QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text=f"{bot_trigger_keyword} 防詐騙測試")),
                         QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text=f"{bot_trigger_keyword} 詐騙類型列表")),
@@ -1501,7 +1501,7 @@ if handler:
                                             style="primary",
                                             color="#FF6B6B",
                                             action=MessageAction(
-                                                label="🔍 檢查網站安全",
+                                                label="🔍 文字安全檢查",
                                                 text=f"{bot_trigger_keyword} 請幫我分析這則訊息："
                                             )
                                         ),
