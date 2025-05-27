@@ -1125,6 +1125,14 @@ if handler:
             # 檢查是否為產品真偽詢問
             product_name = extract_health_product(text_message, bot_trigger_keyword)
             
+            # 檢查是否包含白名單關鍵詞，即使問句格式不標準也可以直接分析
+            if not product_name and bot_trigger_keyword in text_message:
+                for keyword in BEAUTY_HEALTH_WHITELIST:
+                    if keyword in text_message:
+                        logger.info(f"直接從白名單關鍵詞提取產品名: {keyword}")
+                        product_name = keyword
+                        break
+            
             if product_name:
                 logger.info(f"檢測到產品真偽詢問: {product_name}")
                 
@@ -1888,6 +1896,14 @@ def extract_health_product(query, bot_trigger_keyword='土豆'):
     返回:
         str: 提取出的產品名稱，如果無法提取則返回None
     """
+    # 先檢查是否包含白名單關鍵詞，直接返回第一個匹配的關鍵詞
+    if bot_trigger_keyword in query:
+        cleaned_query = query.replace(bot_trigger_keyword, "").strip()
+        for keyword in BEAUTY_HEALTH_WHITELIST:
+            if keyword in cleaned_query:
+                logger.info(f"從白名單直接匹配到產品: {keyword}")
+                return keyword
+    
     # 終極版正則表達式 - 處理各種複雜的格式問題
     pattern = re.compile(
         r'.*?' + re.escape(bot_trigger_keyword) + r'.*?' +  # 匹配觸發詞及其前後文字
@@ -1908,6 +1924,16 @@ def extract_health_product(query, bot_trigger_keyword='土豆'):
     
     match = pattern.search(query)
     if not match:
+        # 嘗試更寬鬆的模式：包含關鍵詞且有疑問詞
+        loose_pattern = re.compile(
+            r'.*?' + re.escape(bot_trigger_keyword) + r'.*?' +  # 匹配觸發詞
+            r'.*?([\u4e00-\u9fff]{2,10})(?:.*?(?:嗎|呢|怎麼樣|如何|可以|安全|效果)[?？]?)?'  # 匹配2-10個中文字符後跟疑問詞
+        )
+        loose_match = loose_pattern.search(query)
+        if loose_match:
+            potential_product = loose_match.group(1)
+            logger.info(f"使用寬鬆模式匹配到可能的產品: {potential_product}")
+            return clean_product_name(potential_product)
         return None
     
     product_name = match.group(1)
