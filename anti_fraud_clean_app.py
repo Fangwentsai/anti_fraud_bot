@@ -399,6 +399,183 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                 "raw_result": f"網域變形攻擊檢測：{spoofing_result['spoofing_type']} - {spoofing_result['risk_explanation']}"
             }
 
+        # 檢查招聘訊息是否為低風險
+        recruitment_keywords = ["招聘", "招募", "徵才", "應徵", "面試", "職缺", "工作機會", "求才", "求職", "人才", "履歷", "人力銀行", "104人力銀行"]
+        is_recruitment_message = any(keyword in user_message for keyword in recruitment_keywords)
+        
+        if is_recruitment_message:
+            # 檢查是否包含正規人力銀行平台
+            has_job_bank = any(platform in user_message for platform in ["104人力銀行", "104", "1111人力銀行", "1111", "518人力銀行", "518", "yes123", "人力銀行"])
+            
+            # 檢查是否有完整公司名稱
+            company_pattern = re.compile(r'[^\s]{2,}(?:股份有限公司|有限公司|公司|企業社|工作室|事務所)')
+            has_company_name = bool(company_pattern.search(user_message))
+            
+            # 檢查是否有合法聯絡方式
+            phone_pattern = re.compile(r'(?:(?:連絡|聯絡|聯繫|電話|手機|聯絡電話|連絡電話)(?:電話)?[:：]?\s*)?(?:\(?\s*(?:0800|0[2-9]|0[2-9]-\d{7}|\d{2}-\d{6,8}|\d{2}\d{8}|09\d{2}[ -]?\d{6}|09\d{8})\)?(?:\s*(?:分機|#|ext|轉)\s*\d{2,5})?)', re.IGNORECASE)
+            has_phone = bool(phone_pattern.search(user_message))
+            
+            # 檢查是否有聯絡人
+            contact_pattern = re.compile(r'(?:(?:連絡|聯絡|聯繫)(?:人|窗口|人員)[:：]?\s*)([\u4e00-\u9fff]{1,3}(?:先生|小姐|專員|經理|主任|組長|店長)?)|(?:([\u4e00-\u9fff]{1,3})(?:先生|小姐|專員|經理|主任))', re.IGNORECASE)
+            has_contact_person = bool(contact_pattern.search(user_message))
+            
+            # 檢查是否有工作內容描述
+            job_description_pattern = re.compile(r'(?:工作內容|職務內容|工作職責|工作描述|工作項目|職務項目)')
+            has_job_description = bool(job_description_pattern.search(user_message))
+            
+            # 檢查是否有薪資資訊
+            salary_pattern = re.compile(r'(?:薪資|待遇|月薪|時薪)(?:：|:|\s)*(?:\d{2,6}[~-至]?(?:\d{2,6})?\s*(?:元|萬元|月|年薪)?)')
+            has_salary_info = bool(salary_pattern.search(user_message))
+            
+            # 檢查是否有面試地點或工作地點
+            location_pattern = re.compile(r'(?:面試地(?:點|址)|工作地(?:點|址)|地(?:點|址)|公司地(?:點|址))[:：]?\s*(?:[\u4e00-\u9fff]+(?:市|縣|區)[\u4e00-\u9fff0-9]+(?:路|街|道)[\u4e00-\u9fff0-9號]+)')
+            has_location = bool(location_pattern.search(user_message))
+            
+            # 檢查是否有明確的工作/面試時間
+            time_pattern = re.compile(r'(?:工作時間|上班時間|出勤時間|面試時間)[:：]?\s*(?:[上下]午|\d{1,2}[.:：]\d{2}[~-至]\d{1,2}[.:：]\d{2}|(?:週|星期)[一二三四五六日])')
+            has_time_info = bool(time_pattern.search(user_message))
+            
+            # 檢查是否有可疑要求
+            suspicious_requests = ["預付", "先付", "支付費用", "繳納保證金", "繳交", "繳費", "保證金", "訂金", "先轉帳", "先匯款", "面試費", "報名費", "資料處理費", "審核費"]
+            has_suspicious_requests = any(request in user_message for request in suspicious_requests)
+            
+            # 檢查是否包含高薪誘餌
+            bait_pattern = re.compile(r'(?:高薪|高額獎金|獎金無上限|輕鬆賺|輕鬆(?:\d{1,2})萬|(?:\d{1,2})萬起)')
+            has_salary_bait = bool(bait_pattern.search(user_message))
+            
+            # 檢查是否為可疑的兼職類型
+            suspicious_part_time_jobs = [
+                "網路兼職", "打字兼職", "刷單", "購物助理", "網購助理", "日結", "日領", "小時工", 
+                "網賺", "網絡賺錢", "在家工作", "零投入", "零門檻", "兼職賺錢", "輕鬆兼職", 
+                "賺外快", "代練", "代購", "代刷", "網店代運營", "點贊", "點擊", "評論", "包養"
+            ]
+            has_suspicious_part_time = any(job_type in user_message for job_type in suspicious_part_time_jobs)
+            
+            # 檢查是否要求添加個人社交媒體帳號
+            social_media_pattern = re.compile(r'(?:加|添加|聯繫|聯絡|私聊)(?:我的?|群主的?|老師的?)?(?:LINE|微信|WeChat|telegram|TG|IG|私人|私聊)', re.IGNORECASE)
+            requires_social_media = bool(social_media_pattern.search(user_message))
+            
+            # 檢查是否包含典型詐騙招聘關鍵詞組合
+            scam_combinations = [
+                (has_salary_bait and has_suspicious_part_time),  # 高薪+可疑兼職類型
+                (has_salary_bait and requires_social_media and not has_job_bank),  # 高薪+要求加LINE等+非正規平台
+                (has_suspicious_part_time and requires_social_media),  # 可疑兼職+要求加LINE等
+                (has_salary_bait and "無需經驗" in user_message),  # 高薪+無需經驗
+                (has_salary_bait and "無經驗" in user_message),  # 高薪+無經驗
+                (has_salary_bait and "兼職" in user_message and "在家" in user_message)  # 高薪+兼職+在家工作
+            ]
+            
+            is_likely_scam_job = any(scam_combinations)
+            
+            # 明確的詐騙指標
+            if is_likely_scam_job or has_suspicious_requests:
+                logger.warning(f"檢測到可疑招聘訊息，疑似詐騙")
+                
+                explanation = "這則招聘訊息存在多個可疑特徵，可能是詐騙："
+                if has_salary_bait:
+                    explanation += "\n• 過高或不合理的薪資承諾"
+                if has_suspicious_part_time:
+                    explanation += "\n• 可疑的兼職類型（如網路兼職、刷單、代購等）"
+                if requires_social_media:
+                    explanation += "\n• 要求加入個人社交媒體帳號而非透過正規管道應徵"
+                if has_suspicious_requests:
+                    explanation += "\n• 要求預先支付費用或保證金"
+                if not has_job_bank and not has_company_name:
+                    explanation += "\n• 沒有明確的公司資訊或非透過正規人力銀行平台"
+                
+                suggestions = "🚨 求職安全警告：\n"
+                suggestions += "• 合法企業不會要求應徵者預付任何費用\n"
+                suggestions += "• 對過高薪資承諾要特別警惕，尤其是無經驗要求的工作\n"
+                suggestions += "• 建議透過104、1111等正規人力銀行平台求職\n"
+                suggestions += "• 可向165反詐騙專線諮詢\n"
+                suggestions += "• 避免加入不明人士的社交媒體或通訊軟體"
+                
+                return {
+                    "success": True,
+                    "message": "分析完成",
+                    "result": {
+                        "risk_level": "高風險",
+                        "fraud_type": "可疑招聘詐騙",
+                        "explanation": explanation,
+                        "suggestions": suggestions,
+                        "is_emerging": True,
+                        "display_name": display_name,
+                        "original_url": original_url,
+                        "expanded_url": expanded_url,
+                        "is_short_url": is_short_url,
+                        "url_expanded_successfully": url_expanded_successfully
+                    },
+                    "raw_result": "經過分析，這可能是招聘詐騙訊息，具有多個可疑特徵。"
+                }
+            
+            # 計算招聘信息的安全得分
+            recruitment_safety_score = 0
+            if has_job_bank:
+                recruitment_safety_score += 3  # 使用正規人力銀行是很重要的安全指標
+            if has_company_name:
+                recruitment_safety_score += 2  # 提供完整公司名稱
+            if has_phone:
+                recruitment_safety_score += 1  # 提供電話
+            if has_contact_person:
+                recruitment_safety_score += 1  # 提供聯絡人
+            if has_job_description:
+                recruitment_safety_score += 1  # 提供工作內容
+            if has_salary_info:
+                recruitment_safety_score += 1  # 提供薪資資訊
+            if has_location:
+                recruitment_safety_score += 2  # 提供面試/工作地點
+            if has_time_info:
+                recruitment_safety_score += 1  # 提供工作/面試時間
+            if has_suspicious_requests:
+                recruitment_safety_score -= 5  # 有可疑要求大幅降低安全分數
+            if has_salary_bait and not has_job_description:
+                recruitment_safety_score -= 2  # 只有高薪誘餌但無詳細工作內容
+            
+            # 若招聘信息安全得分高，判定為低風險
+            if recruitment_safety_score >= 5 and not has_suspicious_requests:
+                logger.info(f"檢測到正常招聘訊息，安全得分: {recruitment_safety_score}")
+                
+                # 產生合適的解釋文本
+                explanation = "這看起來是一則正常的求職招聘訊息，"
+                if has_job_bank:
+                    explanation += "透過正規人力銀行平台發布，"
+                if has_company_name:
+                    explanation += "有完整的公司名稱，"
+                if has_phone:
+                    explanation += "提供了聯絡電話，"
+                if has_contact_person:
+                    explanation += "有明確的聯絡窗口，"
+                if has_location:
+                    explanation += "提供了面試/工作地點，"
+                if has_time_info:
+                    explanation += "說明了工作/面試時間，"
+                explanation += "整體來說風險較低。"
+                
+                suggestions = "✅ 求職安全提醒：\n"
+                suggestions += "• 在面試前先查詢該公司的背景和評價\n"
+                suggestions += "• 面試地點應選擇在公司正式辦公地點\n"
+                suggestions += "• 留意是否要求預付任何費用（正常公司不會要求）\n"
+                suggestions += "• 提供個人資料時應保持謹慎\n"
+                suggestions += "• 若有疑慮，可透過104或1111等人力銀行官方管道查詢"
+                
+                return {
+                    "success": True,
+                    "message": "分析完成",
+                    "result": {
+                        "risk_level": "低風險",
+                        "fraud_type": "正常招聘資訊",
+                        "explanation": explanation,
+                        "suggestions": suggestions,
+                        "is_emerging": False,
+                        "display_name": display_name,
+                        "original_url": original_url,
+                        "expanded_url": expanded_url,
+                        "is_short_url": is_short_url,
+                        "url_expanded_successfully": url_expanded_successfully
+                    },
+                    "raw_result": f"經過分析，這是正常的招聘資訊，安全得分: {recruitment_safety_score}"
+                }
+
         # 檢查白名單網址
         url_pattern_detailed = re.compile(r'https?://[^\s\u4e00-\u9fff，。！？；：]+|www\.[^\s\u4e00-\u9fff，。！？；：]+|[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?(?:/[^\s\u4e00-\u9fff，。！？；：]*)?')
         urls = url_pattern_detailed.findall(analysis_message)
