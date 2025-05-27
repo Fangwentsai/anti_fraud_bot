@@ -920,96 +920,22 @@ if handler:
             logger.info(f"用戶處於等待分析狀態，強制執行詐騙分析: {cleaned_message}")
             current_state["waiting_for_analysis"] = False
             user_conversation_state[user_id] = current_state
-        
-        # 執行詐騙分析
-        analysis_result = detect_fraud_with_chatgpt(cleaned_message, display_name, user_id)
-        
-        if analysis_result and analysis_result.get("success", False):
-            analysis_data = analysis_result.get("result", {})
-            
-            # 檢查是否是網域變形攻擊
-            if analysis_data.get("is_domain_spoofing", False):
-                spoofing_result = analysis_data.get("spoofing_result", {})
-                
-                unified_analysis_data = {
-                    "risk_level": "極高",
-                    "fraud_type": "網域偽裝攻擊",
-                    "explanation": f"⚠️ 詐騙集團可能假冒此網域騙取您的信用卡或銀行帳戶個資，請務必小心！\n\n🔴 可疑網域: {spoofing_result.get('spoofed_domain', '未知')}\n🟢 正版網域: {spoofing_result.get('original_domain', '未知')}\n📝 說明: {spoofing_result.get('risk_explanation', '這是一個可疑的假冒網域')}",
-                    "suggestions": "🚫 千萬不要點擊可疑網址或提供任何個人資料\n🔍 若需使用正版網站，請直接搜尋官方網站\n📞 可撥打165反詐騙專線確認或諮詢"
-                }
-                
-                flex_message = create_analysis_flex_message(unified_analysis_data, display_name, cleaned_message, user_id)
-            else:
-                flex_message = create_analysis_flex_message(analysis_data, display_name, cleaned_message, user_id)
-            
-            # 發送Flex消息
-            if flex_message:
-                try:
-                    line_bot_api.reply_message(reply_token, flex_message)
-                    logger.info(f"使用舊版API回覆分析成功: {user_id}")
-                except LineBotApiError as e:
-                    logger.error(f"發送Flex Message時發生錯誤: {e}")
-                    if "Invalid reply token" in str(e):
-                        try:
-                            line_bot_api.push_message(user_id, flex_message)
-                            logger.info(f"分析回覆令牌無效，改用push_message成功: {user_id}")
-                        except Exception as push_error:
-                            logger.error(f"分析使用push_message也失敗: {push_error}")
-                except Exception as e:
-                    logger.error(f"發送Flex Message時發生未知錯誤: {e}")
-                    # 發送基本文本消息
-                    risk_level = analysis_data.get("risk_level", "不確定")
-                    fraud_type = analysis_data.get("fraud_type", "未知")
-                    explanation = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
-                    suggestions = analysis_data.get("suggestions", "請隨時保持警惕。")
-                    
-                    text_response = f"🔍 風險分析結果\n\n風險等級：{risk_level}\n詐騙類型：{fraud_type}\n\n說明：{explanation}\n\n建議：{suggestions}"
-                    
-                    try:
-                        line_bot_api.reply_message(reply_token, TextSendMessage(text=text_response))
-                    except Exception as text_error:
-                        logger.error(f"發送文本回覆也失敗: {text_error}")
-            else:
-                # 如果Flex消息創建失敗，發送基本文本消息
-                risk_level = analysis_data.get("risk_level", "不確定")
-                fraud_type = analysis_data.get("fraud_type", "未知")
-                explanation = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
-                suggestions = analysis_data.get("suggestions", "請隨時保持警惕。")
-                
-                text_response = f"🔍 風險分析結果\n\n風險等級：{risk_level}\n詐騙類型：{fraud_type}\n\n說明：{explanation}\n\n建議：{suggestions}"
-                
-                try:
-                    line_bot_api.reply_message(reply_token, TextSendMessage(text=text_response))
-                except Exception as text_error:
-                    logger.error(f"發送文本回覆失敗: {text_error}")
+            perform_fraud_analysis = True
         else:
-            # 分析失敗的情況
-            error_message = analysis_result.get("message", "分析失敗，請稍後再試") if analysis_result else "分析失敗，請稍後再試"
-            try:
-                if v3_messaging_api:
-                    from linebot.v3.messaging import TextMessage as V3TextMessage
-                    from linebot.v3.messaging import ReplyMessageRequest
-                    v3_messaging_api.reply_message(
-                        ReplyMessageRequest(
-                            reply_token=reply_token,
-                            messages=[V3TextMessage(text=error_message)]
-                       )
-                    )
-                else:
-                    line_bot_api.reply_message(reply_token, TextSendMessage(text=error_message))
-            except Exception as error_send_error:
-                logger.error(f"發送錯誤訊息失敗: {error_send_error}")
+            # 使用 should_perform_fraud_analysis 函數判斷是否應該進行詐騙分析
+            perform_fraud_analysis = should_perform_fraud_analysis(cleaned_message, user_id)
+            logger.info(f"決定是否執行詐騙分析: {perform_fraud_analysis}")
         
-        return
-
-        # 正常的詐騙分析判斷
-        if should_perform_fraud_analysis(cleaned_message, user_id):
-            logger.info(f"執行詐騙分析: {cleaned_message}")
+        # 根據判斷結果執行詐騙分析或閒聊模式
+        if perform_fraud_analysis:
+            # 執行詐騙分析
+            logger.info(f"進入詐騙分析模式: {cleaned_message}")
             analysis_result = detect_fraud_with_chatgpt(cleaned_message, display_name, user_id)
             
             if analysis_result and analysis_result.get("success", False):
                 analysis_data = analysis_result.get("result", {})
                 
+                # 檢查是否是網域變形攻擊
                 if analysis_data.get("is_domain_spoofing", False):
                     spoofing_result = analysis_data.get("spoofing_result", {})
                     
@@ -1024,20 +950,22 @@ if handler:
                 else:
                     flex_message = create_analysis_flex_message(analysis_data, display_name, cleaned_message, user_id)
                 
+                # 發送Flex消息
                 if flex_message:
                     try:
                         line_bot_api.reply_message(reply_token, flex_message)
-                        logger.info(f"使用舊版API回覆網頁分析成功: {user_id}")
+                        logger.info(f"使用舊版API回覆分析成功: {user_id}")
                     except LineBotApiError as e:
                         logger.error(f"發送Flex Message時發生錯誤: {e}")
                         if "Invalid reply token" in str(e):
                             try:
                                 line_bot_api.push_message(user_id, flex_message)
-                                logger.info(f"網頁分析回覆令牌無效，改用push_message成功: {user_id}")
+                                logger.info(f"分析回覆令牌無效，改用push_message成功: {user_id}")
                             except Exception as push_error:
-                                logger.error(f"網頁分析使用push_message也失敗: {push_error}")
+                                logger.error(f"分析使用push_message也失敗: {push_error}")
                     except Exception as e:
                         logger.error(f"發送Flex Message時發生未知錯誤: {e}")
+                        # 發送基本文本消息
                         risk_level = analysis_data.get("risk_level", "不確定")
                         fraud_type = analysis_data.get("fraud_type", "未知")
                         explanation = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
@@ -1050,6 +978,7 @@ if handler:
                         except Exception as text_error:
                             logger.error(f"發送文本回覆也失敗: {text_error}")
                 else:
+                    # 如果Flex消息創建失敗，發送基本文本消息
                     risk_level = analysis_data.get("risk_level", "不確定")
                     fraud_type = analysis_data.get("fraud_type", "未知")
                     explanation = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
@@ -1062,6 +991,7 @@ if handler:
                     except Exception as text_error:
                         logger.error(f"發送文本回覆失敗: {text_error}")
             else:
+                # 分析失敗的情況
                 error_message = analysis_result.get("message", "分析失敗，請稍後再試") if analysis_result else "分析失敗，請稍後再試"
                 try:
                     if v3_messaging_api:
@@ -1077,74 +1007,109 @@ if handler:
                         line_bot_api.reply_message(reply_token, TextSendMessage(text=error_message))
                 except Exception as error_send_error:
                     logger.error(f"發送錯誤訊息失敗: {error_send_error}")
-            
-            return
-
-        logger.info(f"進入一般聊天模式: {cleaned_message}")
-        try:
-            chat_response = openai_client.chat.completions.create(
-                model=OPENAI_MODEL,
-                messages=[
-                 {"role": "system", "content": "你是一位名為「土豆」的AI聊天機器人，專門幫助50-60歲的長輩防範詐騙。你的說話風格要：\n1. 非常簡單易懂，像鄰居朋友在聊天\n2. 用溫暖親切的語氣，不要太正式\n3. 當給建議時，一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號\n4. 避免複雜的專業術語，用日常生活的話來解釋\n5. 當用戶提到投資、轉帳、可疑訊息時，要特別關心並給出簡單明確的建議\n6. 回應要簡短，不要太長篇大論"},
-                 {"role": "user", "content": cleaned_message}
-                ],
-                temperature=CHAT_TEMPERATURE,
-                max_tokens=CHAT_MAX_TOKENS
-            )
-            
-            if chat_response and chat_response.choices:
-                chat_reply = chat_response.choices[0].message.content.strip()
+        else:
+            # 閒聊模式
+            logger.info(f"進入一般聊天模式: {cleaned_message}")
+            try:
+                chat_response = openai_client.chat.completions.create(
+                    model=OPENAI_MODEL,
+                    messages=[
+                     {"role": "system", "content": "你是一位名為「土豆」的AI聊天機器人，專門幫助50-60歲的長輩防範詐騙。你的說話風格要：\n1. 非常簡單易懂，像鄰居朋友在聊天\n2. 用溫暖親切的語氣，不要太正式\n3. 當給建議時，一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號\n4. 避免複雜的專業術語，用日常生活的話來解釋\n5. 當用戶提到投資、轉帳、可疑訊息時，要特別關心並給出簡單明確的建議\n6. 回應要簡短，不要太長篇大論"},
+                     {"role": "user", "content": cleaned_message}
+                    ],
+                    temperature=CHAT_TEMPERATURE,
+                    max_tokens=CHAT_MAX_TOKENS
+                )
                 
-                if random.random() < CHAT_TIP_PROBABILITY:
-                    tips = get_anti_fraud_tips()
-                    if tips:
-                        random_tip = random.choice(tips)
-                        chat_reply += f"\n\n💡 小提醒：{random_tip}"
-                
-                if len(chat_reply) > LINE_MESSAGE_SAFE_LENGTH:
-                    chat_reply = chat_reply[:LINE_MESSAGE_SAFE_LENGTH] + "..."
-                
-                introduction = f"\n\n💫 我是您的專業防詐騙助手！經過全面測試，我能為您提供：\n🔍 網站安全檢查\n🎯 防詐騙知識測驗\n📚 詐騙案例查詢\n\n有任何可疑訊息都歡迎直接傳給我分析喔！"
-                
-                if user_id not in first_time_chatters:
-                    first_time_chatters.add(user_id)
-                    if len(chat_reply + introduction) <= LINE_MESSAGE_SAFE_LENGTH:
-                        chat_reply += introduction
-                
-                try:
-                    if v3_messaging_api:
-                        from linebot.v3.messaging import TextMessage as V3TextMessage
-                        from linebot.v3.messaging import ReplyMessageRequest
-                        v3_messaging_api.reply_message(
-                            ReplyMessageRequest(
-                                reply_token=reply_token,
-                                messages=[V3TextMessage(text=chat_reply)]
-                           )
-                        )
-                        logger.info(f"使用v3 API回覆成功: {user_id}")
-                    else:
-                        line_bot_api.reply_message(reply_token, TextSendMessage(text=chat_reply))
-                except LineBotApiError as e:
-                    logger.error(f"使用LINE API回覆時發生錯誤: {e}")
-                    if "Invalid reply token" in str(e):
-                        try:
-                            if v3_messaging_api:
-                                from linebot.v3.messaging import TextMessage as V3TextMessage
-                                from linebot.v3.messaging import PushMessageRequest
-                                
-                                v3_messaging_api.push_message(
-                                    PushMessageRequest(
-                                        to=user_id,
-                                        messages=[V3TextMessage(text=chat_reply)]
-                                   )
-                                )
-                            else:
-                                line_bot_api.push_message(user_id, TextSendMessage(text=chat_reply))
-                            logger.info(f"回覆令牌無效，改用push_message成功: {user_id}")
-                        except Exception as push_error:
-                            logger.error(f"使用push_message也失敗: {push_error}")
-            else:
-                fallback_message = "我現在有點忙，不過如果您有可疑訊息需要分析，我隨時可以幫忙喔！ 😊"
+                if chat_response and chat_response.choices:
+                    chat_reply = chat_response.choices[0].message.content.strip()
+                    
+                    if random.random() < CHAT_TIP_PROBABILITY:
+                        tips = get_anti_fraud_tips()
+                        if tips:
+                            random_tip = random.choice(tips)
+                            chat_reply += f"\n\n💡 小提醒：{random_tip}"
+                    
+                    if len(chat_reply) > LINE_MESSAGE_SAFE_LENGTH:
+                        chat_reply = chat_reply[:LINE_MESSAGE_SAFE_LENGTH] + "..."
+                    
+                    introduction = f"\n\n💫 我是您的專業防詐騙助手！經過全面測試，我能為您提供：\n🔍 網站安全檢查\n🎯 防詐騙知識測驗\n📚 詐騙案例查詢\n\n有任何可疑訊息都歡迎直接傳給我分析喔！"
+                    
+                    if user_id not in first_time_chatters:
+                        first_time_chatters.add(user_id)
+                        if len(chat_reply + introduction) <= LINE_MESSAGE_SAFE_LENGTH:
+                            chat_reply += introduction
+                    
+                    try:
+                        if v3_messaging_api:
+                            from linebot.v3.messaging import TextMessage as V3TextMessage
+                            from linebot.v3.messaging import ReplyMessageRequest
+                            v3_messaging_api.reply_message(
+                                ReplyMessageRequest(
+                                    reply_token=reply_token,
+                                    messages=[V3TextMessage(text=chat_reply)]
+                               )
+                            )
+                            logger.info(f"使用v3 API回覆成功: {user_id}")
+                        else:
+                            line_bot_api.reply_message(reply_token, TextSendMessage(text=chat_reply))
+                    except LineBotApiError as e:
+                        logger.error(f"使用LINE API回覆時發生錯誤: {e}")
+                        if "Invalid reply token" in str(e):
+                            try:
+                                if v3_messaging_api:
+                                    from linebot.v3.messaging import TextMessage as V3TextMessage
+                                    from linebot.v3.messaging import PushMessageRequest
+                                    
+                                    v3_messaging_api.push_message(
+                                        PushMessageRequest(
+                                            to=user_id,
+                                            messages=[V3TextMessage(text=chat_reply)]
+                                       )
+                                    )
+                                else:
+                                    line_bot_api.push_message(user_id, TextSendMessage(text=chat_reply))
+                                logger.info(f"回覆令牌無效，改用push_message成功: {user_id}")
+                            except Exception as push_error:
+                                logger.error(f"使用push_message也失敗: {push_error}")
+                else:
+                    fallback_message = "我現在有點忙，不過如果您有可疑訊息需要分析，我隨時可以幫忙喔！ 😊"
+                    
+                    try:
+                        if v3_messaging_api:
+                            from linebot.v3.messaging import TextMessage as V3TextMessage
+                            from linebot.v3.messaging import ReplyMessageRequest
+                            v3_messaging_api.reply_message(
+                                ReplyMessageRequest(
+                                    reply_token=reply_token,
+                                    messages=[V3TextMessage(text=fallback_message)]
+                               )
+                            )
+                        else:
+                            line_bot_api.reply_message(reply_token, TextSendMessage(text=fallback_message))
+                    except LineBotApiError as e:
+                        logger.error(f"發送fallback訊息時發生LINE API錯誤: {e}")
+                        if "Invalid reply token" in str(e):
+                            try:
+                                if v3_messaging_api:
+                                    from linebot.v3.messaging import TextMessage as V3TextMessage
+                                    from linebot.v3.messaging import PushMessageRequest
+                                    
+                                    v3_messaging_api.push_message(
+                                        PushMessageRequest(
+                                            to=user_id,
+                                            messages=[V3TextMessage(text=fallback_message)]
+                                       )
+                                    )
+                                else:
+                                    line_bot_api.push_message(user_id, TextSendMessage(text=fallback_message))
+                                logger.info(f"fallback訊息使用push_message成功: {user_id}")
+                            except Exception as push_error:
+                                logger.error(f"發送fallback訊息時使用push_message也失敗: {push_error}")
+                    
+            except Exception as e:
+                logger.exception(f"生成聊天回應時發生錯誤: {e}")
+                fallback_message = "不好意思，我現在有點狀況，不過如果您有可疑訊息需要分析，我隨時可以幫忙！ 😊"
                 
                 try:
                     if v3_messaging_api:
@@ -1159,7 +1124,7 @@ if handler:
                     else:
                         line_bot_api.reply_message(reply_token, TextSendMessage(text=fallback_message))
                 except LineBotApiError as e:
-                    logger.error(f"發送fallback訊息時發生LINE API錯誤: {e}")
+                    logger.error(f"發送錯誤fallback訊息時發生LINE API錯誤: {e}")
                     if "Invalid reply token" in str(e):
                         try:
                             if v3_messaging_api:
@@ -1174,46 +1139,10 @@ if handler:
                                 )
                             else:
                                 line_bot_api.push_message(user_id, TextSendMessage(text=fallback_message))
-                            logger.info(f"fallback訊息使用push_message成功: {user_id}")
+                            logger.info(f"錯誤fallback訊息使用push_message成功: {user_id}")
                         except Exception as push_error:
-                            logger.error(f"發送fallback訊息時使用push_message也失敗: {push_error}")
-                
-        except Exception as e:
-            logger.exception(f"生成聊天回應時發生錯誤: {e}")
-            fallback_message = "不好意思，我現在有點狀況，不過如果您有可疑訊息需要分析，我隨時可以幫忙！ 😊"
+                            logger.error(f"發送錯誤fallback訊息時使用push_message也失敗: {push_error}")
             
-            try:
-                if v3_messaging_api:
-                    from linebot.v3.messaging import TextMessage as V3TextMessage
-                    from linebot.v3.messaging import ReplyMessageRequest
-                    v3_messaging_api.reply_message(
-                        ReplyMessageRequest(
-                            reply_token=reply_token,
-                            messages=[V3TextMessage(text=fallback_message)]
-                       )
-                    )
-                else:
-                    line_bot_api.reply_message(reply_token, TextSendMessage(text=fallback_message))
-            except LineBotApiError as e:
-                logger.error(f"發送錯誤fallback訊息時發生LINE API錯誤: {e}")
-                if "Invalid reply token" in str(e):
-                    try:
-                        if v3_messaging_api:
-                            from linebot.v3.messaging import TextMessage as V3TextMessage
-                            from linebot.v3.messaging import PushMessageRequest
-                            
-                            v3_messaging_api.push_message(
-                                PushMessageRequest(
-                                    to=user_id,
-                                    messages=[V3TextMessage(text=fallback_message)]
-                               )
-                            )
-                        else:
-                            line_bot_api.push_message(user_id, TextSendMessage(text=fallback_message))
-                        logger.info(f"錯誤fallback訊息使用push_message成功: {user_id}")
-                    except Exception as push_error:
-                        logger.error(f"發送錯誤fallback訊息時使用push_message也失敗: {push_error}")
-
     @handler.add(PostbackEvent)
     def handle_postback(event):
         """處理PostbackEvent（按鈕點擊事件）"""
@@ -1478,16 +1407,42 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
     """判斷是否應該進行詐騙分析"""
     message_lower = message.lower().strip()
     
-    if len(message_lower) < 3:
+    # 訊息太短的情況下不做分析
+    if len(message_lower) < 5:
         return False
     
+    # 1. 先排除明確是功能查詢或問候語的情況
     if any(keyword in message_lower for keyword in function_inquiry_keywords):
         return False
     
-    greetings = ["你好", "哈囉", "嗨", "hi", "hello", "早安", "午安", "晚安", "再見", "謝謝", "感謝"]
-    if any(greeting in message_lower for greeting in greetings) and len(message_lower) < 10:
+    # 2. 排除明確是閒聊的常見問題
+    chat_patterns = [
+        "怎麼做", "做法", "食譜", "教我", "告訴我", 
+        "介紹", "推薦", "什麼是", "解釋", "說明",
+        "好吃", "好玩", "有趣", "最近", "天氣",
+        "你認為", "你覺得", "你喜歡", "笑話", "故事"
+    ]
+    
+    if any(pattern in message_lower for pattern in chat_patterns):
+        logger.info(f"檢測到閒聊模式關鍵詞: {message_lower}")
         return False
     
+    # 3. 排除情感表達和問候語
+    emotion_patterns = [
+        "謝謝", "感謝", "開心", "難過", "生氣", "傷心", 
+        "好玩", "有趣", "無聊", "好笑", "感動", "感覺",
+        "喜歡", "愛", "恨", "討厭", "煩", "敏感"
+    ]
+    
+    if any(pattern in message_lower for pattern in emotion_patterns):
+        logger.info(f"檢測到情感表達關鍵詞: {message_lower}")
+        return False
+    
+    greetings = ["你好", "哈囉", "嗨", "hi", "hello", "早安", "午安", "晚安", "再見", "謝謝", "感謝"]
+    if any(greeting in message_lower for greeting in greetings) and len(message_lower) < 15:
+        return False
+    
+    # 4. 排除特定功能關鍵詞
     if any(keyword in message_lower for keyword in ["詐騙類型", "詐騙手法", "詐騙種類", "常見詐騙"]):
         return False
     
@@ -1497,25 +1452,52 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
     if is_weather_related(message):
         return False
     
+    # 5. 排除分析請求但沒有具體內容的情況
     analysis_request_keywords = ["請幫我分析這則訊息", "幫我分析訊息", "請分析這則訊息", "請幫我分析", "分析這則訊息"]
     if any(keyword in message and len(message.strip()) < 20 for keyword in analysis_request_keywords):
         logger.info("檢測到純粹的分析請求（沒有具體內容），不觸發詐騙分析")
         return False
     
+    # 檢查是否包含URL，如果包含則進行分析
     import re
     url_pattern = re.compile(r'(https?://[^\s\u4e00-\u9fff，。！？；：]+|www\.[^\s\u4e00-\u9fff，。！？；：]+|[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?(?:/[^\s\u4e00-\u9fff，。！？；：]*)?)')
     if url_pattern.search(message):
         logger.info("檢測到URL，觸發詐騙分析")
         return True
     
+    # 檢查是否包含明確的分析請求
     explicit_analysis_requests = [
-        "這是詐騙嗎", "這可靠嗎", "這是真的嗎", 
-        "這安全嗎", "可以相信嗎", "有問題嗎", "是騙人的嗎"
+        "這是詐騙嗎", "這可靠嗎", "這是真的嗎", "這個是真的嗎",
+        "這安全嗎", "可以相信嗎", "有問題嗎", "是騙人的嗎",
+        "是不是詐騙", "會是詐騙嗎", "風險高嗎", "安全性"
     ]
-    if any(request in message_lower for request in explicit_analysis_requests):
-        logger.info("檢測到明確分析請求")
-        return True
     
+    # 排除特定的誤判情況
+    false_positives = {
+        "兵免役是真的嗎": "可能是關於兵役的一般問題",
+        "兵役免役是真的嗎": "可能是關於兵役的一般問題",
+        "我可以免役嗎": "可能是關於兵役的一般問題",
+        "免役是真的嗎": "可能是關於兵役的一般問題",
+        "是真的嗎": "問句太廣泛，需要更多上下文",
+        "這是真的嗎": "問句太廣泛，需要更多上下文"
+    }
+    
+    for phrase, reason in false_positives.items():
+        if phrase in message_lower:
+            logger.info(f"排除誤判情況: '{phrase}' - {reason}")
+            return False
+    
+    if any(request in message_lower for request in explicit_analysis_requests):
+        # 只有當內容看起來像是詐騙相關時才進行分析
+        fraud_related_keywords = ["詐騙", "騙", "投資", "賺錢", "兼職", "入金", "儲值", "銀行", "轉帳", "匯款", "個資", "帳號", "密碼"]
+        if any(keyword in message_lower for keyword in fraud_related_keywords):
+            logger.info("檢測到明確分析請求 + 詐騙相關詞")
+            return True
+        else:
+            logger.info("檢測到分析請求但可能是閒聊")
+            return False
+    
+    # 檢查是否包含分析請求關鍵詞 + 內容
     analysis_request_patterns = [
         "請幫我分析", "幫我分析", "請分析", "分析一下", "幫忙分析",
         "請檢查", "幫我檢查", "檢查一下", "幫忙檢查"
@@ -1524,20 +1506,22 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
     for pattern in analysis_request_patterns:
         if pattern in message:
             remaining_content = message.replace(pattern, "").strip()
-            if len(remaining_content) > 3:
+            if len(remaining_content) > 5:
                 logger.info(f"檢測到分析請求關鍵詞：{pattern}，且有具體內容")
                 return True
     
-    analysis_keywords = ["分析", "詐騙", "安全", "可疑", "風險", "網站", "連結", "投資", "賺錢"]
+    # 檢查是否包含分析關鍵詞 + 疑問詞
+    analysis_keywords = ["詐騙", "安全", "可疑", "風險", "網站", "連結", "投資", "賺錢", "陌生人", "騙子"]
     question_words = ["嗎", "呢", "吧", "?", "？"]
     
     has_analysis_keyword = any(keyword in message_lower for keyword in analysis_keywords)
     has_question_word = any(word in message_lower for word in question_words)
     
     if has_analysis_keyword and has_question_word:
-        logger.info("檢測到分析關鍵詞+疑問詞組合")
+        logger.info("檢測到詐騙關鍵詞+疑問詞組合")
         return True
     
+    # 檢查是否包含多個詐騙關鍵詞
     fraud_keywords = ["詐騙", "被騙", "轉帳", "匯款", "投資", "賺錢", "兼職", "工作", "銀行", "帳號", "密碼", "個資", "中獎", "免費", "限時", "急"]
     fraud_count = sum(1 for keyword in fraud_keywords if keyword in message_lower)
     
@@ -1545,6 +1529,8 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
         logger.info(f"檢測到 {fraud_count} 個詐騙關鍵詞")
         return True
     
+    # 如果以上條件都不符合，則視為閒聊
+    logger.info("無明確詐騙分析指標，視為閒聊")
     return False
 
 # 初始化FlexMessageService
