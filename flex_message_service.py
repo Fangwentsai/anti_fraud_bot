@@ -568,7 +568,8 @@ class FlexMessageService:
         """根據風險等級取得對應顏色"""
         color_map = {
             "極高": self.colors["danger"],
-            "高": self.colors["warning"],
+            "高": self.colors["danger"],
+            "高風險": self.colors["danger"],
             "中高": self.colors["warning"],
             "中": "#FFA726",
             "低": self.colors["success"],
@@ -673,11 +674,13 @@ class FlexMessageService:
         header_color = "#3498DB"  # 默認藍色
         if risk_level == "極高":
             header_color = "#E74C3C"  # 紅色
-        elif risk_level == "高":
+        elif risk_level == "高" or risk_level == "高風險":
+            header_color = "#E74C3C"  # 紅色
+        elif risk_level == "中高":
             header_color = "#F39C12"  # 橙色
         elif risk_level == "中":
             header_color = "#3498DB"  # 藍色
-        elif risk_level == "低":
+        elif risk_level == "低" or risk_level == "低風險":
             header_color = "#2ECC71"  # 綠色
         
         # 創建詳情頁的內容
