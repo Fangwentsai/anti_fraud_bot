@@ -1011,10 +1011,27 @@ if handler:
             # 閒聊模式
             logger.info(f"進入一般聊天模式: {cleaned_message}")
             try:
+                # 檢查用戶狀態是否需要提供防詐騙教學
+                current_state = user_conversation_state.get(user_id, {})
+                need_fraud_prevention_tips = current_state.get("need_fraud_prevention_tips", False)
+                
+                system_prompt = "你是一位名為「土豆」的AI聊天機器人，專門幫助50-60歲的長輩防範詐騙。你的說話風格要：\n1. 非常簡單易懂，像鄰居朋友在聊天\n2. 用溫暖親切的語氣，不要太正式\n3. 當給建議時，一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號\n4. 避免複雜的專業術語，用日常生活的話來解釋\n5. 當用戶提到投資、轉帳、可疑訊息時，要特別關心並給出簡單明確的建議\n6. 回應要簡短，不要太長篇大論"
+                
+                # 如果是防詐騙教學請求，添加特殊指令
+                if need_fraud_prevention_tips:
+                    logger.info(f"用戶 {user_id} 需要防詐騙教學回應")
+                    
+                    # 移除標記，避免重複觸發
+                    current_state.pop("need_fraud_prevention_tips", None)
+                    user_conversation_state[user_id] = current_state
+                    
+                    # 添加防詐騙教學專用提示詞
+                    system_prompt += "\n\n用戶正在詢問如何防止被詐騙，這是一個重要的教育時刻。請提供以下內容：\n1. 3-5條簡單實用的防詐騙建議，每條前面加上適當的emoji\n2. 重點強調「停、看、聽、問」的防詐騙原則\n3. 針對常見詐騙類型（如假投資、假交友、釣魚網站）各提供1個防範要點\n4. 提醒用戶可以隨時詢問土豆關於詐騙分析和辨識\n\n回答應該結構清晰，語氣友善且堅定，內容要實用且易於記憶，總長度控制在300字以內。"
+                
                 chat_response = openai_client.chat.completions.create(
                     model=OPENAI_MODEL,
                     messages=[
-                     {"role": "system", "content": "你是一位名為「土豆」的AI聊天機器人，專門幫助50-60歲的長輩防範詐騙。你的說話風格要：\n1. 非常簡單易懂，像鄰居朋友在聊天\n2. 用溫暖親切的語氣，不要太正式\n3. 當給建議時，一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號\n4. 避免複雜的專業術語，用日常生活的話來解釋\n5. 當用戶提到投資、轉帳、可疑訊息時，要特別關心並給出簡單明確的建議\n6. 回應要簡短，不要太長篇大論"},
+                     {"role": "system", "content": system_prompt},
                      {"role": "user", "content": cleaned_message}
                     ],
                     temperature=CHAT_TEMPERATURE,
@@ -1024,7 +1041,7 @@ if handler:
                 if chat_response and chat_response.choices:
                     chat_reply = chat_response.choices[0].message.content.strip()
                     
-                    if random.random() < CHAT_TIP_PROBABILITY:
+                    if random.random() < CHAT_TIP_PROBABILITY and not need_fraud_prevention_tips:
                         tips = get_anti_fraud_tips()
                         if tips:
                             random_tip = random.choice(tips)
@@ -1035,7 +1052,7 @@ if handler:
                     
                     introduction = f"\n\n💫 我是您的專業防詐騙助手！經過全面測試，我能為您提供：\n🔍 網站安全檢查\n🎯 防詐騙知識測驗\n📚 詐騙案例查詢\n\n有任何可疑訊息都歡迎直接傳給我分析喔！"
                     
-                    if user_id not in first_time_chatters:
+                    if user_id not in first_time_chatters and not need_fraud_prevention_tips:
                         first_time_chatters.add(user_id)
                         if len(chat_reply + introduction) <= LINE_MESSAGE_SAFE_LENGTH:
                             chat_reply += introduction
@@ -1411,11 +1428,57 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
     if len(message_lower) < 5:
         return False
     
-    # 1. 先排除明確是功能查詢或問候語的情況
+    # 1. 如果使用者明確請求分析訊息，則直接進行詐騙分析
+    explicit_analysis_requests = [
+        "請幫我分析這則訊息", "幫我分析訊息", "請分析這則訊息", "幫我分析", 
+        "分析這則訊息", "分析一下這個", "檢查這個訊息", "看看這是不是詐騙"
+    ]
+    
+    if any(request in message_lower for request in explicit_analysis_requests):
+        logger.info(f"使用者明確要求分析訊息: {message_lower}")
+        return True
+    
+    # 2. 檢查是否包含URL，如果包含則自動進行分析
+    import re
+    url_pattern = re.compile(r'(https?://[^\s\u4e00-\u9fff，。！？；：]+|www\.[^\s\u4e00-\u9fff，。！？；：]+|[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?(?:/[^\s\u4e00-\u9fff，。！？；：]*)?)')
+    if url_pattern.search(message):
+        logger.info("檢測到URL，觸發詐騙分析")
+        return True
+    
+    # 3. 排除明確是功能查詢或問候語的情況
     if any(keyword in message_lower for keyword in function_inquiry_keywords):
         return False
     
-    # 2. 排除明確是閒聊的常見問題
+    # 4. 特殊處理"教我如何防詐騙"類請求
+    anti_fraud_teaching_patterns = [
+        "防止被詐騙", "避免被詐騙", "防詐騙", "防範詐騙", 
+        "怎麼防詐騙", "怎樣防詐騙", "如何防詐騙", 
+        "詐騙手法", "詐騙技巧", "詐騙方式", "詐騙案例",
+        "防止受騙", "避免受騙", "教我防詐騙"
+    ]
+    
+    teaching_keywords = ["教我", "告訴我", "如何", "怎麼", "怎樣", "方法"]
+    
+    # 檢查是否是防詐騙教學請求
+    is_anti_fraud_teaching_request = (
+        any(pattern in message_lower for pattern in anti_fraud_teaching_patterns) and
+        any(keyword in message_lower for keyword in teaching_keywords)
+    )
+    
+    if is_anti_fraud_teaching_request:
+        logger.info(f"檢測到防詐騙教學請求: {message_lower}，將通過閒聊模式處理")
+        
+        # 使用用戶狀態，標記需要提供防詐騙教學回應
+        if user_id:
+            user_state = get_user_state(user_id)
+            user_state["need_fraud_prevention_tips"] = True
+            update_user_state(user_id, user_state)
+            logger.info(f"已標記用戶 {user_id} 需要防詐騙教學回應")
+        
+        # 返回False使其進入閒聊模式，但帶有特殊標記
+        return False
+    
+    # 5. 排除明確是閒聊的常見問題
     chat_patterns = [
         "怎麼做", "做法", "食譜", "教我", "告訴我", 
         "介紹", "推薦", "什麼是", "解釋", "說明",
@@ -1427,7 +1490,7 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
         logger.info(f"檢測到閒聊模式關鍵詞: {message_lower}")
         return False
     
-    # 3. 排除情感表達和問候語
+    # 6. 排除情感表達和問候語
     emotion_patterns = [
         "謝謝", "感謝", "開心", "難過", "生氣", "傷心", 
         "好玩", "有趣", "無聊", "好笑", "感動", "感覺",
@@ -1442,7 +1505,7 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
     if any(greeting in message_lower for greeting in greetings) and len(message_lower) < 15:
         return False
     
-    # 4. 排除特定功能關鍵詞
+    # 7. 排除特定功能關鍵詞
     if any(keyword in message_lower for keyword in ["詐騙類型", "詐騙手法", "詐騙種類", "常見詐騙"]):
         return False
     
@@ -1452,27 +1515,7 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
     if is_weather_related(message):
         return False
     
-    # 5. 排除分析請求但沒有具體內容的情況
-    analysis_request_keywords = ["請幫我分析這則訊息", "幫我分析訊息", "請分析這則訊息", "請幫我分析", "分析這則訊息"]
-    if any(keyword in message and len(message.strip()) < 20 for keyword in analysis_request_keywords):
-        logger.info("檢測到純粹的分析請求（沒有具體內容），不觸發詐騙分析")
-        return False
-    
-    # 檢查是否包含URL，如果包含則進行分析
-    import re
-    url_pattern = re.compile(r'(https?://[^\s\u4e00-\u9fff，。！？；：]+|www\.[^\s\u4e00-\u9fff，。！？；：]+|[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?(?:/[^\s\u4e00-\u9fff，。！？；：]*)?)')
-    if url_pattern.search(message):
-        logger.info("檢測到URL，觸發詐騙分析")
-        return True
-    
-    # 檢查是否包含明確的分析請求
-    explicit_analysis_requests = [
-        "這是詐騙嗎", "這可靠嗎", "這是真的嗎", "這個是真的嗎",
-        "這安全嗎", "可以相信嗎", "有問題嗎", "是騙人的嗎",
-        "是不是詐騙", "會是詐騙嗎", "風險高嗎", "安全性"
-    ]
-    
-    # 排除特定的誤判情況
+    # 8. 排除特定的誤判情況
     false_positives = {
         "兵免役是真的嗎": "可能是關於兵役的一般問題",
         "兵役免役是真的嗎": "可能是關於兵役的一般問題",
@@ -1487,50 +1530,71 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
             logger.info(f"排除誤判情況: '{phrase}' - {reason}")
             return False
     
-    if any(request in message_lower for request in explicit_analysis_requests):
-        # 只有當內容看起來像是詐騙相關時才進行分析
-        fraud_related_keywords = ["詐騙", "騙", "投資", "賺錢", "兼職", "入金", "儲值", "銀行", "轉帳", "匯款", "個資", "帳號", "密碼"]
-        if any(keyword in message_lower for keyword in fraud_related_keywords):
-            logger.info("檢測到明確分析請求 + 詐騙相關詞")
-            return True
-        else:
-            logger.info("檢測到分析請求但可能是閒聊")
-            return False
+    # 9. 詐騙關鍵詞分類，計算分數來判斷
+    fraud_keywords = {
+        # 高風險詐騙關鍵詞 (每個詞配2分)
+        "高風險": [
+            "詐騙", "被騙", "騙", "詐騙集團", "假冒", "詐騙手法", 
+            "騙錢", "騙子", "釣魚", "釣魚網站", "假網站"
+        ],
+        
+        # 金融相關詐騙關鍵詞 (每個詞配1分)
+        "金融": [
+            "投資", "賺錢", "兼職", "入金", "儲值", "銀行", "轉帳", 
+            "匯款", "匯錢", "儲值", "比特幣", "虛擬貨幣", "錢包", 
+            "出金", "股票", "期貨", "外匯", "退款", "贖回", "回報率",
+            "利潤", "分潤"
+        ],
+        
+        # 個資相關詐騙關鍵詞 (每個詞配1分)
+        "個資": [
+            "個資", "帳號", "密碼", "身份證", "信用卡", "卡號", "驗證碼", 
+            "驗證", "銀行帳號", "金融卡", "網路銀行", "盜用", "洩漏", 
+            "資料外洩"
+        ],
+        
+        # 社交相關詐騙關鍵詞 (每個詞配1分)
+        "社交": [
+            "交友", "約會", "戀愛", "感情", "交往", "婚戀", "網戀",
+            "一夜情", "相親", "愛情", "陌生人", "帥哥", "美女"
+        ],
+        
+        # 緊急關鍵詞 (每個詞配1分)
+        "緊急": [
+            "急", "限時", "搶", "快", "緊急", "立即", "馬上", "趕快",
+            "最後機會", "僅此一次", "倒數", "限量", "搶購"
+        ]
+    }
     
-    # 檢查是否包含分析請求關鍵詞 + 內容
-    analysis_request_patterns = [
-        "請幫我分析", "幫我分析", "請分析", "分析一下", "幫忙分析",
-        "請檢查", "幫我檢查", "檢查一下", "幫忙檢查"
-    ]
+    # 計算詐騙風險得分
+    fraud_score = 0
+    matched_keywords = []
     
-    for pattern in analysis_request_patterns:
-        if pattern in message:
-            remaining_content = message.replace(pattern, "").strip()
-            if len(remaining_content) > 5:
-                logger.info(f"檢測到分析請求關鍵詞：{pattern}，且有具體內容")
-                return True
+    # 高風險詐騙關鍵詞，每個詞配2分
+    for keyword in fraud_keywords["高風險"]:
+        if keyword in message_lower:
+            fraud_score += 2
+            matched_keywords.append(keyword)
     
-    # 檢查是否包含分析關鍵詞 + 疑問詞
-    analysis_keywords = ["詐騙", "安全", "可疑", "風險", "網站", "連結", "投資", "賺錢", "陌生人", "騙子"]
-    question_words = ["嗎", "呢", "吧", "?", "？"]
+    # 其他類別關鍵詞，每個詞配1分
+    for category in ["金融", "個資", "社交", "緊急"]:
+        for keyword in fraud_keywords[category]:
+            if keyword in message_lower:
+                fraud_score += 1
+                matched_keywords.append(keyword)
     
-    has_analysis_keyword = any(keyword in message_lower for keyword in analysis_keywords)
-    has_question_word = any(word in message_lower for word in question_words)
+    # 檢查是否有疑問詞，增加分數
+    question_words = ["嗎", "呢", "吧", "?", "？", "如何", "怎麼", "怎樣"]
+    if any(word in message_lower for word in question_words):
+        fraud_score += 1
     
-    if has_analysis_keyword and has_question_word:
-        logger.info("檢測到詐騙關鍵詞+疑問詞組合")
-        return True
-    
-    # 檢查是否包含多個詐騙關鍵詞
-    fraud_keywords = ["詐騙", "被騙", "轉帳", "匯款", "投資", "賺錢", "兼職", "工作", "銀行", "帳號", "密碼", "個資", "中獎", "免費", "限時", "急"]
-    fraud_count = sum(1 for keyword in fraud_keywords if keyword in message_lower)
-    
-    if fraud_count >= 2:
-        logger.info(f"檢測到 {fraud_count} 個詐騙關鍵詞")
+    # 若總分達到閾值（>=3分），則進行詐騙分析
+    if fraud_score >= 3:
+        logger.info(f"詐騙風險得分: {fraud_score}，匹配關鍵詞: {matched_keywords}，觸發詐騙分析")
         return True
     
     # 如果以上條件都不符合，則視為閒聊
-    logger.info("無明確詐騙分析指標，視為閒聊")
+    logger.info(f"詐騙風險得分: {fraud_score}，不足以觸發詐騙分析，視為閒聊")
     return False
 
 # 初始化FlexMessageService
