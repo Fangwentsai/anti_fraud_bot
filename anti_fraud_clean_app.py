@@ -173,6 +173,37 @@ user_pending_analysis = {}
 first_time_chatters = set()
 user_conversation_state = {}
 
+# 載入醫美服務和健康知識的白名單
+def load_beauty_health_whitelist():
+    """從beauty_health_whitelist.json文件載入醫美和健康相關的白名單關鍵詞"""
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        whitelist_path = os.path.join(script_dir, 'beauty_health_whitelist.json')
+        
+        with open(whitelist_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            
+            # 將所有類別的關鍵詞合併為一個扁平列表
+            flattened_whitelist = []
+            for category, keywords in data['categories'].items():
+                flattened_whitelist.extend(keywords)
+            
+            logger.info(f"成功載入 {len(flattened_whitelist)} 個醫美和健康相關關鍵詞")
+            return flattened_whitelist
+    except FileNotFoundError:
+        logger.warning("找不到beauty_health_whitelist.json文件，使用預設的白名單列表")
+        default_whitelist = [
+            "皮秒雷射", "微針", "膠原蛋白", "玻尿酸", "肉毒桿菌", "減肥", "美白",
+            "保濕", "瘦身", "膠原蛋白飲", "中醫美容", "雷射", "電波拉皮"
+        ]
+        return default_whitelist
+    except Exception as e:
+        logger.error(f"載入beauty_health_whitelist.json時發生錯誤: {e}")
+        return []
+
+# 載入醫美和健康相關白名單
+BEAUTY_HEALTH_WHITELIST = load_beauty_health_whitelist()
+
 # 為了向下兼容，保留舊的變數名稱
 function_inquiry_keywords = FUNCTION_INQUIRY_KEYWORDS
 follow_up_patterns = FOLLOW_UP_PATTERNS
@@ -1633,7 +1664,15 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
     if len(message_lower) < 5:
         return False
     
-    # 1. 如果使用者明確請求分析訊息，則直接進行詐騙分析
+    # 1. 檢查是否為醫美和健康相關白名單關鍵詞的查詢
+    if bot_trigger_keyword in message:
+        # 檢查是否包含醫美健康白名單關鍵詞
+        for keyword in BEAUTY_HEALTH_WHITELIST:
+            if keyword in message:
+                logger.info(f"檢測到醫美健康白名單關鍵詞: {keyword}")
+                return True
+    
+    # 2. 如果使用者明確請求分析訊息，則直接進行詐騙分析
     explicit_analysis_requests = [
         "請幫我分析這則訊息", "幫我分析訊息", "請分析這則訊息", "幫我分析", 
         "分析這則訊息", "分析一下這個", "檢查這個訊息", "看看這是不是詐騙"
@@ -1643,14 +1682,14 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
         logger.info(f"使用者明確要求分析訊息: {message_lower}")
         return True
     
-    # 2. 檢查是否包含URL，如果包含則自動進行分析
+    # 3. 檢查是否包含URL，如果包含則自動進行分析
     import re
     url_pattern = re.compile(r'(https?://[^\s\u4e00-\u9fff，。！？；：]+|www\.[^\s\u4e00-\u9fff，。！？；：]+|[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?(?:/[^\s\u4e00-\u9fff，。！？；：]*)?)')
     if url_pattern.search(message):
         logger.info("檢測到URL，觸發詐騙分析")
         return True
     
-    # 3. 檢查是否為健康產品或醫美療程的真偽詢問
+    # 4. 檢查是否為健康產品或醫美療程的真偽詢問
     if bot_trigger_keyword in message:
         product_name = extract_health_product(message, bot_trigger_keyword)
         if product_name:
@@ -1683,11 +1722,11 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
             logger.info(f"檢測到一般產品真偽詢問: {message_lower}")
             return True
     
-    # 4. 排除明確是功能查詢或問候語的情況
+    # 5. 排除明確是功能查詢或問候語的情況
     if any(keyword in message_lower for keyword in function_inquiry_keywords):
         return False
     
-    # 5. 特殊處理"教我如何防詐騙"類請求
+    # 6. 特殊處理"教我如何防詐騙"類請求
     anti_fraud_teaching_patterns = [
         "防止被詐騙", "避免被詐騙", "防詐騙", "防範詐騙", 
         "怎麼防詐騙", "怎樣防詐騙", "如何防詐騙", 
@@ -1716,7 +1755,7 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
         # 返回False使其進入閒聊模式，但帶有特殊標記
         return False
     
-    # 6. 排除明確是閒聊的常見問題
+    # 7. 排除明確是閒聊的常見問題
     chat_patterns = [
         "怎麼做", "做法", "食譜", "教我", "告訴我", 
         "介紹", "推薦", "什麼是", "解釋", "說明",
@@ -1728,7 +1767,7 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
         logger.info(f"檢測到閒聊模式關鍵詞: {message_lower}")
         return False
     
-    # 7. 排除情感表達和問候語
+    # 8. 排除情感表達和問候語
     emotion_patterns = [
         "謝謝", "感謝", "開心", "難過", "生氣", "傷心", 
         "好玩", "有趣", "無聊", "好笑", "感動", "感覺",
@@ -1743,7 +1782,7 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
     if any(greeting in message_lower for greeting in greetings) and len(message_lower) < 15:
         return False
     
-    # 8. 排除特定功能關鍵詞
+    # 9. 排除特定功能關鍵詞
     if any(keyword in message_lower for keyword in ["詐騙類型", "詐騙手法", "詐騙種類", "常見詐騙"]):
         return False
     
@@ -1753,7 +1792,7 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
     if is_weather_related(message):
         return False
     
-    # 9. 排除特定的誤判情況
+    # 10. 排除特定的誤判情況
     false_positives = {
         "兵免役是真的嗎": "可能是關於兵役的一般問題",
         "兵役免役是真的嗎": "可能是關於兵役的一般問題",
@@ -1768,7 +1807,7 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
             logger.info(f"排除誤判情況: '{phrase}' - {reason}")
             return False
     
-    # 10. 詐騙關鍵詞分類，計算分數來判斷
+    # 11. 詐騙關鍵詞分類，計算分數來判斷
     fraud_keywords = {
         # 高風險詐騙關鍵詞 (每個詞配2分)
         "高風險": [
@@ -2094,8 +2133,8 @@ def parse_health_product_analysis(analysis_result, display_name="朋友"):
         
         # 將解析結果映射到我們的詐騙分析格式
         fraud_result = {
-            "risk_level": "中風險",
-            "fraud_type": "購物詐騙/虛假廣告",
+            "risk_level": "低(請依自身狀況評估)",
+            "fraud_type": "健康諮詢",
             "explanation": "無法解析分析結果。",
             "suggestions": "建議謹慎處理。",
             "is_emerging": False,
@@ -2117,16 +2156,8 @@ def parse_health_product_analysis(analysis_result, display_name="朋友"):
             elif "消費建議：" in line or "消費建議:" in line:
                 result["consumer_advice"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
             elif "風險評級：" in line or "風險評級:" in line:
-                risk_text = line.split("：", 1)[-1].split(":", 1)[-1].strip()
-                if "高" in risk_text:
-                    result["risk_level"] = "高風險"
-                elif "中" in risk_text:
-                    result["risk_level"] = "中風險"
-                elif "低" in risk_text:
-                    result["risk_level"] = "低風險"
-        
-        # 構建詐騙分析格式的結果
-        fraud_result["risk_level"] = result["risk_level"]
+                # 忽略原始分析的風險等級，統一設為低風險
+                pass
         
         # 構建精簡的解釋文本
         explanation = f"「{result['product_name']}」科學分析：\n\n"
@@ -2147,8 +2178,8 @@ def parse_health_product_analysis(analysis_result, display_name="朋友"):
     except Exception as e:
         logger.error(f"解析健康產品分析結果時發生錯誤: {e}")
         return {
-            "risk_level": "中風險",
-            "fraud_type": "購物詐騙/虛假廣告",
+            "risk_level": "低(請依自身狀況評估)",
+            "fraud_type": "健康諮詢",
             "explanation": "此產品/療程可能宣傳效果誇大，請謹慎考慮並諮詢專業醫療人員意見。",
             "suggestions": "🔍 購買前先查詢相關科學研究\n🛡️ 諮詢專業醫生或相關專家\n⚠️ 警惕誇大的宣傳和效果承諾",
             "is_emerging": False,

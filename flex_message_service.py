@@ -54,6 +54,10 @@ class FlexMessageService:
             # 根據風險等級選擇顏色
             risk_color = self._get_risk_color(risk_level)
             
+            # 如果是健康諮詢類型，強制使用綠色
+            if fraud_type == "健康諮詢":
+                risk_color = self.colors["success"]
+            
             # 設定標題
             if is_health_product_analysis:
                 title = "🔬 產品科學分析"
@@ -668,6 +672,7 @@ class FlexMessageService:
             "中": "#FFA726",
             "低": self.colors["success"],
             "低風險": self.colors["success"],
+            "低(請依自身狀況評估)": self.colors["success"],
             "極低": self.colors["success"],
             "無風險": self.colors["success"]
         }
