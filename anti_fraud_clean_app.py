@@ -1023,44 +1023,7 @@ if handler:
                 line_bot_api.reply_message(reply_token, TextSendMessage(text=response_text))
                 return
 
-        # 檢查分析請求但沒有內容
-        analysis_request_keywords = ["請幫我分析這則訊息", "幫我分析訊息", "請分析這則訊息", "請幫我分析", "分析這則訊息"]
-        is_analysis_request = any(keyword in cleaned_message for keyword in analysis_request_keywords)
-        
-        if is_analysis_request and (len(cleaned_message) < 20 or cleaned_message.rstrip("：:") in analysis_request_keywords):
-            logger.info(f"檢測到分析請求但沒有提供具體內容: {cleaned_message}")
-            
-            current_state["waiting_for_analysis"] = True
-            user_conversation_state[user_id] = current_state
-            
-            prompt_message = f"好的 {display_name}，我會幫您分析可疑訊息！\n\n" \
-                           f"請直接把您收到的可疑訊息或網址傳給我，我會立即為您分析風險程度。\n\n" \
-                           f"💡 您可以：\n" \
-                           f"• 轉傳可疑的文字訊息\n" \
-                           f"• ⚠️FB、IG不易判別，請提供貼文內網址\n" \
-                           f"• 貼上可疑的網址連結\n" \
-                           f"• 描述您遇到的可疑情況"
-            
-            try:
-                if v3_messaging_api:
-                    from linebot.v3.messaging import TextMessage as V3TextMessage
-                    from linebot.v3.messaging import ReplyMessageRequest
-                    v3_messaging_api.reply_message(
-                        ReplyMessageRequest(
-                            reply_token=reply_token,
-                            messages=[V3TextMessage(text=prompt_message)]
-                        )
-                    )
-                else:
-                    line_bot_api.reply_message(reply_token, TextSendMessage(text=prompt_message))
-            except LineBotApiError as e:
-                logger.error(f"發送分析提示訊息時發生LINE API錯誤: {e}")
-                return
-            except Exception as e:
-                logger.error(f"發送分析提示訊息時發生未知錯誤: {e}")
-            return
-
-        # 檢查圖片分析請求
+        # 檢查圖片分析請求 (將這部分移到分析請求檢查前面)
         if "分析圖片" in cleaned_message or "檢查圖片" in cleaned_message or "請幫我分析圖片" in cleaned_message:
             image_analysis_prompt = f"📷 {display_name}，請點擊左下角鍵盤後上傳您想分析的圖片！\n\n" \
                                   f"我可以分析以下類型的圖片：\n" \
@@ -1105,6 +1068,43 @@ if handler:
                         logger.info(f"圖片分析提示訊息使用push_message成功: {user_id}")
                     except Exception as push_error:
                         logger.error(f"圖片分析提示訊息使用push_message也失敗: {push_error}")
+            return
+
+        # 檢查分析請求但沒有內容（修改檢查邏輯，排除包含圖片相關的文本）
+        analysis_request_keywords = ["請幫我分析這則訊息", "幫我分析訊息", "請分析這則訊息", "請幫我分析", "分析這則訊息"]
+        is_analysis_request = any(keyword in cleaned_message for keyword in analysis_request_keywords) and "圖片" not in cleaned_message
+        
+        if is_analysis_request and (len(cleaned_message) < 20 or cleaned_message.rstrip("：:") in analysis_request_keywords):
+            logger.info(f"檢測到分析請求但沒有提供具體內容: {cleaned_message}")
+            
+            current_state["waiting_for_analysis"] = True
+            user_conversation_state[user_id] = current_state
+            
+            prompt_message = f"好的 {display_name}，我會幫您分析可疑訊息！\n\n" \
+                           f"請直接把您收到的可疑訊息或網址傳給我，我會立即為您分析風險程度。\n\n" \
+                           f"💡 您可以：\n" \
+                           f"• 轉傳可疑的文字訊息\n" \
+                           f"• ⚠️FB、IG不易判別，請提供貼文內網址\n" \
+                           f"• 貼上可疑的網址連結\n" \
+                           f"• 描述您遇到的可疑情況"
+            
+            try:
+                if v3_messaging_api:
+                    from linebot.v3.messaging import TextMessage as V3TextMessage
+                    from linebot.v3.messaging import ReplyMessageRequest
+                    v3_messaging_api.reply_message(
+                        ReplyMessageRequest(
+                            reply_token=reply_token,
+                            messages=[V3TextMessage(text=prompt_message)]
+                        )
+                    )
+                else:
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text=prompt_message))
+            except LineBotApiError as e:
+                logger.error(f"發送分析提示訊息時發生LINE API錯誤: {e}")
+                return
+            except Exception as e:
+                logger.error(f"發送分析提示訊息時發生未知錯誤: {e}")
             return
 
         # 判斷是否需要進行詐騙分析
