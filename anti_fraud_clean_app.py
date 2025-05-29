@@ -800,6 +800,25 @@ def callback():
 def home():
     return "Line Bot Anti-Fraud is running!"
 
+@app.route("/health", methods=['GET'])
+def health_check():
+    """健康檢查端點，用於 keep-alive 和監控"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "server": "gunicorn",
+        "service": "anti-fraud-linebot"
+    }
+
+@app.route("/keep-alive", methods=['GET'])
+def keep_alive():
+    """Keep-alive 端點，防止服務休眠"""
+    return {
+        "status": "alive",
+        "timestamp": datetime.now().isoformat(),
+        "message": "Service is active"
+    }
+
 @app.route("/fraud-statistics", methods=['GET'])
 def fraud_statistics():
     """顯示詐騙統計數據頁面"""
