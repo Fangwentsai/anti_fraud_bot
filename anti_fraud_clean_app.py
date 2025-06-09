@@ -986,14 +986,6 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                     "raw_result": f"經過分析，這是正常的招聘資訊，安全得分: {recruitment_safety_score}"
                 }
 
-        # 如果訊息包含網址且不是短網址，嘗試獲取網頁標題
-        website_title = None
-        if original_url and not is_short_url:
-            website_title = get_website_title(expanded_url or original_url)
-        elif is_short_url and url_expanded_successfully and expanded_url:
-            # 短網址已經在 expand_short_url 中獲取了標題，這裡使用 page_title
-            website_title = page_title
-
         # 檢查白名單網址
         url_pattern_detailed = re.compile(r'https?://[^\s\u4e00-\u9fff，。！？；：]+|www\.[^\s\u4e00-\u9fff，。！？；：]+|[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?(?:/[^\s\u4e00-\u9fff，。！？；：]*)?')
         urls = url_pattern_detailed.findall(analysis_message)
@@ -1029,6 +1021,13 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                     original_domain, site_description = normalized_safe_domains[domain]
                     logger.info(f"檢測到白名單中的域名: {domain} -> {original_domain}")
                     
+                    # 獲取網頁標題
+                    website_title = None
+                    if not is_short_url:
+                        website_title = get_website_title(url)
+                    elif is_short_url and url_expanded_successfully:
+                        website_title = page_title
+                    
                     # 特殊處理：lin.ee 需要檢查訊息內容
                     if domain == 'lin.ee':
                         # 檢查訊息內容是否包含明顯的詐騙關鍵詞
@@ -1054,7 +1053,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                                 "result": {
                                     "risk_level": "低風險",
                                     "fraud_type": "非詐騙相關",
-                                    "explanation": f"這個網站是 {original_domain}，{site_description}，可以安心使用。",
+                                    "explanation": f"這個網站是 {original_domain}，{site_description}，可以安心使用。" + (f"\n\n📄 網頁標題：{website_title}" if website_title else ""),
                                     "suggestions": "這是正規網站，不必特別擔心。如有疑慮，建議您直接從官方管道進入該網站。",
                                     "is_emerging": False,
                                     "display_name": display_name,
@@ -1074,7 +1073,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                             "result": {
                                 "risk_level": "低風險",
                                 "fraud_type": "非詐騙相關",
-                                "explanation": f"這個網站是 {original_domain}，{site_description}，可以安心使用。",
+                                "explanation": f"這個網站是 {original_domain}，{site_description}，可以安心使用。" + (f"\n\n📄 網頁標題：{website_title}" if website_title else ""),
                                 "suggestions": "這是正規網站，不必特別擔心。如有疑慮，建議您直接從官方管道進入該網站。",
                                 "is_emerging": False,
                                 "display_name": display_name,
@@ -1099,13 +1098,21 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                             if _is_legitimate_subdomain(subdomain_part):
                                 site_description = SAFE_DOMAINS.get(safe_domain_key, "台灣常見的可靠網站")
                                 logger.info(f"檢測到合法子網域: {domain} -> {safe_domain_key}")
+                                
+                                # 獲取網頁標題
+                                website_title = None
+                                if not is_short_url:
+                                    website_title = get_website_title(url)
+                                elif is_short_url and url_expanded_successfully:
+                                    website_title = page_title
+                                
                                 return {
                                     "success": True,
                                     "message": "分析完成",
                                     "result": {
                                         "risk_level": "低風險",
                                         "fraud_type": "非詐騙相關",
-                                        "explanation": f"這個網站是 {safe_domain_key} 的子網域，{site_description}，可以安心使用。",
+                                        "explanation": f"這個網站是 {safe_domain_key} 的子網域，{site_description}，可以安心使用。" + (f"\n\n📄 網頁標題：{website_title}" if website_title else ""),
                                         "suggestions": "這是正規網站的子網域，不必特別擔心。如有疑慮，建議您直接從官方管道進入該網站。",
                                         "is_emerging": False,
                                         "display_name": display_name,

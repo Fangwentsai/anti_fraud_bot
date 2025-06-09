@@ -23,4 +23,5 @@ python-dotenv==1.0.0
 requests==2.31.0
 gunicorn==21.2.0 
 httpx==0.27.0 
-Pillow==11.2.1  # 圖像處理庫，用於image_handler.py和image_analysis_service.py 
+Pillow==11.2.1  # 圖像處理庫，用於image_handler.py和image_analysis_service.py
+beautifulsoup4==4.12.2  # HTML解析庫，用於短網址展開和網頁標題提取 
