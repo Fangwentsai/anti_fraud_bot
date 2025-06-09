@@ -70,6 +70,10 @@ def detect_domain_spoofing(url_or_message, safe_domains):
                 safe_parts = safe_domain_lower.split('.')
                 safe_base = safe_parts[0]
                 
+                # 處理 www 前綴：如果第一部分是 www，取第二部分作為基礎網域
+                if safe_base == 'www' and len(safe_parts) > 1:
+                    safe_base = safe_parts[1]
+                
                 # 檢查是否為基礎域名加上-tw或-taiwan（直接判定為高風險）
                 if base_domain == safe_base + '-tw' or base_domain == safe_base + '-taiwan':
                     site_description = safe_domains.get(safe_domain, "知名網站")
@@ -79,6 +83,18 @@ def detect_domain_spoofing(url_or_message, safe_domains):
                         'spoofed_domain': domain,
                         'spoofing_type': "插入額外字元攻擊",
                         'risk_explanation': f"⚠️ 高風險警告！\n\n這個網址 {domain} 疑似模仿正牌的 {safe_domain} ({site_description})。\n\n詐騙集團常使用添加'-tw'或'-taiwan'字樣的手法製作假網站來騙取個人資料或信用卡資訊。\n\n🚨 千萬不要在這個網站輸入任何個人資料、密碼或信用卡號碼！"
+                    }
+                
+                # 新增：檢查明顯的網域名稱變形攻擊（如 fetc-nete 模仿 fetc）
+                # 檢查是否為基礎域名的變形（插入字元、替換字元等）
+                if _is_obvious_domain_spoofing(base_domain, safe_base):
+                    site_description = safe_domains.get(safe_domain, "知名網站")
+                    return {
+                        'is_spoofed': True,
+                        'original_domain': safe_domain,
+                        'spoofed_domain': domain,
+                        'spoofing_type': "網域名稱變形攻擊",
+                        'risk_explanation': f"⚠️ 高風險警告！\n\n這個網址 {domain} 疑似模仿正牌的 {safe_domain} ({site_description})。\n\n詐騙集團常用相似的網域名稱來混淆視聽，製作假網站騙取個人資料或信用卡資訊。\n\n🚨 千萬不要在這個網站輸入任何個人資料、密碼或信用卡號碼！"
                     }
             
             # 檢查每個白名單網域是否有相似性
@@ -419,6 +435,88 @@ def _is_homograph_attack(suspicious_domain, safe_domain):
     
     # 如果有1-3個字元被替換，認為是相似字元攻擊
     return 1 <= substitution_count <= 3
+
+def _is_obvious_domain_spoofing(suspicious_base, safe_base):
+    """檢查明顯的網域名稱變形攻擊"""
+    # 如果完全相同，不是變形攻擊
+    if suspicious_base == safe_base:
+        return False
+    
+    # 檢查是否包含原始網域名稱作為子字串
+    if safe_base in suspicious_base:
+        # 檢查是否為常見的變形模式
+        
+        # 1. 插入連字符和額外字元 (fetc -> fetc-nete, google -> google-search)
+        if suspicious_base.startswith(safe_base + '-'):
+            return True
+        
+        # 2. 在中間插入字元 (fetc -> fetc-nete, amazon -> amazoner)
+        if suspicious_base.startswith(safe_base):
+            added_part = suspicious_base[len(safe_base):]
+            # 如果添加的部分是常見的變形模式
+            if len(added_part) <= 6 and (added_part.startswith('-') or added_part.isalpha()):
+                return True
+        
+        # 3. 檢查是否在原始網域中間插入字元
+        # 例如 fetc -> fe-tc, f-etc 等
+        for i in range(1, len(safe_base)):
+            prefix = safe_base[:i]
+            suffix = safe_base[i:]
+            # 檢查是否為 prefix + 插入字元 + suffix 的模式
+            if suspicious_base.startswith(prefix) and suspicious_base.endswith(suffix):
+                middle_part = suspicious_base[len(prefix):-len(suffix)] if suffix else suspicious_base[len(prefix):]
+                if len(middle_part) <= 4 and ('-' in middle_part or middle_part.isalpha()):
+                    return True
+    
+    # 4. 檢查字元替換攻擊（更寬鬆的條件）
+    if abs(len(suspicious_base) - len(safe_base)) <= 2:
+        # 計算編輯距離
+        def levenshtein_distance(s1, s2):
+            if len(s1) < len(s2):
+                return levenshtein_distance(s2, s1)
+            
+            if len(s2) == 0:
+                return len(s1)
+            
+            previous_row = list(range(len(s2) + 1))
+            for i, c1 in enumerate(s1):
+                current_row = [i + 1]
+                for j, c2 in enumerate(s2):
+                    insertions = previous_row[j + 1] + 1
+                    deletions = current_row[j] + 1
+                    substitutions = previous_row[j] + (c1 != c2)
+                    current_row.append(min(insertions, deletions, substitutions))
+                previous_row = current_row
+            
+            return previous_row[-1]
+        
+        distance = levenshtein_distance(suspicious_base, safe_base)
+        max_length = max(len(suspicious_base), len(safe_base))
+        
+        # 如果編輯距離小於等於2，且有足夠的相似性
+        if distance <= 2:
+            # 計算最長公共子序列
+            def lcs_length(s1, s2):
+                m, n = len(s1), len(s2)
+                dp = [[0] * (n + 1) for _ in range(m + 1)]
+                
+                for i in range(1, m + 1):
+                    for j in range(1, n + 1):
+                        if s1[i-1] == s2[j-1]:
+                            dp[i][j] = dp[i-1][j-1] + 1
+                        else:
+                            dp[i][j] = max(dp[i-1][j], dp[i][j-1])
+                
+                return dp[m][n]
+            
+            lcs_len = lcs_length(suspicious_base, safe_base)
+            similarity_ratio = lcs_len / max_length
+            
+            # 降低閾值到60%，專門針對明顯的變形攻擊
+            if similarity_ratio >= 0.6:
+                return True
+    
+    return False
 
 def _has_sufficient_similarity(domain1, domain2):
     """檢查兩個網域是否有足夠的相似性"""
