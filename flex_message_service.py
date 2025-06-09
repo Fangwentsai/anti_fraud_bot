@@ -215,7 +215,7 @@ class FlexMessageService:
                             "action": {
                                 "type": "message",
                                 "label": "🏠 回到首頁",
-                                "text": "土豆 主選單"
+                                "text": "土豆"
                             }
                         }
                     ],
@@ -671,6 +671,7 @@ class FlexMessageService:
         """根據風險等級取得對應顏色"""
         color_map = {
             "極高": self.colors["danger"],
+            "極高風險": self.colors["danger"],
             "高": self.colors["danger"],
             "高風險": self.colors["danger"],
             "中高": self.colors["warning"],
@@ -687,7 +688,9 @@ class FlexMessageService:
         """根據風險等級取得對應emoji"""
         emoji_map = {
             "極高": "🚨",
+            "極高風險": "🚨",
             "高": "⚠️",
+            "高風險": "⚠️",
             "中高": "⚠️",
             "中": "⚡",
             "低": "✅",

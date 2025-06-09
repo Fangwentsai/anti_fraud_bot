@@ -866,7 +866,7 @@ if handler:
         # 檢查是否為空訊息
         if not cleaned_message.strip():
             reply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐小助手，記得用土豆呼喚我喔！\n" \
-                        f"讓我用4大服務保護你：（如果點擊按鈕後沒反應可能在忙，請再叫我一次哈哈）\n\n" \
+                        f"讓我用4大服務保護你：\n如果點擊按鈕沒反應可能在忙，請再叫我一次喔(🧎)\n\n" \
                         f"🔍 文字或網站分析：\n立刻分析假冒文字、詐騙訊息或釣魚網站！\n" \
                         f"📷 上傳截圖分析：\n不想輸入文字嗎？！直接截圖給我！\n" \
                         f"🎯 防詐騙測驗：\n玩問答提升你的防詐意識，輕鬆識破詐騙！\n" \
@@ -908,6 +908,11 @@ if handler:
             
             line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
             
+            # 保存互動記錄到Firebase
+            firebase_manager.save_user_interaction(
+                user_id, display_name, text_message, reply_text,
+                is_fraud_related=False
+            )
             return
 
         # 處理遊戲觸發
@@ -917,8 +922,18 @@ if handler:
             
             if flex_message:
                 line_bot_api.reply_message(reply_token, flex_message)
+                # 保存互動記錄到Firebase
+                firebase_manager.save_user_interaction(
+                    user_id, display_name, text_message, "開始防詐騙測驗遊戲",
+                    is_fraud_related=False
+                )
             else:
                 line_bot_api.reply_message(reply_token, TextSendMessage(text=error_message))
+                # 保存互動記錄到Firebase
+                firebase_manager.save_user_interaction(
+                    user_id, display_name, text_message, error_message,
+                    is_fraud_related=False
+                )
             return
 
         # 檢查詐騙類型列表查詢
@@ -932,13 +947,28 @@ if handler:
                 if fraud_tactics:
                     fraud_types_flex = create_fraud_types_flex_message(fraud_tactics, display_name)
                     line_bot_api.reply_message(reply_token, fraud_types_flex)
+                    # 保存互動記錄到Firebase
+                    firebase_manager.save_user_interaction(
+                        user_id, display_name, text_message, "提供詐騙類型列表",
+                        is_fraud_related=False
+                    )
                 else:
                     error_text = "抱歉，詐騙類型資料載入失敗。\n\n💡 您可以：\n• 直接傳送可疑訊息給我分析\n• 說「防詐騙測試」進行知識測驗"
                     line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
+                    # 保存互動記錄到Firebase
+                    firebase_manager.save_user_interaction(
+                        user_id, display_name, text_message, error_text,
+                        is_fraud_related=False
+                    )
             except Exception as e:
                 logger.error(f"處理詐騙類型查詢時發生錯誤: {e}")
                 error_text = "抱歉，詐騙類型查詢功能暫時無法使用。\n\n💡 您可以：\n• 直接傳送可疑訊息給我分析\n• 說「防詐騙測試」進行知識測驗"
                 line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
+                # 保存互動記錄到Firebase
+                firebase_manager.save_user_interaction(
+                    user_id, display_name, text_message, error_text,
+                    is_fraud_related=False
+                )
             return
 
         # 檢查特定詐騙類型查詢
@@ -958,6 +988,11 @@ if handler:
                     )
                     
                     line_bot_api.reply_message(reply_token, fraud_detail_flex)
+                    # 保存互動記錄到Firebase
+                    firebase_manager.save_user_interaction(
+                        user_id, display_name, text_message, f"提供{fraud_type}詳細說明",
+                        is_fraud_related=False
+                    )
                     return
                 except Exception as e:
                     logger.error(f"創建詐騙類型詳細信息Flex Message失敗: {e}")
@@ -987,6 +1022,11 @@ if handler:
                     response_text += f"\n如果您收到疑似{fraud_type}的訊息，歡迎直接傳給我分析！"
                 
                 line_bot_api.reply_message(reply_token, TextSendMessage(text=response_text))
+                # 保存互動記錄到Firebase
+                firebase_manager.save_user_interaction(
+                    user_id, display_name, text_message, f"提供{fraud_type}詳細說明(文字版)",
+                    is_fraud_related=False
+                )
                 return
 
         # 檢查圖片分析請求 (將這部分移到分析請求檢查前面)
@@ -1016,6 +1056,12 @@ if handler:
                 else:
                     line_bot_api.reply_message(reply_token, TextSendMessage(text=image_analysis_prompt))
                     logger.info(f"已回覆圖片分析提示訊息 (舊版API): {user_id}")
+                
+                # 保存互動記錄到Firebase
+                firebase_manager.save_user_interaction(
+                    user_id, display_name, text_message, "提供圖片分析說明",
+                    is_fraud_related=False
+                )
             except LineBotApiError as e:
                 logger.error(f"回覆圖片分析提示訊息時發生錯誤: {e}")
                 if "Invalid reply token" in str(e):
@@ -1032,6 +1078,12 @@ if handler:
                         else:
                             line_bot_api.push_message(user_id, TextSendMessage(text=image_analysis_prompt))
                         logger.info(f"圖片分析提示訊息使用push_message成功: {user_id}")
+                        
+                        # 保存互動記錄到Firebase
+                        firebase_manager.save_user_interaction(
+                            user_id, display_name, text_message, "提供圖片分析說明(push)",
+                            is_fraud_related=False
+                        )
                     except Exception as push_error:
                         logger.error(f"圖片分析提示訊息使用push_message也失敗: {push_error}")
             return
@@ -1067,6 +1119,12 @@ if handler:
                     )
                 else:
                     line_bot_api.reply_message(reply_token, TextSendMessage(text=prompt_message))
+                
+                # 保存互動記錄到Firebase
+                firebase_manager.save_user_interaction(
+                    user_id, display_name, text_message, "提供分析請求說明",
+                    is_fraud_related=False
+                )
             except LineBotApiError as e:
                 logger.error(f"發送分析提示訊息時發生LINE API錯誤: {e}")
                 return
@@ -1115,12 +1173,28 @@ if handler:
                             try:
                                 line_bot_api.reply_message(reply_token, flex_message)
                                 logger.info(f"健康產品分析回覆成功: {user_id}")
+                                
+                                # 保存互動記錄到Firebase
+                                firebase_manager.save_user_interaction(
+                                    user_id, display_name, text_message, f"健康產品分析: {product_name}",
+                                    is_fraud_related=True,
+                                    fraud_type=analysis_data.get("fraud_type"),
+                                    risk_level=analysis_data.get("risk_level")
+                                )
                             except LineBotApiError as e:
                                 logger.error(f"發送健康產品分析Flex訊息時發生錯誤: {e}")
                                 if "Invalid reply token" in str(e):
                                     try:
                                         line_bot_api.push_message(user_id, flex_message)
                                         logger.info(f"健康產品分析回覆令牌無效，改用push_message成功: {user_id}")
+                                        
+                                        # 保存互動記錄到Firebase
+                                        firebase_manager.save_user_interaction(
+                                            user_id, display_name, text_message, f"健康產品分析: {product_name}",
+                                            is_fraud_related=True,
+                                            fraud_type=analysis_data.get("fraud_type"),
+                                            risk_level=analysis_data.get("risk_level")
+                                        )
                                     except Exception as push_error:
                                         logger.error(f"健康產品分析使用push_message也失敗: {push_error}")
                         else:
@@ -1129,6 +1203,14 @@ if handler:
                             
                             try:
                                 line_bot_api.reply_message(reply_token, TextSendMessage(text=text_response))
+                                
+                                # 保存互動記錄到Firebase
+                                firebase_manager.save_user_interaction(
+                                    user_id, display_name, text_message, f"健康產品分析(文字): {product_name}",
+                                    is_fraud_related=True,
+                                    fraud_type=analysis_data.get("fraud_type"),
+                                    risk_level=analysis_data.get("risk_level")
+                                )
                             except Exception as text_error:
                                 logger.error(f"發送健康產品分析文本回覆失敗: {text_error}")
                         
@@ -1164,12 +1246,28 @@ if handler:
                     try:
                         line_bot_api.reply_message(reply_token, flex_message)
                         logger.info(f"使用舊版API回覆分析成功: {user_id}")
+                        
+                        # 保存互動記錄到Firebase
+                        firebase_manager.save_user_interaction(
+                            user_id, display_name, text_message, "詐騙分析結果",
+                            is_fraud_related=True,
+                            fraud_type=analysis_data.get("fraud_type"),
+                            risk_level=analysis_data.get("risk_level")
+                        )
                     except LineBotApiError as e:
                         logger.error(f"發送Flex Message時發生錯誤: {e}")
                         if "Invalid reply token" in str(e):
                             try:
                                 line_bot_api.push_message(user_id, flex_message)
                                 logger.info(f"分析回覆令牌無效，改用push_message成功: {user_id}")
+                                
+                                # 保存互動記錄到Firebase
+                                firebase_manager.save_user_interaction(
+                                    user_id, display_name, text_message, "詐騙分析結果(push)",
+                                    is_fraud_related=True,
+                                    fraud_type=analysis_data.get("fraud_type"),
+                                    risk_level=analysis_data.get("risk_level")
+                                )
                             except Exception as push_error:
                                 logger.error(f"分析使用push_message也失敗: {push_error}")
                     except Exception as e:
@@ -1184,6 +1282,14 @@ if handler:
                         
                         try:
                             line_bot_api.reply_message(reply_token, TextSendMessage(text=text_response))
+                            
+                            # 保存互動記錄到Firebase
+                            firebase_manager.save_user_interaction(
+                                user_id, display_name, text_message, "詐騙分析結果(文字)",
+                                is_fraud_related=True,
+                                fraud_type=fraud_type,
+                                risk_level=risk_level
+                            )
                         except Exception as text_error:
                             logger.error(f"發送文本回覆也失敗: {text_error}")
                 else:
@@ -1197,6 +1303,14 @@ if handler:
                     
                     try:
                         line_bot_api.reply_message(reply_token, TextSendMessage(text=text_response))
+                        
+                        # 保存互動記錄到Firebase
+                        firebase_manager.save_user_interaction(
+                            user_id, display_name, text_message, "詐騙分析結果(備用文字)",
+                            is_fraud_related=True,
+                            fraud_type=fraud_type,
+                            risk_level=risk_level
+                        )
                     except Exception as text_error:
                         logger.error(f"發送文本回覆失敗: {text_error}")
             else:
@@ -1214,6 +1328,12 @@ if handler:
                         )
                     else:
                         line_bot_api.reply_message(reply_token, TextSendMessage(text=error_message))
+                    
+                    # 保存互動記錄到Firebase
+                    firebase_manager.save_user_interaction(
+                        user_id, display_name, text_message, "分析失敗",
+                        is_fraud_related=False
+                    )
                 except Exception as error_send_error:
                     logger.error(f"發送錯誤訊息失敗: {error_send_error}")
         else:
@@ -1279,6 +1399,12 @@ if handler:
                             logger.info(f"使用v3 API回覆成功: {user_id}")
                         else:
                             line_bot_api.reply_message(reply_token, TextSendMessage(text=chat_reply))
+                        
+                        # 保存互動記錄到Firebase
+                        firebase_manager.save_user_interaction(
+                            user_id, display_name, text_message, chat_reply,
+                            is_fraud_related=False
+                        )
                     except LineBotApiError as e:
                         logger.error(f"使用LINE API回覆時發生錯誤: {e}")
                         if "Invalid reply token" in str(e):
@@ -1296,6 +1422,12 @@ if handler:
                                 else:
                                     line_bot_api.push_message(user_id, TextSendMessage(text=chat_reply))
                                 logger.info(f"回覆令牌無效，改用push_message成功: {user_id}")
+                                
+                                # 保存互動記錄到Firebase
+                                firebase_manager.save_user_interaction(
+                                    user_id, display_name, text_message, chat_reply,
+                                    is_fraud_related=False
+                                )
                             except Exception as push_error:
                                 logger.error(f"使用push_message也失敗: {push_error}")
                 else:
@@ -1400,8 +1532,18 @@ if handler:
                     
                     if flex_message:
                         line_bot_api.reply_message(reply_token, flex_message)
+                        # 保存互動記錄到Firebase
+                        firebase_manager.save_user_interaction(
+                            user_id, display_name, "點擊開始防詐騙測驗", "開始防詐騙測驗遊戲",
+                            is_fraud_related=False
+                        )
                     else:
                         line_bot_api.reply_message(reply_token, TextSendMessage(text=error_message))
+                        # 保存互動記錄到Firebase
+                        firebase_manager.save_user_interaction(
+                            user_id, display_name, "點擊開始防詐騙測驗", error_message,
+                            is_fraud_related=False
+                        )
                         
                 elif action == 'potato_game_answer':
                     answer_index = int(params.get('answer', 0))
@@ -1412,10 +1554,16 @@ if handler:
                         return
                     
                     line_bot_api.reply_message(reply_token, result_flex)
+                    # 保存互動記錄到Firebase
+                    firebase_manager.save_user_interaction(
+                        user_id, display_name, f"防詐騙測驗答題: {answer_index}", 
+                        f"答題結果: {'正確' if is_correct else '錯誤'}",
+                        is_fraud_related=False
+                    )
                     
                 elif action == 'show_main_menu':
                     rreply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐小助手，記得用土豆呼喚我喔！\n" \
-                        f"讓我用4大服務保護你：（如果點擊按鈕後沒反應可能在忙，請再叫我一次哈哈）\n\n" \
+                        f"讓我用4大服務保護你：\n如果點擊按鈕沒反應可能在忙，請再叫我一次喔(🧎)\n\n" \
                                 f"🔍 文字或網站分析：\n立刻分析假冒文字、詐騙訊息或釣魚網站！\n" \
                                 f"📷 上傳截圖分析：\n不想輸入文字嗎？！直接截圖給我！\n" \
                                 f"🎯 防詐騙測驗：\n玩問答提升你的防詐意識，輕鬆識破詐騙！\n" \
@@ -1508,12 +1656,28 @@ if handler:
                 try:
                     line_bot_api.reply_message(reply_token, flex_message)
                     logger.info(f"使用舊版API回覆圖片分析成功: {user_id}")
+                    
+                    # 保存互動記錄到Firebase
+                    firebase_manager.save_user_interaction(
+                        user_id, display_name, "上傳圖片分析", "圖片分析結果",
+                        is_fraud_related=True if raw_result and raw_result.get("risk_level") not in ["無風險", "低"] else False,
+                        fraud_type=raw_result.get("fraud_type") if raw_result else None,
+                        risk_level=raw_result.get("risk_level") if raw_result else None
+                    )
                 except LineBotApiError as e:
                     logger.error(f"使用LINE API回覆圖片分析時發生錯誤: {e}")
                     if "Invalid reply token" in str(e):
                         try:
                             line_bot_api.push_message(user_id, flex_message)
                             logger.info(f"圖片分析回覆令牌無效，改用push_message成功: {user_id}")
+                            
+                            # 保存互動記錄到Firebase
+                            firebase_manager.save_user_interaction(
+                                user_id, display_name, "上傳圖片分析", "圖片分析結果(push)",
+                                is_fraud_related=True if raw_result and raw_result.get("risk_level") not in ["無風險", "低"] else False,
+                                fraud_type=raw_result.get("fraud_type") if raw_result else None,
+                                risk_level=raw_result.get("risk_level") if raw_result else None
+                            )
                         except Exception as push_error:
                             logger.error(f"圖片分析使用push_message也失敗: {push_error}")
             else:
@@ -1524,12 +1688,24 @@ if handler:
                         reply_token,
                         TextSendMessage(text=error_message)
                     )
+                    
+                    # 保存互動記錄到Firebase
+                    firebase_manager.save_user_interaction(
+                        user_id, display_name, "上傳圖片分析", error_message,
+                        is_fraud_related=False
+                    )
                 except LineBotApiError as e:
                     logger.error(f"使用LINE API回覆圖片錯誤訊息時發生錯誤: {e}")
                     if "Invalid reply token" in str(e):
                         try:
                             line_bot_api.push_message(user_id, TextSendMessage(text=error_message))
                             logger.info(f"圖片錯誤訊息回覆令牌無效，改用push_message成功: {user_id}")
+                            
+                            # 保存互動記錄到Firebase
+                            firebase_manager.save_user_interaction(
+                                user_id, display_name, "上傳圖片分析", error_message,
+                                is_fraud_related=False
+                            )
                         except Exception as push_error:
                             logger.error(f"圖片錯誤訊息使用push_message也失敗: {push_error}")
                 
