@@ -24,6 +24,9 @@ from image_analysis_service import (
 # 導入統一的 Flex Message 服務
 from flex_message_service import create_analysis_flex_message
 
+# 導入網域變形檢測
+from domain_spoofing_detector import detect_domain_spoofing
+
 # 設置日誌
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -35,6 +38,8 @@ class ImageHandler:
     def __init__(self, line_bot_api: LineBotApi = None):
         """初始化圖片處理器"""
         self.line_bot_api = line_bot_api
+        # 載入安全網域列表
+        self.safe_domains = self._load_safe_domains()
     
     def handle_image_message(self, message_id: str, user_id: str, display_name: str, 
                             context_message: str = "", analysis_type: str = "GENERAL") -> Tuple[FlexSendMessage, str]:
@@ -131,6 +136,22 @@ class ImageHandler:
                 analysis_type = "SOCIAL_MEDIA"
                 logger.info("檢測到社交媒體相關關鍵詞，使用社交媒體分析")
         
+        # 檢查提取的文字中是否包含網址，進行網域變形檢測
+        domain_spoofing_result = self._check_domain_spoofing_in_text(extracted_text)
+        
+        # 如果檢測到網域變形攻擊，直接返回高風險結果
+        if domain_spoofing_result.get("is_spoofing", False):
+            logger.info(f"檢測到網域變形攻擊: {domain_spoofing_result.get('spoofed_domain', '')}")
+            return {
+                "success": True,
+                "risk_level": "極高風險",
+                "fraud_type": "網域名稱變形攻擊",
+                "explanation": domain_spoofing_result.get("explanation", "檢測到可疑的假冒網域"),
+                "suggestions": domain_spoofing_result.get("suggestions", "🚫 立即停止使用此網站\n🔍 確認官方網址\n🛡️ 如已輸入資料請立即更改密碼"),
+                "extracted_text": extracted_text,
+                "spoofing_details": domain_spoofing_result
+            }
+        
         # 檢查是否包含QR碼
         qr_result = detect_qr_code(image_content)
         
@@ -175,6 +196,114 @@ class ImageHandler:
             "YouTube", "頻道", "訂閱", "追蹤", "按讚", "分享", "留言", "直播", "私訊", "限時動態"
         ]
         return any(keyword in text for keyword in social_keywords)
+    
+    def _load_safe_domains(self) -> Dict:
+        """載入安全網域列表"""
+        try:
+            import json
+            import os
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            safe_domains_path = os.path.join(script_dir, 'safe_domains.json')
+            
+            with open(safe_domains_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                # 扁平化分類的安全網域字典
+                flattened_safe_domains = {}
+                for category, domains in data['safe_domains'].items():
+                    if isinstance(domains, dict):
+                        flattened_safe_domains.update(domains)
+                
+                return flattened_safe_domains
+        except Exception as e:
+            logger.error(f"載入安全網域列表失敗: {e}")
+            return {}
+    
+    def _check_domain_spoofing_in_text(self, text: str) -> Dict:
+        """
+        檢查文字中是否包含可疑的網域變形攻擊
+        
+        Args:
+            text: 提取的文字內容
+            
+        Returns:
+            Dict: 網域變形檢測結果
+        """
+        import re
+        
+        # 使用正則表達式提取所有可能的網址
+        url_patterns = [
+            r'https?://[^\s<>"{}|\\^`\[\]]+',  # 標準 HTTP/HTTPS URL
+            r'www\.[^\s<>"{}|\\^`\[\]]+',      # www 開頭的網址
+            r'[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/[^\s]*)?'  # 一般網域格式
+        ]
+        
+        urls = []
+        for pattern in url_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            urls.extend(matches)
+        
+        # 清理和去重
+        cleaned_urls = []
+        for url in urls:
+            # 移除末尾的標點符號
+            url = re.sub(r'[.,;:!?)\]}>]+$', '', url)
+            if url and url not in cleaned_urls:
+                cleaned_urls.append(url)
+        
+        logger.info(f"從圖片文字中提取到的網址: {cleaned_urls}")
+        
+        # 檢查每個網址是否為網域變形攻擊
+        for url in cleaned_urls:
+            # 提取網域部分
+            domain = url
+            if '://' in url:
+                domain = url.split('://')[1].split('/')[0]
+            elif url.startswith('www.'):
+                domain = url.split('/')[0]
+            else:
+                # 如果不是完整URL，假設是網域
+                domain = url.split('/')[0]
+            
+            # 進行網域變形檢測
+            spoofing_result = detect_domain_spoofing(domain, self.safe_domains)
+            
+            if spoofing_result.get("is_spoofed", False):
+                logger.info(f"檢測到網域變形攻擊: {domain} -> {spoofing_result}")
+                
+                # 生成詳細的說明
+                spoofed_domain = spoofing_result.get("spoofed_domain", domain)
+                original_domain = spoofing_result.get("original_domain", "未知")
+                attack_type = spoofing_result.get("spoofing_type", "網域變形")
+                risk_explanation = spoofing_result.get("risk_explanation", "")
+                
+                # 使用原有的風險說明，或生成新的
+                if risk_explanation:
+                    explanation = risk_explanation
+                else:
+                    explanation = f"這個網址「{spoofed_domain}」是假冒「{original_domain}」的詐騙網站！" \
+                                f"詐騙集團故意把網址改得很像真的，想騙取您的個人資料或金錢。" \
+                                f"攻擊類型：{attack_type}。"
+                
+                suggestions = f"🚫 立即停止使用此網站\n" \
+                            f"🔍 正確網址應該是：{original_domain}\n" \
+                            f"🛡️ 如已輸入資料請立即更改密碼\n" \
+                            f"💳 檢查信用卡及銀行帳戶是否有異常"
+                
+                return {
+                    "is_spoofing": True,
+                    "spoofed_domain": spoofed_domain,
+                    "original_domain": original_domain,
+                    "spoofing_type": attack_type,
+                    "explanation": explanation,
+                    "suggestions": suggestions,
+                    "detected_url": url
+                }
+        
+        # 沒有檢測到網域變形攻擊
+        return {
+            "is_spoofing": False,
+            "detected_urls": cleaned_urls
+        }
     
     def _create_error_flex_message(self, error_message: str, display_name: str) -> FlexSendMessage:
         """

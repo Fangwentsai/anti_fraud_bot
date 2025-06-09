@@ -42,10 +42,11 @@ class FlexMessageService:
     def create_analysis_flex_message(self, analysis_data, display_name="朋友", original_message="", user_id=None):
         """創建詐騙分析Flex Message"""
         try:
-            risk_level = analysis_data.get("risk_level", "未知")
-            fraud_type = analysis_data.get("fraud_type", "未知類型")
-            explanation = analysis_data.get("explanation", "無法獲取詳細分析。")
-            suggestions = analysis_data.get("suggestions", "請謹慎處理此訊息。")
+            # 安全地獲取數據，確保不為空
+            risk_level = str(analysis_data.get("risk_level", "未知")).strip() or "未知"
+            fraud_type = str(analysis_data.get("fraud_type", "未知類型")).strip() or "未知類型"
+            explanation = str(analysis_data.get("explanation", "無法獲取詳細分析。")).strip() or "無法獲取詳細分析。"
+            suggestions = str(analysis_data.get("suggestions", "請謹慎處理此訊息。")).strip() or "請謹慎處理此訊息。"
             is_emerging = analysis_data.get("is_emerging", False)
             
             # 檢查是否為健康產品分析結果
@@ -63,6 +64,16 @@ class FlexMessageService:
                 title = "🔬 健康科學分析"
             else:
                 title = "🔍 詐騙風險分析"
+            
+            # 最後一次檢查，確保所有文字欄位都不為空
+            if not risk_level.strip():
+                risk_level = "未知"
+            if not fraud_type.strip():
+                fraud_type = "未知類型"
+            if not explanation.strip():
+                explanation = "無法獲取詳細分析。"
+            if not suggestions.strip():
+                suggestions = "請謹慎處理此訊息。"
             
             # 建立Flex Message
             bubble = {
@@ -202,16 +213,10 @@ class FlexMessageService:
                             "style": "primary",
                             "height": "sm",
                             "action": {
-                                "type": "postback",
+                                "type": "message",
                                 "label": "🏠 回到首頁",
-                                "data": "action=show_main_menu"
+                                "text": "土豆 主選單"
                             }
-                        },
-                        {
-                            "type": "box",
-                            "layout": "vertical",
-                            "contents": [],
-                            "margin": "sm"
                         }
                     ],
                     "flex": 0

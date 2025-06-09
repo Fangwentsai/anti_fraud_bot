@@ -288,13 +288,17 @@ class ImageAnalysisService:
             for line in lines:
                 line = line.strip()
                 if line.startswith("風險等級：") or line.startswith("風險等級:"):
-                    parsed_result["risk_level"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+                    value = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+                    parsed_result["risk_level"] = value if value else "中風險"
                 elif line.startswith("詐騙類型：") or line.startswith("詐騙類型:"):
-                    parsed_result["fraud_type"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+                    value = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+                    parsed_result["fraud_type"] = value if value else "未知"
                 elif line.startswith("說明：") or line.startswith("說明:"):
-                    parsed_result["explanation"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+                    value = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+                    parsed_result["explanation"] = value if value else "無法解析分析結果。"
                 elif line.startswith("建議：") or line.startswith("建議:"):
-                    parsed_result["suggestions"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+                    value = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+                    parsed_result["suggestions"] = value if value else "建議謹慎處理。"
             
             # 如果說明為空，嘗試從整個回應中提取
             if not parsed_result["explanation"] or parsed_result["explanation"] == "無法解析分析結果。":
