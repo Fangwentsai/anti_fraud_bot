@@ -289,34 +289,91 @@ def parse_fraud_analysis(analysis_result):
         lines = analysis_result.strip().split('\n')
         result = {
             "risk_level": "中風險",
-            "fraud_type": "未知",
+            "fraud_type": "需要進一步分析",
             "explanation": "無法解析分析結果。",
             "suggestions": "建議謹慎處理。",
             "is_emerging": False
         }
         
+        # 先嘗試解析結構化格式
         for line in lines:
             line = line.strip()
             if line.startswith("風險等級：") or line.startswith("風險等級:"):
                 result["risk_level"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
             elif line.startswith("詐騙類型：") or line.startswith("詐騙類型:"):
-                result["fraud_type"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+                fraud_type = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+                # 避免使用"未知"作為詐騙類型
+                if fraud_type and fraud_type not in ["未知", "不明", "無法確定"]:
+                    result["fraud_type"] = fraud_type
             elif line.startswith("說明：") or line.startswith("說明:"):
-                result["explanation"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+                explanation = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+                if explanation:
+                    result["explanation"] = explanation
             elif line.startswith("建議：") or line.startswith("建議:"):
-                result["suggestions"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+                suggestions = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+                if suggestions:
+                    result["suggestions"] = suggestions
             elif line.startswith("新興手法：") or line.startswith("新興手法:"):
                 emerging_text = line.split("：", 1)[-1].split(":", 1)[-1].strip()
                 result["is_emerging"] = emerging_text in ["是", "Yes", "true", "True"]
         
+        # 如果沒有解析到說明，嘗試從整個回應中提取
         if not result["explanation"] or result["explanation"] == "無法解析分析結果。":
+            # 移除格式標籤，取得純文字內容
             clean_text = analysis_result
             for prefix in ["風險等級：", "風險等級:", "詐騙類型：", "詐騙類型:", "說明：", "說明:", "建議：", "建議:", "新興手法：", "新興手法:"]:
                 clean_text = clean_text.replace(prefix, "")
             
+            # 分割成行並過濾空行
             clean_lines = [line.strip() for line in clean_text.split('\n') if line.strip()]
+            
+            # 如果有內容，使用第一行作為說明
             if clean_lines:
                 result["explanation"] = clean_lines[0]
+            
+            # 如果還是沒有有效說明，使用整個回應
+            if not result["explanation"] or len(result["explanation"]) < 10:
+                result["explanation"] = analysis_result.strip()
+        
+        # 智能推斷詐騙類型（如果仍然是預設值）
+        if result["fraud_type"] == "需要進一步分析":
+            content_lower = analysis_result.lower()
+            
+            # 根據關鍵詞推斷詐騙類型
+            if any(keyword in content_lower for keyword in ["投資", "理財", "股票", "基金", "獲利", "報酬", "收益"]):
+                result["fraud_type"] = "投資詐騙"
+            elif any(keyword in content_lower for keyword in ["購物", "商品", "產品", "減肥", "美容", "療效"]):
+                result["fraud_type"] = "購物詐騙/虛假廣告"
+            elif any(keyword in content_lower for keyword in ["交友", "約會", "感情", "戀愛", "單身"]):
+                result["fraud_type"] = "假交友詐騙"
+            elif any(keyword in content_lower for keyword in ["中獎", "獎金", "抽獎", "幸運"]):
+                result["fraud_type"] = "中獎詐騙"
+            elif any(keyword in content_lower for keyword in ["工作", "兼職", "招聘", "求職", "面試"]):
+                result["fraud_type"] = "求職詐騙"
+            elif any(keyword in content_lower for keyword in ["網址", "連結", "點擊", "登入", "密碼"]):
+                result["fraud_type"] = "釣魚網站"
+            elif any(keyword in content_lower for keyword in ["冒充", "假冒", "身分", "政府", "銀行"]):
+                result["fraud_type"] = "假冒身分詐騙"
+            elif "風險" in content_lower and any(level in content_lower for level in ["低", "無"]):
+                result["fraud_type"] = "非詐騙相關"
+            else:
+                result["fraud_type"] = "可疑訊息"
+        
+        # 確保風險等級有效
+        valid_risk_levels = ["極低風險", "低風險", "中風險", "高風險", "極高風險", "無風險"]
+        if result["risk_level"] not in valid_risk_levels:
+            # 嘗試從文字中推斷風險等級
+            content_lower = analysis_result.lower()
+            if any(keyword in content_lower for keyword in ["極高", "非常高", "很高"]):
+                result["risk_level"] = "極高風險"
+            elif any(keyword in content_lower for keyword in ["高風險", "高"]):
+                result["risk_level"] = "高風險"
+            elif any(keyword in content_lower for keyword in ["低風險", "低", "安全"]):
+                result["risk_level"] = "低風險"
+            elif any(keyword in content_lower for keyword in ["極低", "非常低", "無風險"]):
+                result["risk_level"] = "極低風險"
+            else:
+                result["risk_level"] = "中風險"
         
         return result
         
@@ -720,13 +777,27 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                 "message": "AI分析服務暫時不可用，請稍後再試"
             }
         
+        # 構建詳細的分析請求
+        analysis_request = f"""請分析以下訊息是否為詐騙，並按照以下格式回覆：
+
+風險等級：[極低風險/低風險/中風險/高風險/極高風險]
+詐騙類型：[根據上述分類指南選擇具體類型，不要使用"未知"]
+說明：[用簡單易懂的話解釋為什麼這個訊息可疑或安全，要具體分析內容]
+建議：[給出具體的防範建議，使用emoji符號]
+新興手法：[是/否]
+
+要分析的訊息：
+{analysis_message}
+
+請仔細分析訊息內容，不要給出模糊的回答。如果是詐騙，要明確指出是哪種類型的詐騙。"""
+        
         chat_response = openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "你是一位名為「防詐騙助手」的AI聊天機器人，專門幫助50-60歲的長輩防範詐騙。你的說話風格要：\n1. 非常簡單易懂，像鄰居朋友在聊天\n2. 用溫暖親切的語氣，不要太正式\n3. 當給建議時，一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號\n4. 避免複雜的專業術語，用日常生活的話來解釋\n5. 當用戶提到投資、轉帳、可疑訊息時，要特別關心並給出簡單明確的建議\n6. 回應要簡短，不要太長篇大論\n\n詐騙類型分類指南：\n1. 購物詐騙/虛假廣告：涉及商品購買、減肥產品、美容產品、健康食品等宣稱效果誇大的商品\n2. 投資詐騙：涉及投資理財、股票、基金、加密貨幣等金融投資行為\n3. 假交友詐騙：涉及交友、約會、婚戀等感情互動\n4. 釣魚網站：偽造的網站，試圖騙取用戶的個人或金融資料\n5. 假冒身分詐騙：冒充親友、公司、政府機構等身份\n6. 中獎詐騙：宣稱用戶中獎或獲得意外獎勵\n7. 求職詐騙：涉及工作機會、求職、兼職等就業相關內容\n8. 網路釣魚：通過電子郵件、簡訊等方式誘導用戶點擊惡意鏈接\n9. 失效短網址風險：無法展開或驗證的短網址\n10. 其他詐騙：不屬於上述類別的其他詐騙形式\n\n若分析的是產品效果的真實性（如減肥、美容產品等），請歸類為「購物詐騙/虛假廣告」而非投資詐騙。"},
-                {"role": "user", "content": openai_prompt}
+                {"role": "system", "content": "你是一位專業的防詐騙分析師，專門幫助識別各種詐騙手法。你必須仔細分析每個訊息的內容，給出具體明確的分析結果，不能使用模糊的詞彙如'未知'。"},
+                {"role": "user", "content": analysis_request}
             ],
-            temperature=0.2,
+            temperature=0.1,
             max_tokens=1000
         )
         
@@ -866,7 +937,7 @@ if handler:
         # 檢查是否為空訊息
         if not cleaned_message.strip():
             reply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐小助手，記得用土豆呼喚我喔！\n" \
-                        f"讓我用4大服務保護你：\n如果點擊按鈕沒反應可能在忙，請再叫我一次喔(🧎)\n\n" \
+                        f"讓我用4大服務保護你：\n如果沒反應請再叫我一次喔(🧎)\n\n" \
                         f"🔍 文字或網站分析：\n立刻分析假冒文字、詐騙訊息或釣魚網站！\n" \
                         f"📷 上傳截圖分析：\n不想輸入文字嗎？！直接截圖給我！\n" \
                         f"🎯 防詐騙測驗：\n玩問答提升你的防詐意識，輕鬆識破詐騙！\n" \
@@ -1563,7 +1634,7 @@ if handler:
                     
                 elif action == 'show_main_menu':
                     rreply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐小助手，記得用土豆呼喚我喔！\n" \
-                        f"讓我用4大服務保護你：\n如果點擊按鈕沒反應可能在忙，請再叫我一次喔(🧎)\n\n" \
+                                f"讓我用4大服務保護你：\n如果沒反應請再叫我一次喔(🧎)\n\n" \
                                 f"🔍 文字或網站分析：\n立刻分析假冒文字、詐騙訊息或釣魚網站！\n" \
                                 f"📷 上傳截圖分析：\n不想輸入文字嗎？！直接截圖給我！\n" \
                                 f"🎯 防詐騙測驗：\n玩問答提升你的防詐意識，輕鬆識破詐騙！\n" \
