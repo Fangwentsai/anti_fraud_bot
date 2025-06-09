@@ -874,11 +874,32 @@ if handler:
                         f"💬 日常閒聊：\n陪你談天說地 甚至可以輸入：\n土豆 蔥爆牛肉怎麼做😂\n\n" \
                         f"💡 點擊下方按鈕，或直接告訴我你需要什麼！"
                 
+            # 使用 emoji 的 QuickReply 格式，簡潔美觀
             quick_reply = QuickReply(items=[
-                QuickReplyButton(action=MessageAction(label="🔍 文字或網站分析", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
-                QuickReplyButton(action=MessageAction(label="📷 上傳截圖分析", text=f"{bot_trigger_keyword} 請幫我分析圖片：")),
-                QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text=f"{bot_trigger_keyword} 防詐騙測試")),
-                QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text=f"{bot_trigger_keyword} 詐騙類型列表")),
+                QuickReplyButton(
+                    action=MessageAction(
+                        label="🔍 文字或網站分析", 
+                        text=f"{bot_trigger_keyword} 請幫我分析這則訊息："
+                    )
+                ),
+                QuickReplyButton(
+                    action=MessageAction(
+                        label="📷 上傳截圖分析", 
+                        text=f"{bot_trigger_keyword} 請幫我分析圖片："
+                    )
+                ),
+                QuickReplyButton(
+                    action=MessageAction(
+                        label="🎯 防詐騙測驗", 
+                        text=f"{bot_trigger_keyword} 防詐騙測試"
+                    )
+                ),
+                QuickReplyButton(
+                    action=MessageAction(
+                        label="📚 詐騙案例", 
+                        text=f"{bot_trigger_keyword} 詐騙類型列表"
+                    )
+                ),
             ])
             
             mention_text = f"@{display_name} {reply_text}"
@@ -886,82 +907,6 @@ if handler:
                 reply_text = mention_text
             
             line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
-            
-            try:
-                import time
-                time.sleep(1)
-                
-                unified_flex = FlexSendMessage(
-                    alt_text="土豆的服務選單",
-                    contents=BubbleContainer(
-                        size="kilo",
-                        header=BoxComponent(
-                            layout="vertical",
-                            contents=[
-                                TextComponent(
-                                    text="🥜 土豆的服務選單",
-                                    weight="bold",
-                                    size="lg",
-                                    color="#1DB446"
-                                )
-                            ],
-                            background_color="#F0F0F0",
-                            padding_all="sm"
-                        ),
-                        body=BoxComponent(
-                            layout="vertical",
-                            spacing="sm",
-                            contents=[
-                                ButtonComponent(
-                                    style="primary",
-                                    color="#FF6B6B",
-                                    action=MessageAction(
-                                        label="🔍 文字或網站分析",
-                                        text=f"{bot_trigger_keyword} 請幫我分析這則訊息："
-                                    )
-                                ),
-                                ButtonComponent(
-                                    style="primary", 
-                                    color="#F39C12",
-                                    action=MessageAction(
-                                        label="📷 上傳截圖分析",
-                                        text=f"{bot_trigger_keyword} 請幫我分析圖片："
-                                    )
-                                ),
-                                ButtonComponent(
-                                    style="primary",
-                                    color="#4ECDC4",
-                                    action=MessageAction(
-                                        label="🎯 防詐騙測驗",
-                                        text=f"{bot_trigger_keyword} 防詐騙測試"
-                                    )
-                                ),
-                                ButtonComponent(
-                                    style="primary",
-                                    color="#45B7D1", 
-                                    action=MessageAction(
-                                        label="📚 詐騙案例",
-                                        text=f"{bot_trigger_keyword} 詐騙類型列表"
-                                    )
-                                )
-                            ]
-                        )
-                    )
-                )
-                
-                if is_group_message:
-                    line_bot_api.push_message(event.source.group_id, unified_flex)
-                else:
-                    line_bot_api.push_message(user_id, unified_flex)
-                logger.info("已發送統一的彩色Flex Message按鈕")
-                
-            except LineBotApiError as e:
-                if e.status_code == 429:
-                    logger.warning(f"達到LINE API月度限制，無法發送額外按鈕: {e}")
-                else:
-                    logger.error(f"LINE API其他錯誤: {e}")
-            except Exception as e:
-                logger.error(f"發送統一按鈕時發生未知錯誤: {e}")
             
             return
 
@@ -1478,11 +1423,32 @@ if handler:
                                 f"💬 日常閒聊：\n陪你談天說地 甚至可以輸入：\n土豆 蔥爆牛肉怎麼做😂\n\n" \
                                 f"💡 點擊下方按鈕，或直接告訴我你需要什麼！"
                     
+                    # 使用 emoji 的 QuickReply 格式，簡潔美觀
                     quick_reply = QuickReply(items=[
-                        QuickReplyButton(action=MessageAction(label="🔍 文字或網站分析", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
-                        QuickReplyButton(action=MessageAction(label="📷 上傳截圖分析", text=f"{bot_trigger_keyword} 請幫我分析圖片：")),
-                        QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text=f"{bot_trigger_keyword} 防詐騙測試")),
-                        QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text=f"{bot_trigger_keyword} 詐騙類型列表")),
+                        QuickReplyButton(
+                            action=MessageAction(
+                                label="🔍 文字或網站分析", 
+                                text=f"{bot_trigger_keyword} 請幫我分析這則訊息："
+                            )
+                        ),
+                        QuickReplyButton(
+                            action=MessageAction(
+                                label="📷 上傳截圖分析", 
+                                text=f"{bot_trigger_keyword} 請幫我分析圖片："
+                            )
+                        ),
+                        QuickReplyButton(
+                            action=MessageAction(
+                                label="🎯 防詐騙測驗", 
+                                text=f"{bot_trigger_keyword} 防詐騙測試"
+                            )
+                        ),
+                        QuickReplyButton(
+                            action=MessageAction(
+                                label="📚 詐騙案例", 
+                                text=f"{bot_trigger_keyword} 詐騙類型列表"
+                            )
+                        ),
                     ])
                     
                     mention_text = f"@{display_name} {reply_text}"
@@ -1490,78 +1456,6 @@ if handler:
                         reply_text = mention_text
                     
                     line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
-                    
-                    try:
-                        import time
-                        time.sleep(1)
-                        
-                        unified_flex = FlexSendMessage(
-                            alt_text="土豆的服務選單",
-                            contents=BubbleContainer(
-                                size="kilo",
-                                header=BoxComponent(
-                                    layout="vertical",
-                                    contents=[
-                                        TextComponent(
-                                            text="🥜 土豆的服務選單",
-                                            weight="bold",
-                                            size="lg",
-                                            color="#1DB446"
-                                        )
-                                    ],
-                                    background_color="#F0F0F0",
-                                    padding_all="sm"
-                                ),
-                                body=BoxComponent(
-                                    layout="vertical",
-                                    spacing="sm",
-                                    contents=[
-                                        ButtonComponent(
-                                            style="primary",
-                                            color="#FF6B6B",
-                                            action=MessageAction(
-                                                label="🔍 文字或網站分析",
-                                                text=f"{bot_trigger_keyword} 請幫我分析這則訊息："
-                                            )
-                                        ),
-                                        ButtonComponent(
-                                            style="primary", 
-                                            color="#F39C12",
-                                            action=MessageAction(
-                                                label="📷 上傳截圖分析",
-                                                text=f"{bot_trigger_keyword} 請幫我分析圖片："
-                                            )
-                                        ),
-                                        ButtonComponent(
-                                            style="primary",
-                                            color="#4ECDC4",
-                                            action=MessageAction(
-                                                label="🎯 防詐騙測驗",
-                                                text=f"{bot_trigger_keyword} 防詐騙測試"
-                                            )
-                                        ),
-                                        ButtonComponent(
-                                            style="primary",
-                                            color="#45B7D1", 
-                                            action=MessageAction(
-                                                label="📚 詐騙案例",
-                                                text=f"{bot_trigger_keyword} 詐騙類型列表"
-                                            )
-                                        )
-                                    ]
-                                )
-                            )
-                        )
-                        
-                        line_bot_api.push_message(user_id, unified_flex)
-                        
-                    except LineBotApiError as e:
-                        if e.status_code == 429:
-                            logger.warning(f"達到LINE API月度限制，無法發送額外按鈕: {e}")
-                        else:
-                            logger.error(f"LINE API其他錯誤: {e}")
-                    except Exception as e:
-                        logger.error(f"發送統一按鈕時發生未知錯誤: {e}")
                         
                 elif action == 'report_feedback':
                     feedback_message = f"📝 回報註記功能開發中！\n\n" \
