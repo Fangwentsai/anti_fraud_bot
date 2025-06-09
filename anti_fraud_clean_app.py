@@ -2066,7 +2066,7 @@ if handler:
                     )
                     
                 elif action == 'show_main_menu':
-                    rreply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐小助手，記得用土豆呼喚我喔！\n" \
+                    reply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐小助手，記得用土豆呼喚我喔！\n" \
                                 f"讓我用4大服務保護你：\n如果沒反應請再叫我一次喔(跪)\n\n" \
                                 f"🔍 文字或網站分析：\n立刻分析假冒文字、詐騙訊息或釣魚網站！\n" \
                                 f"📷 上傳截圖分析：\n不想輸入文字嗎？！直接截圖給我！\n" \
