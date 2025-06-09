@@ -495,7 +495,8 @@
             "typeform.com": "Typeform (互動式表單問卷)",
             "trello.com": "Trello (專案管理工具)",
             "asana.com": "Asana (專案管理工具)",
-            "slack.com": "Slack (團隊溝通協作平台)"
+            "slack.com": "Slack (團隊溝通協作平台)",
+            "lin.ee": "LINE 官方短網址服務 (用於 LINE 官方帳號、群組等連結)"
         },
         "支付 / 點數": {
             "jkos.com": "街口支付",

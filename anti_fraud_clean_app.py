@@ -485,39 +485,250 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
             if not original_url.startswith(('http://', 'https://')):
                 original_url = 'https://' + original_url
                 
+            # 先檢查是否為短網址
             original_url, expanded_url, is_short_url, url_expanded_successfully = expand_short_url(original_url)
             
-            if is_short_url and url_expanded_successfully:
-                analysis_message = user_message.replace(url_match.group(0), f"{original_url} (展開後: {expanded_url})")
-                logger.info(f"已展開短網址進行分析: {original_url} -> {expanded_url}")
+            # 如果是短網址，提供特殊處理
+            if is_short_url:
+                if url_expanded_successfully:
+                    # 短網址成功展開，分析展開後的網址
+                    analysis_message = user_message.replace(url_match.group(0), f"{original_url} (展開後: {expanded_url})")
+                    logger.info(f"已展開短網址進行分析: {original_url} -> {expanded_url}")
+                    
+                    # 首先檢查展開後的網址是否為白名單網站
+                    try:
+                        parsed = urlparse(expanded_url)
+                        domain = parsed.netloc.lower()
+                        
+                        # 創建標準化的安全網域列表
+                        normalized_safe_domains = {}
+                        for safe_domain, description in SAFE_DOMAINS.items():
+                            safe_domain_lower = safe_domain.lower()
+                            normalized_safe_domains[safe_domain_lower] = (safe_domain, description)
+                            
+                            if safe_domain_lower.startswith('www.'):
+                                normalized_safe_domains[safe_domain_lower[4:]] = (safe_domain, description)
+                            else:
+                                normalized_safe_domains['www.' + safe_domain_lower] = (safe_domain, description)
+                        
+                        # 首先檢查完全匹配
+                        if domain in normalized_safe_domains:
+                            original_domain, site_description = normalized_safe_domains[domain]
+                            logger.info(f"短網址展開後檢測到白名單網域: {domain} -> {original_domain}")
+                            
+                            # 特殊處理：lin.ee 短網址 - 展開後連到安全網站
+                            if original_url and 'lin.ee' in original_url.lower():
+                                return {
+                                    "success": True,
+                                    "message": "分析完成",
+                                    "result": {
+                                        "risk_level": "低風險",
+                                        "fraud_type": "LINE 官方短網址連到安全網站",
+                                        "explanation": f"✅ 這是 LINE 官方短網址，展開後連到安全的網站。\n\n🔍 短網址：{original_url}\n🎯 真實目的地：{expanded_url}\n\n這個網站是 {original_domain}，{site_description}，屬於安全網站。\n\n💡 溫馨提醒：雖然這次是安全的，但詐騙集團也會申請正規 LINE 帳號來傳送詐騙連結，建議還是要確認傳送者身份。",
+                                        "suggestions": "✅ 這個 LINE 短網址是安全的，可以放心使用\n🔍 建議確認傳送者身份，確保不是陌生人\n⚠️ 如果內容涉及投資、賺錢、購物，要特別小心\n🛡️ 遇到要求轉帳或提供個人資料時，務必多方查證\n💡 養成良好習慣：即使是官方平台也要保持警覺",
+                                        "is_emerging": False,
+                                        "display_name": display_name,
+                                        "original_url": original_url,
+                                        "expanded_url": expanded_url,
+                                        "is_short_url": is_short_url,
+                                        "url_expanded_successfully": url_expanded_successfully
+                                    },
+                                    "raw_result": f"LINE 官方短網址連到安全網站：{site_description}"
+                                }
+                            
+                            # 其他安全網域的一般處理
+                            return {
+                                "success": True,
+                                "message": "分析完成",
+                                "result": {
+                                    "risk_level": "低風險",
+                                    "fraud_type": "短網址連結到安全網站",
+                                    "explanation": f"✅ 這是一個短網址，展開後連到安全的網站。\n\n🔍 短網址：{original_url}\n🎯 真實目的地：{expanded_url}\n\n這個網站是 {original_domain}，{site_description}，可以安心使用。\n\n💡 雖然這次是安全的，但建議以後遇到短網址時還是要小心，最好先確認來源再點擊。",
+                                    "suggestions": "✅ 這個短網址是安全的，可以放心使用\n🔍 建議直接從官方管道進入該網站會更安全\n💡 以後遇到短網址時，可以先詢問傳送者內容\n🛡️ 養成良好的網路安全習慣，不隨意點擊不明連結",
+                                    "is_emerging": False,
+                                    "display_name": display_name,
+                                    "original_url": original_url,
+                                    "expanded_url": expanded_url,
+                                    "is_short_url": is_short_url,
+                                    "url_expanded_successfully": url_expanded_successfully
+                                },
+                                "raw_result": f"短網址展開後連到安全網站：{site_description}"
+                            }
+                        
+                        # 檢查子網域是否屬於白名單網域
+                        for safe_domain_lower, (safe_domain, description) in normalized_safe_domains.items():
+                            if domain.endswith('.' + safe_domain_lower):
+                                logger.info(f"短網址展開後檢測到白名單子網域: {domain} -> {safe_domain}")
+                                
+                                # 特殊處理：lin.ee 短網址 - 展開後連到安全網站的子網域
+                                if original_url and 'lin.ee' in original_url.lower():
+                                    return {
+                                        "success": True,
+                                        "message": "分析完成",
+                                        "result": {
+                                            "risk_level": "低風險",
+                                            "fraud_type": "LINE 官方短網址連到安全網站",
+                                            "explanation": f"✅ 這是 LINE 官方短網址，展開後連到安全的網站。\n\n🔍 短網址：{original_url}\n🎯 真實目的地：{expanded_url}\n\n這個網站是 {safe_domain} 的子網域，{description}，屬於安全網站。\n\n💡 溫馨提醒：雖然這次是安全的，但詐騙集團也會申請正規 LINE 帳號來傳送詐騙連結，建議還是要確認傳送者身份。",
+                                            "suggestions": "✅ 這個 LINE 短網址是安全的，可以放心使用\n🔍 建議確認傳送者身份，確保不是陌生人\n⚠️ 如果內容涉及投資、賺錢、購物，要特別小心\n🛡️ 遇到要求轉帳或提供個人資料時，務必多方查證\n💡 養成良好習慣：即使是官方平台也要保持警覺",
+                                            "is_emerging": False,
+                                            "display_name": display_name,
+                                            "original_url": original_url,
+                                            "expanded_url": expanded_url,
+                                            "is_short_url": is_short_url,
+                                            "url_expanded_successfully": url_expanded_successfully
+                                        },
+                                        "raw_result": f"LINE 官方短網址連到安全網站：{description}"
+                                    }
+                                
+                                # 其他安全網域的一般處理
+                                return {
+                                    "success": True,
+                                    "message": "分析完成",
+                                    "result": {
+                                        "risk_level": "低風險",
+                                        "fraud_type": "短網址連結到安全網站",
+                                        "explanation": f"✅ 這是一個短網址，展開後連到安全的網站。\n\n🔍 短網址：{original_url}\n🎯 真實目的地：{expanded_url}\n\n這個網站是 {safe_domain} 的子網域，{description}，可以安心使用。\n\n💡 雖然這次是安全的，但建議以後遇到短網址時還是要小心，最好先確認來源再點擊。",
+                                        "suggestions": "✅ 這個短網址是安全的，可以放心使用\n🔍 建議直接從官方管道進入該網站會更安全\n💡 以後遇到短網址時，可以先詢問傳送者內容\n🛡️ 養成良好的網路安全習慣，不隨意點擊不明連結",
+                                        "is_emerging": False,
+                                        "display_name": display_name,
+                                        "original_url": original_url,
+                                        "expanded_url": expanded_url,
+                                        "is_short_url": is_short_url,
+                                        "url_expanded_successfully": url_expanded_successfully
+                                    },
+                                    "raw_result": f"短網址展開後連到安全網站：{description}"
+                                }
+                    except Exception as e:
+                        logger.error(f"解析展開後的網址時發生錯誤: {e}")
+                    
+                    # 如果不是白名單網站，再進行網域變形檢測
+                    spoofing_result = detect_domain_spoofing(expanded_url, SAFE_DOMAINS)
+                    if spoofing_result['is_spoofed']:
+                        logger.warning(f"短網址展開後檢測到網域變形攻擊: {spoofing_result['spoofed_domain']} 模仿 {spoofing_result['original_domain']}")
+                        return {
+                            "success": True,
+                            "message": "分析完成",
+                            "result": {
+                                "risk_level": "極高風險",
+                                "fraud_type": "短網址隱藏的網域變形攻擊",
+                                "explanation": f"⚠️ 這是一個短網址，展開後發現是假冒網站！\n\n🔍 短網址：{original_url}\n🎯 真實目的地：{expanded_url}\n\n{spoofing_result['risk_explanation']}\n\n💡 詐騙集團經常使用短網址來隱藏真實的詐騙網站，讓人無法事先判斷風險。",
+                                "suggestions": f"🚫 立即停止點擊這個短網址\n⚠️ 不要輸入任何個人資料或密碼\n🔍 如需使用正牌網站，請直接搜尋 {spoofing_result['original_domain']} 或從書籤進入\n📞 將此可疑網址回報給165反詐騙專線\n💡 以後遇到短網址要特別小心，建議先詢問傳送者內容",
+                                "is_emerging": False,
+                                "display_name": display_name,
+                                "original_url": original_url,
+                                "expanded_url": expanded_url,
+                                "is_short_url": is_short_url,
+                                "url_expanded_successfully": url_expanded_successfully,
+                                "is_domain_spoofing": True,
+                                "spoofing_result": spoofing_result
+                            },
+                            "raw_result": f"短網址隱藏的網域變形攻擊：{spoofing_result['spoofing_type']} - {spoofing_result['risk_explanation']}"
+                        }
+                    
+                    # 如果展開後的網址不是變形攻擊也不是白名單，使用 OpenAI 分析
+                    logger.info(f"短網址展開後需要進一步分析: {original_url} -> {expanded_url}")
+                    
+                    # 特殊處理：lin.ee 短網址展開後不是安全網站，需要更詳細的分析
+                    if original_url and 'lin.ee' in original_url.lower():
+                        # 修改分析訊息，包含短網址和展開後的資訊
+                        analysis_message = f"這是一個 LINE 官方短網址 {original_url}，展開後連到 {expanded_url}。請分析展開後的網站內容是否為詐騙，特別注意：1. 是否為投資詐騙 2. 是否為購物詐騙 3. 是否為假交友詐騙 4. 是否要求提供個人資料或金錢 5. 網站內容是否可疑。由於詐騙集團會申請正規 LINE 帳號來傳送詐騙連結，請特別仔細分析。"
+                    else:
+                        # 一般短網址的分析
+                        analysis_message = f"這是一個短網址 {original_url}，展開後連到 {expanded_url}。請分析展開後的網站內容是否為詐騙。"
+                    
+                    # 繼續使用 OpenAI 分析展開後的內容
+                else:
+                    # 短網址無法展開，直接返回高風險
+                    logger.warning(f"短網址無法展開: {original_url}")
+                    
+                    # 特殊處理：lin.ee 無法展開的情況
+                    if original_url and 'lin.ee' in original_url.lower():
+                        # 檢查訊息內容是否包含明顯的詐騙關鍵詞
+                        fraud_keywords = [
+                            "投資", "獲利", "賺錢", "收益", "報酬", "保證", "穩賺", "高報酬", "低風險",
+                            "限時", "優惠", "機會", "名額", "今天", "立即", "馬上", "快速",
+                            "轉帳", "匯款", "付款", "先付", "保證金", "手續費", "會費",
+                            "私聊", "加LINE", "加我", "聯繫我", "詳談", "私下", "一對一"
+                        ]
+                        
+                        suspicious_content = any(keyword in user_message for keyword in fraud_keywords)
+                        
+                        if suspicious_content:
+                            # 如果訊息內容可疑，進行完整分析而不是直接返回
+                            logger.warning(f"lin.ee 無法展開且訊息內容可疑，進行完整分析")
+                            analysis_message = f"這個訊息包含一個無法展開的 LINE 官方短網址 {original_url}，同時訊息內容可能涉及詐騙。請仔細分析整個訊息內容是否為詐騙，特別注意投資詐騙、購物詐騙等常見手法。訊息內容：{user_message}"
+                            # 繼續進行 OpenAI 分析，不直接返回
+                        else:
+                            # 如果訊息內容看起來正常，返回中風險警告
+                            return {
+                                "success": True,
+                                "message": "分析完成",
+                                "result": {
+                                    "risk_level": "中風險",
+                                    "fraud_type": "LINE 官方短網址無法展開",
+                                    "explanation": f"⚠️ 這是一個 LINE 官方短網址，但我們無法展開查看真正的目的地。\n\n🔍 短網址：{original_url}\n\n可能原因：\n• 連結已失效或過期\n• LINE 官方帳號被停用\n• 網站暫時無法訪問\n• 可能是惡意連結被封鎖\n\n💡 雖然是 LINE 官方服務，但詐騙集團也會申請正規 LINE 帳號。無法展開的連結需要特別小心。",
+                                    "suggestions": "🔍 詢問傳送者這個連結的具體內容和目的\n⚠️ 確認傳送者身份是否可信\n🛡️ 如果不確定來源或內容，建議不要點擊\n📞 如有疑慮可撥打165反詐騙專線諮詢\n💡 記住：即使是官方平台，也可能被不肖人士利用",
+                                    "is_emerging": False,
+                                    "display_name": display_name,
+                                    "original_url": original_url,
+                                    "expanded_url": expanded_url,
+                                    "is_short_url": is_short_url,
+                                    "url_expanded_successfully": url_expanded_successfully
+                                },
+                                "raw_result": f"LINE 官方短網址無法展開，需要謹慎確認：{original_url}"
+                            }
+                    else:
+                        # 一般短網址無法展開，設定分析訊息但不直接返回
+                        analysis_message = user_message
+                    
+                    # 如果不是 lin.ee 或 lin.ee 內容不可疑，對於一般短網址無法展開直接返回高風險
+                    if not (original_url and 'lin.ee' in original_url.lower()):
+                        return {
+                            "success": True,
+                            "message": "分析完成",
+                            "result": {
+                                "risk_level": "高風險",
+                                "fraud_type": "失效或可疑短網址",
+                                "explanation": f"⚠️ 這是一個短網址，但我們無法展開查看真正的目的地。\n\n🔍 短網址：{original_url}\n\n可能原因：\n• 網址已失效或過期\n• 網站暫時無法訪問\n• 可能是惡意網址被封鎖\n• 詐騙網站被下架\n\n💡 無法驗證的短網址特別危險，因為不知道會連到哪個網站。",
+                                "suggestions": "🚫 立即停止點擊這個短網址\n🔍 詢問傳送者這個連結的具體內容\n⚠️ 如果不確定來源，直接刪除或忽略\n🛡️ 遇到失效短網址要特別小心，可能是詐騙陷阱\n📞 如有疑慮可撥打165反詐騙專線諮詢",
+                                "is_emerging": False,
+                                "display_name": display_name,
+                                "original_url": original_url,
+                                "expanded_url": expanded_url,
+                                "is_short_url": is_short_url,
+                                "url_expanded_successfully": url_expanded_successfully
+                            },
+                            "raw_result": f"短網址無法展開，存在安全風險：{original_url}"
+                        }
             else:
                 analysis_message = user_message
         else:
             analysis_message = user_message
 
-        # 檢查網域變形攻擊
-        spoofing_result = detect_domain_spoofing(analysis_message, SAFE_DOMAINS)
-        if spoofing_result['is_spoofed']:
-            logger.warning(f"檢測到網域變形攻擊: {spoofing_result['spoofed_domain']} 模仿 {spoofing_result['original_domain']}")
-            return {
-                "success": True,
-                "message": "分析完成",
-                "result": {
-                    "risk_level": "高風險",
-                    "fraud_type": "網域變形詐騙",
-                    "explanation": spoofing_result['risk_explanation'],
-                    "suggestions": f"• 立即停止使用這個網站\n• 不要輸入任何個人資料或密碼\n• 如需使用正牌網站，請直接搜尋 {spoofing_result['original_domain']} 或從書籤進入\n• 將此可疑網址回報給165反詐騙專線",
-                    "is_emerging": False,
-                    "display_name": display_name,
-                    "original_url": original_url,
-                    "expanded_url": expanded_url,
-                    "is_short_url": is_short_url,
-                    "url_expanded_successfully": url_expanded_successfully,
-                    "is_domain_spoofing": True,
-                    "spoofing_result": spoofing_result
-                },
-                "raw_result": f"網域變形攻擊檢測：{spoofing_result['spoofing_type']} - {spoofing_result['risk_explanation']}"
-            }
+        # 只有在非短網址的情況下才進行網域變形檢測
+        if not is_short_url:
+            spoofing_result = detect_domain_spoofing(analysis_message, SAFE_DOMAINS)
+            if spoofing_result['is_spoofed']:
+                logger.warning(f"檢測到網域變形攻擊: {spoofing_result['spoofed_domain']} 模仿 {spoofing_result['original_domain']}")
+                return {
+                    "success": True,
+                    "message": "分析完成",
+                    "result": {
+                        "risk_level": "極高風險",
+                        "fraud_type": "網域名稱變形攻擊",
+                        "explanation": spoofing_result['risk_explanation'],
+                        "suggestions": f"🚫 立即停止使用這個網站\n⚠️ 不要輸入任何個人資料或密碼\n🔍 如需使用正牌網站，請直接搜尋 {spoofing_result['original_domain']} 或從書籤進入\n📞 將此可疑網址回報給165反詐騙專線",
+                        "is_emerging": False,
+                        "display_name": display_name,
+                        "original_url": original_url,
+                        "expanded_url": expanded_url,
+                        "is_short_url": is_short_url,
+                        "url_expanded_successfully": url_expanded_successfully,
+                        "is_domain_spoofing": True,
+                        "spoofing_result": spoofing_result
+                    },
+                    "raw_result": f"網域變形攻擊檢測：{spoofing_result['spoofing_type']} - {spoofing_result['risk_explanation']}"
+                }
 
         # 檢查招聘訊息是否為低風險
         recruitment_keywords = ["招聘", "招募", "徵才", "應徵", "面試", "職缺", "工作機會", "求才", "求職", "人才", "履歷", "人力銀行", "104人力銀行"]
@@ -730,23 +941,62 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                 if domain in normalized_safe_domains:
                     original_domain, site_description = normalized_safe_domains[domain]
                     logger.info(f"檢測到白名單中的域名: {domain} -> {original_domain}")
-                    return {
-                        "success": True,
-                        "message": "分析完成",
-                        "result": {
-                            "risk_level": "低風險",
-                            "fraud_type": "非詐騙相關",
-                            "explanation": f"這個網站是 {original_domain}，{site_description}，可以安心使用。",
-                            "suggestions": "這是正規網站，不必特別擔心。如有疑慮，建議您直接從官方管道進入該網站。",
-                            "is_emerging": False,
-                            "display_name": display_name,
-                            "original_url": original_url,
-                            "expanded_url": expanded_url,
-                            "is_short_url": is_short_url,
-                            "url_expanded_successfully": url_expanded_successfully
-                        },
-                        "raw_result": f"經過分析，這是已知的可信任網站：{site_description}"
-                    }
+                    
+                    # 特殊處理：lin.ee 需要檢查訊息內容
+                    if domain == 'lin.ee':
+                        # 檢查訊息內容是否包含明顯的詐騙關鍵詞
+                        fraud_keywords = [
+                            "投資", "獲利", "賺錢", "收益", "報酬", "保證", "穩賺", "高報酬", "低風險",
+                            "限時", "優惠", "機會", "名額", "今天", "立即", "馬上", "快速",
+                            "轉帳", "匯款", "付款", "先付", "保證金", "手續費", "會費",
+                            "私聊", "加LINE", "加我", "聯繫我", "詳談", "私下", "一對一"
+                        ]
+                        
+                        suspicious_content = any(keyword in user_message for keyword in fraud_keywords)
+                        
+                        if suspicious_content:
+                            # 如果訊息內容可疑，不直接返回，繼續進行 OpenAI 分析
+                            logger.warning(f"lin.ee 在白名單中但訊息內容可疑，進行完整分析")
+                            analysis_message = f"這個訊息包含 LINE 官方短網址 {original_url}，但訊息內容可能涉及詐騙。請仔細分析整個訊息內容是否為詐騙，特別注意投資詐騙、購物詐騙等常見手法。訊息內容：{user_message}"
+                            # 不返回，繼續進行分析
+                        else:
+                            # 如果訊息內容看起來正常，返回低風險
+                            return {
+                                "success": True,
+                                "message": "分析完成",
+                                "result": {
+                                    "risk_level": "低風險",
+                                    "fraud_type": "非詐騙相關",
+                                    "explanation": f"這個網站是 {original_domain}，{site_description}，可以安心使用。",
+                                    "suggestions": "這是正規網站，不必特別擔心。如有疑慮，建議您直接從官方管道進入該網站。",
+                                    "is_emerging": False,
+                                    "display_name": display_name,
+                                    "original_url": original_url,
+                                    "expanded_url": expanded_url,
+                                    "is_short_url": is_short_url,
+                                    "url_expanded_successfully": url_expanded_successfully
+                                },
+                                "raw_result": f"經過分析，這是已知的可信任網站：{site_description}"
+                            }
+                    else:
+                        # 其他白名單網域的一般處理
+                        return {
+                            "success": True,
+                            "message": "分析完成",
+                            "result": {
+                                "risk_level": "低風險",
+                                "fraud_type": "非詐騙相關",
+                                "explanation": f"這個網站是 {original_domain}，{site_description}，可以安心使用。",
+                                "suggestions": "這是正規網站，不必特別擔心。如有疑慮，建議您直接從官方管道進入該網站。",
+                                "is_emerging": False,
+                                "display_name": display_name,
+                                "original_url": original_url,
+                                "expanded_url": expanded_url,
+                                "is_short_url": is_short_url,
+                                "url_expanded_successfully": url_expanded_successfully
+                            },
+                            "raw_result": f"經過分析，這是已知的可信任網站：{site_description}"
+                        }
                 
                 for safe_domain_key in SAFE_DOMAINS.keys():
                     safe_domain_lower = safe_domain_key.lower()

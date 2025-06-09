@@ -54,6 +54,9 @@ SHORT_URL_DOMAINS = [
     'lihi1.com', 'lihi2.com', 'lihi3.com', 'lihi4.com',
     'short.link', 'url.tw', 'myppt.cc', 'myurl.com.tw',
     
+    # LINE 官方短網址服務
+    'lin.ee',
+    
     # 中國短網址服務（詐騙常用）
     'dwz.cn', 'suo.im', 'mrw.so', 'url.cn', 'sina.lt',
     't.cn', 'weibo.cn', 'tb.cn', 'tmall.com', 'taobao.com'
