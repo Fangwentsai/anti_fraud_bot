@@ -42,12 +42,18 @@ class FlexMessageService:
     def create_analysis_flex_message(self, analysis_data, display_name="朋友", original_message="", user_id=None):
         """創建詐騙分析Flex Message"""
         try:
-            # 安全地獲取數據，確保不為空
+            # 安全地獲取數據，確保不為空，並清理可能的陣列格式
             risk_level = str(analysis_data.get("risk_level", "未知")).strip() or "未知"
             fraud_type = str(analysis_data.get("fraud_type", "未知類型")).strip() or "未知類型"
             explanation = str(analysis_data.get("explanation", "無法獲取詳細分析。")).strip() or "無法獲取詳細分析。"
             suggestions = str(analysis_data.get("suggestions", "請謹慎處理此訊息。")).strip() or "請謹慎處理此訊息。"
             is_emerging = analysis_data.get("is_emerging", False)
+            
+            # 清理可能的陣列格式 "[]"
+            risk_level = risk_level.replace("[]", "").replace("[", "").replace("]", "").strip() or "未知"
+            fraud_type = fraud_type.replace("[]", "").replace("[", "").replace("]", "").strip() or "未知類型"
+            explanation = explanation.replace("[]", "").replace("[", "").replace("]", "").strip() or "無法獲取詳細分析。"
+            suggestions = suggestions.replace("[]", "").replace("[", "").replace("]", "").strip() or "請謹慎處理此訊息。"
             
             # 檢查是否為健康產品分析結果
             is_health_product_analysis = "「" in explanation and "」科學分析" in explanation
@@ -65,14 +71,14 @@ class FlexMessageService:
             else:
                 title = "🔍 詐騙風險分析"
             
-            # 最後一次檢查，確保所有文字欄位都不為空
-            if not risk_level.strip():
+            # 最後一次檢查，確保所有文字欄位都不為空且不包含陣列格式
+            if not risk_level.strip() or risk_level in ["[]", "[", "]"]:
                 risk_level = "未知"
-            if not fraud_type.strip():
+            if not fraud_type.strip() or fraud_type in ["[]", "[", "]"]:
                 fraud_type = "未知類型"
-            if not explanation.strip():
+            if not explanation.strip() or explanation in ["[]", "[", "]"]:
                 explanation = "無法獲取詳細分析。"
-            if not suggestions.strip():
+            if not suggestions.strip() or suggestions in ["[]", "[", "]"]:
                 suggestions = "請謹慎處理此訊息。"
             
             # 建立Flex Message
@@ -680,6 +686,7 @@ class FlexMessageService:
             "低風險": self.colors["success"],
             "低(請依自身狀況評估)": self.colors["success"],
             "極低": self.colors["success"],
+            "極低風險": self.colors["success"],
             "無風險": self.colors["success"]
         }
         return color_map.get(risk_level, self.colors["warning"])
@@ -696,6 +703,7 @@ class FlexMessageService:
             "低": "✅",
             "低風險": "✅",
             "極低": "✅",
+            "極低風險": "✅",
             "無風險": "✅"
         }
         return emoji_map.get(risk_level, "⚡")

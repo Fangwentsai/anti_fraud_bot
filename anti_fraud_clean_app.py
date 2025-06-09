@@ -286,6 +286,9 @@ def get_user_profile(user_id):
 def parse_fraud_analysis(analysis_result):
     """解析OpenAI返回的詐騙分析結果"""
     try:
+        # 先檢查是否包含 "[]" 並清理
+        analysis_result = str(analysis_result).replace("[]", "").strip()
+        
         lines = analysis_result.strip().split('\n')
         result = {
             "risk_level": "中風險",
@@ -299,18 +302,29 @@ def parse_fraud_analysis(analysis_result):
         for line in lines:
             line = line.strip()
             if line.startswith("風險等級：") or line.startswith("風險等級:"):
-                result["risk_level"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+                risk_level = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+                # 清理可能的陣列格式
+                risk_level = risk_level.replace("[]", "").replace("[", "").replace("]", "").strip()
+                if risk_level:
+                    result["risk_level"] = risk_level
             elif line.startswith("詐騙類型：") or line.startswith("詐騙類型:"):
                 fraud_type = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+                # 清理可能的陣列格式
+                fraud_type = fraud_type.replace("[]", "").replace("[", "").replace("]", "").strip()
                 # 避免使用"未知"作為詐騙類型
                 if fraud_type and fraud_type not in ["未知", "不明", "無法確定"]:
                     result["fraud_type"] = fraud_type
             elif line.startswith("說明：") or line.startswith("說明:"):
                 explanation = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+                # 清理可能的陣列格式
+                explanation = explanation.replace("[]", "").replace("[", "").replace("]", "").strip()
                 if explanation:
                     result["explanation"] = explanation
             elif line.startswith("建議：") or line.startswith("建議:"):
                 suggestions = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+                # 清理可能的陣列格式和引號
+                suggestions = suggestions.replace("[]", "").replace("[", "").replace("]", "").strip()
+                suggestions = suggestions.replace('"', '').replace("'", "").strip()
                 if suggestions:
                     result["suggestions"] = suggestions
             elif line.startswith("新興手法：") or line.startswith("新興手法:"):
@@ -324,6 +338,9 @@ def parse_fraud_analysis(analysis_result):
             for prefix in ["風險等級：", "風險等級:", "詐騙類型：", "詐騙類型:", "說明：", "說明:", "建議：", "建議:", "新興手法：", "新興手法:"]:
                 clean_text = clean_text.replace(prefix, "")
             
+            # 清理可能的陣列格式
+            clean_text = clean_text.replace("[]", "").replace("[", "").replace("]", "").strip()
+            
             # 分割成行並過濾空行
             clean_lines = [line.strip() for line in clean_text.split('\n') if line.strip()]
             
@@ -334,6 +351,21 @@ def parse_fraud_analysis(analysis_result):
             # 如果還是沒有有效說明，使用整個回應
             if not result["explanation"] or len(result["explanation"]) < 10:
                 result["explanation"] = analysis_result.strip()
+        
+        # 最終檢查：確保所有文字欄位都不包含 "[]"
+        for key in ["risk_level", "fraud_type", "explanation", "suggestions"]:
+            if result[key]:
+                result[key] = str(result[key]).replace("[]", "").replace("[", "").replace("]", "").strip()
+                # 如果清理後變成空字串，提供預設值
+                if not result[key]:
+                    if key == "risk_level":
+                        result[key] = "中風險"
+                    elif key == "fraud_type":
+                        result[key] = "需要進一步分析"
+                    elif key == "explanation":
+                        result[key] = "無法獲取詳細分析。"
+                    elif key == "suggestions":
+                        result[key] = "建議謹慎處理。"
         
         # 智能推斷詐騙類型（如果仍然是預設值）
         if result["fraud_type"] == "需要進一步分析":
