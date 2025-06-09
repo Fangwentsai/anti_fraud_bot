@@ -1446,6 +1446,154 @@ def fraud_statistics():
     stats = firebase_manager.get_fraud_statistics()
     return render_template('statistics.html', stats=stats)
 
+# 訊息發送重試機制
+def _send_message_with_retry(reply_token, message_text, user_id, display_name, interaction_type, max_retries=2):
+    """
+    帶重連機制的訊息發送函數
+    
+    Args:
+        reply_token: LINE回覆令牌
+        message_text: 要發送的訊息內容
+        user_id: 用戶ID
+        display_name: 用戶顯示名稱
+        interaction_type: 互動類型
+        max_retries: 最大重試次數
+        
+    Returns:
+        bool: 發送是否成功
+    """
+    import time
+    import requests
+    from requests.exceptions import ConnectionError, Timeout
+    
+    for attempt in range(max_retries + 1):
+        try:
+            if v3_messaging_api:
+                from linebot.v3.messaging import TextMessage as V3TextMessage
+                from linebot.v3.messaging import ReplyMessageRequest
+                v3_messaging_api.reply_message(
+                    ReplyMessageRequest(
+                        reply_token=reply_token,
+                        messages=[V3TextMessage(text=message_text)]
+                    )
+                )
+            else:
+                line_bot_api.reply_message(reply_token, TextSendMessage(text=message_text))
+            
+            # 保存互動記錄到Firebase
+            firebase_manager.save_user_interaction(
+                user_id, display_name, "系統訊息", interaction_type,
+                is_fraud_related=False
+            )
+            
+            logger.info(f"成功發送訊息給用戶 {display_name} (嘗試 {attempt + 1}/{max_retries + 1})")
+            return True
+            
+        except LineBotApiError as e:
+            logger.error(f"發送訊息時發生LINE API錯誤 (嘗試 {attempt + 1}/{max_retries + 1}): {e}")
+            if "Invalid reply token" in str(e):
+                # reply token 無效，不需要重試
+                logger.warning(f"Reply token 無效，停止重試: {display_name}")
+                return False
+                
+        except (ConnectionError, requests.exceptions.ConnectionError, Timeout) as e:
+            logger.error(f"發送訊息時發生連接錯誤 (嘗試 {attempt + 1}/{max_retries + 1}): {e}")
+            
+            if attempt < max_retries:
+                # 等待一段時間後重試
+                wait_time = (attempt + 1) * 2  # 2秒, 4秒, 6秒...
+                logger.info(f"等待 {wait_time} 秒後重試...")
+                time.sleep(wait_time)
+                continue
+            else:
+                # 所有重試都失敗，記錄最終失敗
+                logger.error(f"所有重試都失敗，無法發送訊息給用戶 {display_name}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"發送訊息時發生未知錯誤 (嘗試 {attempt + 1}/{max_retries + 1}): {e}")
+            
+            if attempt < max_retries:
+                wait_time = (attempt + 1) * 2
+                logger.info(f"等待 {wait_time} 秒後重試...")
+                time.sleep(wait_time)
+                continue
+            else:
+                return False
+    
+    return False
+
+def _get_recovery_message_prefix(current_state, display_name):
+    """
+    獲取恢復訊息前綴（如果需要的話）
+    
+    Args:
+        current_state: 當前用戶狀態
+        display_name: 用戶顯示名稱
+        
+    Returns:
+        str: 恢復訊息前綴，如果不需要則返回空字符串
+    """
+    if current_state.get("show_recovery_message", False):
+        recovery_context = current_state.get("recovery_context", {})
+        failed_type = recovery_context.get("failed_message_type")
+        
+        recovery_prefix = f"哈囉 {display_name}！我是土豆🥜\n\n" \
+                        f"剛剛發生了一些技術問題（LINE和我切八段了QQ），不好意思讓您久等了！\n\n"
+        
+        if failed_type == "analysis_prompt":
+            recovery_prefix += "您剛才想要分析訊息對吧？太好了，我現在可以幫您分析了！\n\n"
+        else:
+            recovery_prefix += "現在一切都恢復正常了！\n\n"
+        
+        # 清除恢復訊息狀態
+        current_state["show_recovery_message"] = False
+        if "recovery_context" in current_state:
+            del current_state["recovery_context"]
+        
+        return recovery_prefix
+    
+    return ""
+
+def _check_and_handle_connection_recovery(user_id, display_name, current_state):
+    """
+    檢查並處理連接恢復情況（不主動發送訊息）
+    
+    Args:
+        user_id: 用戶ID
+        display_name: 用戶顯示名稱
+        current_state: 當前用戶狀態
+        
+    Returns:
+        tuple: (是否需要恢復, 恢復上下文信息)
+    """
+    if current_state.get("connection_failed", False):
+        # 用戶之前遇到連接問題，現在重新連接了
+        logger.info(f"檢測到用戶 {display_name} 連接恢復")
+        
+        # 清除連接失敗狀態
+        current_state["connection_failed"] = False
+        failed_message_type = current_state.get("failed_message_type")
+        failed_message_content = current_state.get("failed_message_content")
+        
+        # 保存恢復上下文信息
+        recovery_info = {
+            "failed_message_type": failed_message_type,
+            "failed_message_content": failed_message_content
+        }
+        
+        # 清除失敗訊息記錄
+        if "failed_message_type" in current_state:
+            del current_state["failed_message_type"]
+        if "failed_message_content" in current_state:
+            del current_state["failed_message_content"]
+        
+        user_conversation_state[user_id] = current_state
+        
+        return True, recovery_info
+    
+    return False, None
+
 # 只有在handler存在時才添加事件處理器
 if handler:
     @handler.add(MessageEvent, message=TextMessage)
@@ -1471,6 +1619,15 @@ if handler:
         current_state = user_conversation_state.get(user_id, {})
         current_state["last_time"] = current_time
         
+        # 檢查是否需要處理連接恢復（僅記錄狀態，不主動發送訊息）
+        need_recovery, recovery_info = _check_and_handle_connection_recovery(user_id, display_name, current_state)
+        if need_recovery:
+            # 設置恢復狀態，在用戶下次發送訊息時會自動包含恢復說明
+            current_state["show_recovery_message"] = True
+            current_state["recovery_context"] = recovery_info
+            user_conversation_state[user_id] = current_state
+            logger.info(f"檢測到用戶 {display_name} 連接恢復，已設置恢復提示狀態")
+        
         # 檢查是否包含觸發關鍵詞或用戶處於等待分析狀態
         waiting_for_analysis = current_state.get("waiting_for_analysis", False)
         
@@ -1486,7 +1643,11 @@ if handler:
 
         # 檢查是否為空訊息
         if not cleaned_message.strip():
-            reply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐小助手，記得用土豆呼喚我喔！\n" \
+            # 獲取恢復訊息前綴（如果需要的話）
+            recovery_prefix = _get_recovery_message_prefix(current_state, display_name)
+            user_conversation_state[user_id] = current_state  # 更新狀態
+            
+            reply_text = f"{recovery_prefix}嗨 {display_name}！我是土豆🥜\n你的防詐小助手，記得用土豆呼喚我喔！\n" \
                         f"讓我用4大服務保護你：\n如果沒反應請再叫我一次喔(跪)\n\n" \
                         f"🔍 文字或網站分析：\n立刻分析假冒文字、詐騙訊息或釣魚網站！\n" \
                         f"📷 上傳截圖分析：\n不想輸入文字嗎？！直接截圖給我！\n" \
@@ -1719,7 +1880,11 @@ if handler:
             current_state["waiting_for_analysis"] = True
             user_conversation_state[user_id] = current_state
             
-            prompt_message = f"好的 {display_name}，我會幫您分析可疑訊息！\n\n" \
+            # 獲取恢復訊息前綴（如果需要的話）
+            recovery_prefix = _get_recovery_message_prefix(current_state, display_name)
+            user_conversation_state[user_id] = current_state  # 更新狀態
+            
+            prompt_message = f"{recovery_prefix}好的 {display_name}，我會幫您分析可疑訊息！\n\n" \
                            f"請直接把您收到的可疑訊息或網址傳給我，我會立即為您分析風險程度。\n\n" \
                            f"💡 您可以：\n" \
                            f"• 轉傳收到的可疑的文字訊息\n" \
@@ -1728,29 +1893,20 @@ if handler:
                            f"• 貼上可疑的網址連結\n" \
                            f"• 描述您遇到的可疑情況"
             
-            try:
-                if v3_messaging_api:
-                    from linebot.v3.messaging import TextMessage as V3TextMessage
-                    from linebot.v3.messaging import ReplyMessageRequest
-                    v3_messaging_api.reply_message(
-                        ReplyMessageRequest(
-                            reply_token=reply_token,
-                            messages=[V3TextMessage(text=prompt_message)]
-                        )
-                    )
-                else:
-                    line_bot_api.reply_message(reply_token, TextSendMessage(text=prompt_message))
-                
-                # 保存互動記錄到Firebase
-                firebase_manager.save_user_interaction(
-                    user_id, display_name, text_message, "提供分析請求說明",
-                    is_fraud_related=False
-                )
-            except LineBotApiError as e:
-                logger.error(f"發送分析提示訊息時發生LINE API錯誤: {e}")
-                return
-            except Exception as e:
-                logger.error(f"發送分析提示訊息時發生未知錯誤: {e}")
+            # 嘗試發送分析提示訊息，包含重連機制
+            success = _send_message_with_retry(
+                reply_token, prompt_message, user_id, display_name, 
+                "提供分析請求說明", max_retries=2
+            )
+            
+            if not success:
+                # 如果所有重試都失敗，設置用戶狀態以便下次自動處理
+                current_state["connection_failed"] = True
+                current_state["failed_message_type"] = "analysis_prompt"
+                current_state["failed_message_content"] = prompt_message
+                user_conversation_state[user_id] = current_state
+                logger.warning(f"無法發送分析提示訊息給用戶 {display_name}，已設置重試狀態")
+            
             return
 
         # 判斷是否需要進行詐騙分析

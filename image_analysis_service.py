@@ -148,31 +148,151 @@ class ImageAnalysisService:
             Dict: 分析結果
         """
         try:
+            # 處理特殊的圖片網站URL格式
+            processed_url = self._process_image_url(image_url)
+            logger.info(f"處理後的圖片URL: {processed_url}")
+            
+            # 設置請求標頭，模擬瀏覽器請求
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+                'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.8',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
+            }
+            
             # 下載圖片
-            response = requests.get(image_url, timeout=10)
+            response = requests.get(processed_url, timeout=15, headers=headers, allow_redirects=True)
+            
             if response.status_code != 200:
+                logger.error(f"下載圖片失敗，狀態碼: {response.status_code}, URL: {processed_url}")
                 return {
                     "success": False,
                     "message": f"下載圖片失敗，狀態碼: {response.status_code}",
                     "risk_level": "無法判定",
-                    "fraud_type": "未知",
-                    "explanation": "無法下載圖片進行分析。",
-                    "suggestions": "請確保圖片URL有效，或直接上傳圖片。"
+                    "fraud_type": "圖片下載失敗",
+                    "explanation": f"⚠️ 無法下載圖片進行分析。\n\n🔍 圖片網址：{image_url}\n\n可能原因：\n• 圖片已被刪除或移動\n• 網站暫時無法訪問\n• 圖片URL格式不正確",
+                    "suggestions": "🔄 請確認圖片URL是否正確\n📷 建議直接上傳圖片進行分析\n💡 如果是私人圖片，請直接截圖上傳"
                 }
             
-            # 分析圖片
-            return self.analyze_image(response.content, analysis_type, context_message)
+            # 檢查回應內容是否為圖片
+            content_type = response.headers.get('content-type', '').lower()
+            if not any(img_type in content_type for img_type in ['image/', 'application/octet-stream']):
+                logger.warning(f"回應內容不是圖片格式: {content_type}")
+                # 如果不是圖片，可能是HTML頁面，嘗試解析
+                if 'text/html' in content_type:
+                    return {
+                        "success": False,
+                        "message": "URL指向的是網頁而非圖片",
+                        "risk_level": "無法判定",
+                        "fraud_type": "URL格式錯誤",
+                        "explanation": f"⚠️ 這個網址指向的是網頁，不是圖片。\n\n🔍 網址：{image_url}\n\n請確認您提供的是正確的圖片連結。",
+                        "suggestions": "🔍 請檢查圖片URL是否正確\n📷 建議直接上傳圖片進行分析\n💡 確保URL以.jpg、.png等圖片格式結尾"
+                    }
             
+            # 檢查圖片大小
+            if len(response.content) == 0:
+                return {
+                    "success": False,
+                    "message": "下載的圖片內容為空",
+                    "risk_level": "無法判定",
+                    "fraud_type": "圖片內容為空",
+                    "explanation": "⚠️ 下載的圖片內容為空，無法進行分析。",
+                    "suggestions": "🔄 請確認圖片URL是否有效\n📷 建議直接上傳圖片進行分析"
+                }
+            
+            logger.info(f"成功下載圖片，大小: {len(response.content)} bytes")
+            
+            # 分析圖片
+            result = self.analyze_image(response.content, analysis_type, context_message)
+            
+            # 添加圖片URL信息到結果中
+            if isinstance(result, dict):
+                result["image_url"] = image_url
+                result["processed_url"] = processed_url
+                result["image_size"] = len(response.content)
+            
+            return result
+            
+        except requests.exceptions.Timeout:
+            logger.error(f"下載圖片超時: {image_url}")
+            return {
+                "success": False,
+                "message": "下載圖片超時",
+                "risk_level": "無法判定",
+                "fraud_type": "網路連接超時",
+                "explanation": "⚠️ 下載圖片時發生超時，可能是網路連接問題。",
+                "suggestions": "🔄 請稍後再試\n📷 建議直接上傳圖片進行分析\n🌐 檢查網路連接是否正常"
+            }
+        except requests.exceptions.ConnectionError:
+            logger.error(f"連接圖片URL失敗: {image_url}")
+            return {
+                "success": False,
+                "message": "連接圖片URL失敗",
+                "risk_level": "無法判定",
+                "fraud_type": "網路連接錯誤",
+                "explanation": "⚠️ 無法連接到圖片網站，可能是網路問題或網站暫時無法訪問。",
+                "suggestions": "🔄 請稍後再試\n📷 建議直接上傳圖片進行分析\n🌐 檢查網路連接是否正常"
+            }
         except Exception as e:
             logger.exception(f"從URL下載並分析圖片時發生錯誤: {e}")
             return {
                 "success": False,
                 "message": f"從URL下載並分析圖片時發生錯誤: {str(e)}",
                 "risk_level": "無法判定",
-                "fraud_type": "未知",
-                "explanation": "處理圖片URL時發生技術錯誤。",
-                "suggestions": "建議直接上傳圖片，或確保URL是有效的圖片鏈接。"
+                "fraud_type": "技術錯誤",
+                "explanation": f"❌ 處理圖片URL時發生技術錯誤。\n\n錯誤信息：{str(e)}",
+                "suggestions": "🔄 請稍後再試\n📷 建議直接上傳圖片進行分析\n🛠️ 如果問題持續，請聯繫技術支援"
             }
+    
+    def _process_image_url(self, image_url: str) -> str:
+        """
+        處理特殊的圖片網站URL格式
+        
+        Args:
+            image_url: 原始圖片URL
+            
+        Returns:
+            str: 處理後的直接圖片URL
+        """
+        try:
+            from urllib.parse import urlparse, parse_qs
+            
+            parsed = urlparse(image_url)
+            domain = parsed.netloc.lower()
+            
+            # 處理 imgur.com URL
+            if 'imgur.com' in domain:
+                # 如果是 imgur.com/xxxxx 格式，轉換為直接圖片鏈接
+                if not any(ext in image_url.lower() for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']):
+                    # 提取圖片ID
+                    path_parts = parsed.path.strip('/').split('/')
+                    if path_parts and path_parts[0]:
+                        image_id = path_parts[0]
+                        # 嘗試不同的圖片格式
+                        for ext in ['.jpg', '.png', '.gif', '.webp']:
+                            direct_url = f"https://i.imgur.com/{image_id}{ext}"
+                            logger.info(f"嘗試imgur直接鏈接: {direct_url}")
+                            try:
+                                # 快速檢查URL是否有效
+                                response = requests.head(direct_url, timeout=5)
+                                if response.status_code == 200:
+                                    logger.info(f"找到有效的imgur直接鏈接: {direct_url}")
+                                    return direct_url
+                            except:
+                                continue
+                        # 如果都不行，使用預設的.jpg
+                        return f"https://i.imgur.com/{image_id}.jpg"
+            
+            # 處理其他圖片網站的特殊格式
+            # 可以在這裡添加更多圖片網站的處理邏輯
+            
+            return image_url
+            
+        except Exception as e:
+            logger.error(f"處理圖片URL時發生錯誤: {e}")
+            return image_url
     
     def _resize_image_if_needed(self, image: Image.Image, max_size: int = 1024) -> Image.Image:
         """
