@@ -592,6 +592,122 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
             
             if not original_url.startswith(('http://', 'https://')):
                 original_url = 'https://' + original_url
+            
+            # 檢查是否為圖片URL
+            image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg']
+            image_domains = ['imgur.com', 'i.imgur.com', 'postimg.cc', 'imgbb.com', 'ibb.co', 'tinypic.com', 'photobucket.com', 'flickr.com', 'instagram.com', 'facebook.com']
+            
+            is_image_url = False
+            parsed_url = urlparse(original_url)
+            
+            # 檢查副檔名
+            if any(original_url.lower().endswith(ext) for ext in image_extensions):
+                is_image_url = True
+                logger.info(f"檢測到圖片副檔名: {original_url}")
+            
+            # 檢查圖片網站域名
+            elif any(domain in parsed_url.netloc.lower() for domain in image_domains):
+                is_image_url = True
+                logger.info(f"檢測到圖片網站域名: {parsed_url.netloc}")
+            
+            # 如果是圖片URL，使用圖片分析功能
+            if is_image_url:
+                logger.info(f"開始分析圖片URL: {original_url}")
+                try:
+                    from image_handler import handle_image_url
+                    
+                    # 使用圖片分析功能
+                    flex_message, raw_result = handle_image_url(
+                        original_url, user_id or "unknown", display_name, 
+                        context_message=f"用戶提供的圖片網址分析請求：{user_message}", 
+                        analysis_type="GENERAL"
+                    )
+                    
+                    if flex_message and raw_result:
+                        # 解析圖片分析結果
+                        try:
+                            # 從raw_result中提取分析結果
+                            import json
+                            if isinstance(raw_result, str):
+                                # 如果是字符串，嘗試解析為JSON
+                                try:
+                                    result_data = json.loads(raw_result)
+                                except:
+                                    # 如果不是JSON，創建基本結構
+                                    result_data = {
+                                        "risk_level": "中風險",
+                                        "fraud_type": "圖片內容分析",
+                                        "explanation": raw_result,
+                                        "suggestions": "建議謹慎處理此圖片內容"
+                                    }
+                            else:
+                                result_data = raw_result
+                            
+                            # 添加圖片URL相關信息
+                            result_data["display_name"] = display_name
+                            result_data["original_url"] = original_url
+                            result_data["is_image_url"] = True
+                            result_data["analysis_type"] = "圖片URL分析"
+                            
+                            return {
+                                "success": True,
+                                "message": "圖片分析完成",
+                                "result": result_data,
+                                "raw_result": raw_result,
+                                "flex_message": flex_message
+                            }
+                        except Exception as parse_error:
+                            logger.error(f"解析圖片分析結果時發生錯誤: {parse_error}")
+                            return {
+                                "success": True,
+                                "message": "圖片分析完成",
+                                "result": {
+                                    "risk_level": "中風險",
+                                    "fraud_type": "圖片URL分析",
+                                    "explanation": f"✅ 已成功分析圖片內容。\n\n🔍 圖片網址：{original_url}\n\n📊 分析結果已通過圖片分析功能處理，請查看詳細的分析報告。",
+                                    "suggestions": "🔍 請仔細查看圖片分析結果\n⚠️ 如果圖片內容涉及金錢交易，請特別謹慎\n🛡️ 不要輕易提供個人資料或進行轉帳\n💡 有疑問時可以諮詢親友或專業人士",
+                                    "is_emerging": False,
+                                    "display_name": display_name,
+                                    "original_url": original_url,
+                                    "is_image_url": True,
+                                    "analysis_type": "圖片URL分析"
+                                },
+                                "raw_result": str(raw_result),
+                                "flex_message": flex_message
+                            }
+                    else:
+                        # 圖片分析失敗
+                        return {
+                            "success": False,
+                            "message": "圖片分析失敗",
+                            "result": {
+                                "risk_level": "無法判定",
+                                "fraud_type": "圖片分析失敗",
+                                "explanation": f"⚠️ 無法分析此圖片URL。\n\n🔍 圖片網址：{original_url}\n\n可能原因：\n• 圖片無法下載或訪問\n• 圖片格式不支援\n• 網路連接問題\n• 圖片分析服務暫時不可用",
+                                "suggestions": "🔄 請稍後再試\n📷 建議直接上傳圖片進行分析\n🔍 確認圖片URL是否正確\n💡 如果持續無法分析，請手動檢查圖片內容",
+                                "is_emerging": False,
+                                "display_name": display_name,
+                                "original_url": original_url,
+                                "is_image_url": True
+                            }
+                        }
+                        
+                except Exception as e:
+                    logger.error(f"分析圖片URL時發生錯誤: {e}")
+                    return {
+                        "success": False,
+                        "message": f"分析圖片URL時發生錯誤: {str(e)}",
+                        "result": {
+                            "risk_level": "無法判定",
+                            "fraud_type": "圖片分析錯誤",
+                            "explanation": f"❌ 分析圖片時發生技術錯誤。\n\n🔍 圖片網址：{original_url}\n\n錯誤信息：{str(e)}",
+                            "suggestions": "🔄 請稍後再試\n📷 建議直接上傳圖片進行分析\n🛠️ 如果問題持續，請聯繫技術支援",
+                            "is_emerging": False,
+                            "display_name": display_name,
+                            "original_url": original_url,
+                            "is_image_url": True
+                        }
+                    }
                 
             # 先檢查是否為短網址
             original_url, expanded_url, is_short_url, url_expanded_successfully, page_title = expand_short_url(original_url)
@@ -1730,8 +1846,12 @@ if handler:
             if analysis_result and analysis_result.get("success", False):
                 analysis_data = analysis_result.get("result", {})
                 
+                # 檢查是否是圖片URL分析，如果是則使用預先創建的flex_message
+                if analysis_result.get("flex_message"):
+                    flex_message = analysis_result.get("flex_message")
+                    logger.info("使用圖片URL分析的預先創建Flex Message")
                 # 檢查是否是網域變形攻擊
-                if analysis_data.get("is_domain_spoofing", False):
+                elif analysis_data.get("is_domain_spoofing", False):
                     spoofing_result = analysis_data.get("spoofing_result", {})
                     
                     unified_analysis_data = {

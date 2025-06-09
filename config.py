@@ -50,7 +50,7 @@ SHORT_URL_DOMAINS = [
     'youtu.be', 'amzn.to', 'fb.me', 'git.io', 'aka.ms',
     
     # 台灣短網址服務
-    'reurl.cc', 'pse.is', '0rz.tw', 'tinyurl.tw', 'lihi.cc',
+    'reurl.cc', 'pse.is', '0rz.tw', 'ppt.cc', 'tinyurl.tw', 'lihi.cc',
     'lihi1.com', 'lihi2.com', 'lihi3.com', 'lihi4.com',
     'short.link', 'url.tw', 'myppt.cc', 'myurl.com.tw',
     

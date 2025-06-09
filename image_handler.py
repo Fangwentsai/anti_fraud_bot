@@ -380,11 +380,19 @@ class ImageHandler:
 image_handler = None
 
 # 初始化函數
-def init_image_handler(line_bot_api: LineBotApi):
+def init_image_handler(line_bot_api: LineBotApi = None):
     """初始化圖片處理器"""
     global image_handler
     image_handler = ImageHandler(line_bot_api)
     logger.info("圖片處理器初始化成功")
+
+# 自動初始化（用於測試環境）
+if image_handler is None:
+    try:
+        image_handler = ImageHandler(None)
+        logger.info("圖片處理器自動初始化（測試模式）")
+    except Exception as e:
+        logger.warning(f"圖片處理器自動初始化失敗: {e}")
 
 # 提供便捷的函數接口
 def handle_image_message(message_id: str, user_id: str, display_name: str, 
