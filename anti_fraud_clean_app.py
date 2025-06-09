@@ -234,7 +234,7 @@ def expand_short_url(url):
         
         # 先嘗試 HEAD 請求
         try:
-            response = session.head(url, allow_redirects=True, timeout=10)
+            response = session.head(url, allow_redirects=True, timeout=10, verify=False)
             expanded_url = response.url
         except Exception:
             pass
@@ -242,7 +242,7 @@ def expand_short_url(url):
         # 如果 HEAD 請求沒有重定向，嘗試 GET 請求並檢查內容
         if not expanded_url or expanded_url == url:
             try:
-                response = session.get(url, allow_redirects=True, timeout=10)
+                response = session.get(url, allow_redirects=True, timeout=10, verify=False)
                 expanded_url = response.url
                 
                 # 如果還是沒有重定向，檢查是否有 JavaScript 重定向或 meta refresh
@@ -298,6 +298,37 @@ def expand_short_url(url):
                                     logger.info(f"通過 JavaScript 展開短網址: {url} -> {expanded_url}")
                                     return url, expanded_url, True, True, page_title
                 
+            except requests.exceptions.SSLError as e:
+                logger.warning(f"SSL 錯誤，嘗試不驗證證書: {e}")
+                # 對於 SSL 錯誤，嘗試不驗證證書
+                try:
+                    response = session.get(url, allow_redirects=True, timeout=10, verify=False)
+                    expanded_url = response.url
+                    
+                    # 如果還是沒有重定向，檢查是否有 JavaScript 重定向或 meta refresh
+                    if expanded_url == url and response.status_code == 200:
+                        from bs4 import BeautifulSoup
+                        import re
+                        
+                        soup = BeautifulSoup(response.text, 'html.parser')
+                        
+                        # 獲取頁面標題
+                        title_tag = soup.find('title')
+                        if title_tag:
+                            page_title = title_tag.get_text().strip()
+                        
+                        # 檢查隱藏的 input 元素（如 reurl.cc 的做法）
+                        target_input = soup.find('input', {'id': 'target'}) or soup.find('input', {'name': 'target'})
+                        if target_input and target_input.get('value'):
+                            target_url = target_input.get('value')
+                            # 解碼 HTML 實體
+                            import html
+                            target_url = html.unescape(target_url)
+                            expanded_url = target_url
+                            logger.info(f"通過隱藏元素展開短網址: {url} -> {expanded_url}")
+                            return url, expanded_url, True, True, page_title
+                except Exception as e2:
+                    logger.warning(f"重試後仍然失敗: {e2}")
             except Exception as e:
                 logger.warning(f"GET 請求失敗: {e}")
         
@@ -1021,12 +1052,17 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                     original_domain, site_description = normalized_safe_domains[domain]
                     logger.info(f"檢測到白名單中的域名: {domain} -> {original_domain}")
                     
-                    # 獲取網頁標題
+                    # 獲取網頁標題並摘要
                     website_title = None
+                    title_summary = None
                     if not is_short_url:
                         website_title = get_website_title(url)
+                        if website_title:
+                            title_summary = summarize_website_title(website_title, original_domain)
                     elif is_short_url and url_expanded_successfully:
                         website_title = page_title
+                        if website_title:
+                            title_summary = summarize_website_title(website_title, original_domain)
                     
                     # 特殊處理：lin.ee 需要檢查訊息內容
                     if domain == 'lin.ee':
@@ -1053,7 +1089,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                                 "result": {
                                     "risk_level": "低風險",
                                     "fraud_type": "非詐騙相關",
-                                    "explanation": f"這個網站是 {original_domain}，{site_description}，可以安心使用。" + (f"\n\n📄 網頁標題：{website_title}" if website_title else ""),
+                                    "explanation": f"這個網站是 {original_domain}，{site_description}，可以安心使用。" + (f"\n\n📄 內容：{title_summary}" if title_summary else ""),
                                     "suggestions": "這是正規網站，不必特別擔心。如有疑慮，建議您直接從官方管道進入該網站。",
                                     "is_emerging": False,
                                     "display_name": display_name,
@@ -1073,7 +1109,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                             "result": {
                                 "risk_level": "低風險",
                                 "fraud_type": "非詐騙相關",
-                                "explanation": f"這個網站是 {original_domain}，{site_description}，可以安心使用。" + (f"\n\n📄 網頁標題：{website_title}" if website_title else ""),
+                                "explanation": f"這個網站是 {original_domain}，{site_description}，可以安心使用。" + (f"\n\n📄 內容：{title_summary}" if title_summary else ""),
                                 "suggestions": "這是正規網站，不必特別擔心。如有疑慮，建議您直接從官方管道進入該網站。",
                                 "is_emerging": False,
                                 "display_name": display_name,
@@ -1099,12 +1135,17 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                                 site_description = SAFE_DOMAINS.get(safe_domain_key, "台灣常見的可靠網站")
                                 logger.info(f"檢測到合法子網域: {domain} -> {safe_domain_key}")
                                 
-                                # 獲取網頁標題
+                                # 獲取網頁標題並摘要
                                 website_title = None
+                                title_summary = None
                                 if not is_short_url:
                                     website_title = get_website_title(url)
+                                    if website_title:
+                                        title_summary = summarize_website_title(website_title, safe_domain_key)
                                 elif is_short_url and url_expanded_successfully:
                                     website_title = page_title
+                                    if website_title:
+                                        title_summary = summarize_website_title(website_title, safe_domain_key)
                                 
                                 return {
                                     "success": True,
@@ -1112,7 +1153,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                                     "result": {
                                         "risk_level": "低風險",
                                         "fraud_type": "非詐騙相關",
-                                        "explanation": f"這個網站是 {safe_domain_key} 的子網域，{site_description}，可以安心使用。" + (f"\n\n📄 網頁標題：{website_title}" if website_title else ""),
+                                        "explanation": f"這個網站是 {safe_domain_key} 的子網域，{site_description}，可以安心使用。" + (f"\n\n📄 內容：{title_summary}" if title_summary else ""),
                                         "suggestions": "這是正規網站的子網域，不必特別擔心。如有疑慮，建議您直接從官方管道進入該網站。",
                                         "is_emerging": False,
                                         "display_name": display_name,
@@ -1155,6 +1196,14 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                 "success": False,
                 "message": "AI分析服務暫時不可用，請稍後再試"
             }
+        
+        # 獲取網頁標題（如果還沒有獲取的話）
+        website_title = None
+        if original_url and not is_short_url:
+            website_title = get_website_title(expanded_url or original_url)
+        elif is_short_url and url_expanded_successfully and expanded_url:
+            # 短網址已經在 expand_short_url 中獲取了標題，這裡使用 page_title
+            website_title = page_title
         
         # 構建詳細的分析請求
         title_info = ""
@@ -2787,6 +2836,88 @@ def get_website_title(url):
     except Exception as e:
         logger.warning(f"獲取網站標題失敗: {url} - {e}")
         return None
+
+def summarize_website_title(title, domain=None):
+    """將網頁標題摘要為8-10字的簡潔說明"""
+    if not title:
+        return None
+    
+    try:
+        # 移除常見的網站後綴
+        title_clean = title
+        suffixes_to_remove = [
+            '- 聯合新聞網', '| 聯合新聞網', '- 中央社', '| 中央社', 
+            '- 民視新聞網', '| 民視新聞網', '- 自由時報', '| 自由時報',
+            '- ETtoday新聞雲', '| ETtoday新聞雲', '- 三立新聞網', '| 三立新聞網',
+            '- PChome', '| PChome', '- Yahoo', '| Yahoo',
+            '- Facebook', '| Facebook', '- LINE', '| LINE',
+            '- Google', '| Google', '- YouTube', '| YouTube'
+        ]
+        
+        for suffix in suffixes_to_remove:
+            if suffix in title_clean:
+                title_clean = title_clean.split(suffix)[0].strip()
+        
+        # 移除其他常見分隔符後的內容
+        separators = [' | ', ' - ', ' │ ', ' ｜ ', ' — ']
+        for sep in separators:
+            if sep in title_clean:
+                parts = title_clean.split(sep)
+                # 取最長的部分作為主要內容
+                title_clean = max(parts, key=len).strip()
+        
+        # 如果標題太長，智能截取
+        if len(title_clean) > 12:
+            # 嘗試找到合適的截取點
+            cut_points = ['！', '？', '。', '：', ':', '，', ',']
+            for i, char in enumerate(title_clean):
+                if char in cut_points and 8 <= i <= 15:
+                    title_clean = title_clean[:i+1]
+                    break
+            else:
+                # 如果沒有找到合適的截取點，直接截取前12字
+                if len(title_clean) > 12:
+                    title_clean = title_clean[:10] + "..."
+        
+        # 針對不同類型的內容進行分類摘要
+        if any(keyword in title_clean for keyword in ['加好友', 'Add Friend', '聊天']):
+            return "LINE加好友頁面"
+        elif any(keyword in title_clean for keyword in ['首頁', 'Home', '官網']):
+            return f"{domain or '網站'}首頁" if domain else "網站首頁"
+        elif any(keyword in title_clean for keyword in ['購物', '商品', '優惠', '特價']):
+            if len(title_clean) > 10:
+                return f"購物：{title_clean[:8]}..."
+            return f"購物：{title_clean}"
+        elif '!' in title_clean or '！' in title_clean:
+            # 新聞標題通常有驚嘆號，提取關鍵信息
+            if len(title_clean) > 12:
+                # 找到第一個驚嘆號的位置
+                exclamation_positions = []
+                if '!' in title_clean:
+                    exclamation_positions.append(title_clean.find('!'))
+                if '！' in title_clean:
+                    exclamation_positions.append(title_clean.find('！'))
+                
+                if exclamation_positions:
+                    exclamation_pos = min([pos for pos in exclamation_positions if pos >= 0])
+                    if exclamation_pos > 0:
+                        key_part = title_clean[:exclamation_pos+1]
+                        if len(key_part) <= 12:
+                            return key_part
+                        else:
+                            return key_part[:10] + "..."
+            return title_clean
+        elif any(keyword in title_clean for keyword in ['新聞', '報導', '消息', '快訊']):
+            if len(title_clean) > 10:
+                return f"新聞：{title_clean[:8]}..."
+            return f"新聞：{title_clean}"
+        else:
+            # 一般內容，保持簡潔
+            return title_clean
+            
+    except Exception as e:
+        logger.warning(f"摘要標題時發生錯誤: {e}")
+        return title[:10] + "..." if len(title) > 10 else title
 
 if __name__ == '__main__':
     # 檢查環境變數
