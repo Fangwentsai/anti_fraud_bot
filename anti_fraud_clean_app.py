@@ -582,6 +582,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         expanded_url = None
         is_short_url = False
         url_expanded_successfully = False
+        page_title = None  # 初始化 page_title 變數
         
         url_pattern = re.compile(r'(https?://[^\s\u4e00-\u9fff，。！？；：]+|www\.[^\s\u4e00-\u9fff，。！？；：]+|[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?(?:/[^\s\u4e00-\u9fff，。！？；：]*)?)')
         url_match = url_pattern.search(user_message)
