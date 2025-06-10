@@ -49,6 +49,28 @@ class FlexMessageService:
             suggestions = str(analysis_data.get("suggestions", "請謹慎處理此訊息。")).strip() or "請謹慎處理此訊息。"
             is_emerging = analysis_data.get("is_emerging", False)
             
+            # 處理analysis_details的JSON格式化
+            analysis_details = analysis_data.get("analysis_details")
+            if analysis_details and isinstance(analysis_details, dict):
+                import json
+                try:
+                    # 格式化JSON，使其更易讀
+                    formatted_json = json.dumps(analysis_details, ensure_ascii=False, indent=2)
+                    
+                    # 如果explanation中包含JSON字符串，替換為格式化版本
+                    if "```json" in explanation:
+                        # 提取JSON部分並替換
+                        import re
+                        json_pattern = r'```json\s*(\{.*?\})\s*```'
+                        match = re.search(json_pattern, explanation, re.DOTALL)
+                        if match:
+                            explanation = explanation.replace(match.group(0), f"```json\n{formatted_json}\n```")
+                    elif "{" in explanation and "}" in explanation:
+                        # 如果explanation中包含未格式化的JSON，添加格式化版本
+                        explanation += f"\n\n詳細分析資料：\n```json\n{formatted_json}\n```"
+                except Exception as e:
+                    logger.warning(f"格式化analysis_details時發生錯誤: {e}")
+            
             # 清理可能的陣列格式 "[]"
             risk_level = risk_level.replace("[]", "").replace("[", "").replace("]", "").strip() or "未知"
             fraud_type = fraud_type.replace("[]", "").replace("[", "").replace("]", "").strip() or "未知類型"

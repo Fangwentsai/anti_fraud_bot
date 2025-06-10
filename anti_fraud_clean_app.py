@@ -3463,6 +3463,11 @@ def analyze_email_fraud(email_content, sender_email=None, display_name="朋友")
    - 緊急性語言（立即、馬上、限時等）
    - 威脅性內容（停用服務、法律責任等）
 
+**重要風險等級判定規則**：
+- 如果發信網域與聲稱機構不符（domain_mismatch=true），必須判定為「極高風險」
+- 如果包含繳費要求且發信者身份可疑，應判定為「高風險」或「極高風險」
+- 只有在網域完全匹配且內容正常時，才可判定為「低風險」或「中風險」
+
 郵件內容：
 {email_content}
 
@@ -3482,6 +3487,8 @@ def analyze_email_fraud(email_content, sender_email=None, display_name="朋友")
         "threat_indicators": ["威脅性指標"]
     }}
 }}
+
+注意：如果analysis_details中domain_mismatch為true，risk_level必須是「極高風險」！
 """
 
     try:
