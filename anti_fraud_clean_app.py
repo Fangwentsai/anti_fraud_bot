@@ -3265,43 +3265,14 @@ def analyze_credit_card_3d_verification(message, display_name="朋友"):
             card_last_four = matches[0]
             break
     
-    # 已知詐騙卡號末四碼清單（這些是詐騙集團常用的假卡號）
-    known_fraud_card_numbers = [
-        "8219",  # 富邦卡詐騙常用
-        "1234", "5678", "9999", "0000",  # 常見假卡號
-        "1111", "2222", "3333", "4444", "5555", "6666", "7777", "8888", "9999"
-    ]
-    
-    # 風險評估邏輯
+    # 風險評估邏輯 - 純粹基於交易特性
     risk_level = "低風險"
     fraud_type = "信用卡3D驗證簡訊"
     explanation = ""
     suggestions = []
     
-    # 0. 檢查是否為已知詐騙卡號 - 極高風險
-    if card_last_four and card_last_four in known_fraud_card_numbers:
-        risk_level = "極高風險"
-        fraud_type = "疑似詐騙簡訊（假冒信用卡3D驗證）"
-        explanation = f"🚨 **高度警告：這很可能是詐騙簡訊！**\n\n"
-        explanation += f"⚠️ 卡號末四碼「{card_last_four}」是詐騙集團常用的假卡號\n"
-        explanation += f"💰 聲稱交易金額：{currency}${amount:,}\n"
-        explanation += f"\n🔍 **詐騙特徵分析：**\n"
-        explanation += f"• 詐騙集團大量使用相同的假卡號末四碼\n"
-        explanation += f"• 真正的銀行簡訊不會重複使用相同卡號\n"
-        explanation += f"• 這類簡訊通常要求提供驗證碼進行詐騙\n"
-        explanation += f"\n🛡️ **這是典型的「假冒信用卡3D驗證」詐騙手法**"
-        
-        suggestions = [
-            "🚨 **立即刪除此簡訊，絕不要回覆任何驗證碼**",
-            "⚠️ 這是詐騙簡訊，不是真正的銀行通知",
-            "🔒 真正的銀行不會使用重複的假卡號末四碼",
-            "📞 如有疑慮，請直接撥打信用卡背面的官方客服電話",
-            "🛡️ 將此號碼加入黑名單，避免再次受騙",
-            "💡 可撥打165反詐騙專線檢舉此詐騙簡訊"
-        ]
-    
     # 1. 境外交易（非台幣）- 高風險
-    elif currency and currency.upper() not in ['TWD', 'NT']:
+    if currency and currency.upper() not in ['TWD', 'NT']:
         risk_level = "高風險"
         fraud_type = "境外信用卡交易驗證"
         explanation = f"⚠️ 這是一筆境外信用卡交易驗證簡訊。\n\n"
