@@ -3471,7 +3471,8 @@ def analyze_email_fraud(email_content, sender_email=None, display_name="朋友")
 郵件內容：
 {email_content}
 
-請以JSON格式回應，包含以下欄位：
+請以純JSON格式回應，不要包含任何其他文字或markdown標記，只返回JSON對象：
+
 {{
     "risk_level": "極高風險/高風險/中風險/低風險",
     "fraud_type": "詐騙類型描述",
@@ -3488,7 +3489,10 @@ def analyze_email_fraud(email_content, sender_email=None, display_name="朋友")
     }}
 }}
 
-注意：如果analysis_details中domain_mismatch為true，risk_level必須是「極高風險」！
+重要提醒：
+1. 只返回JSON對象，不要加上任何說明文字
+2. 如果analysis_details中domain_mismatch為true，risk_level必須是「極高風險」
+3. 確保所有字串都用雙引號包圍
 """
 
     try:
@@ -3509,8 +3513,31 @@ def analyze_email_fraud(email_content, sender_email=None, display_name="朋友")
         
         # 解析JSON回應
         import json
+        import re
+        
+        # 嘗試提取JSON內容
+        def extract_json_from_response(text):
+            """從回應中提取JSON內容"""
+            # 移除markdown代碼塊標記
+            text = re.sub(r'```json\s*', '', text)
+            text = re.sub(r'```\s*$', '', text)
+            
+            # 尋找JSON對象
+            json_match = re.search(r'\{.*\}', text, re.DOTALL)
+            if json_match:
+                return json_match.group(0)
+            
+            return text.strip()
+        
         try:
-            result_data = json.loads(analysis_result)
+            # 先嘗試直接解析
+            try:
+                result_data = json.loads(analysis_result)
+            except json.JSONDecodeError:
+                # 如果失敗，嘗試提取JSON部分
+                extracted_json = extract_json_from_response(analysis_result)
+                logger.info(f"提取的JSON內容: {extracted_json[:200]}...")
+                result_data = json.loads(extracted_json)
             
             # 確保必要欄位存在
             if "risk_level" not in result_data:
@@ -3534,8 +3561,8 @@ def analyze_email_fraud(email_content, sender_email=None, display_name="朋友")
                 "raw_result": analysis_result
             }
             
-        except json.JSONDecodeError:
-            logger.warning("ChatGPT回應不是有效的JSON格式，使用文字分析")
+        except json.JSONDecodeError as e:
+            logger.warning(f"ChatGPT回應不是有效的JSON格式: {e}，原始回應: {analysis_result[:200]}...")
             return {
                 "success": True,
                 "message": "ChatGPT郵件詐騙分析完成",
