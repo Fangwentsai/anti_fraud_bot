@@ -583,17 +583,39 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
             logger.info(f"檢測到信用卡3D驗證簡訊，進行專門分析")
             return analyze_credit_card_3d_verification(user_message, display_name)
         
-        # 檢查是否為郵件內容（包含發信者資訊）
+        # 檢查是否為郵件內容 - 更寬鬆的檢測條件
         email_pattern = r'(?:寄件者|發信者|From|from)[:：]\s*([^\n\r]+@[^\n\r\s]+)'
         email_match = re.search(email_pattern, user_message)
         
-        # 或檢查是否包含郵件特徵關鍵詞
+        # 檢查郵件特徵關鍵詞
         email_indicators = ['寄件者', '發信者', '主旨', '收件者', 'From:', 'To:', 'Subject:', '郵件', 'email']
         has_email_indicators = any(indicator in user_message for indicator in email_indicators)
         
-        if email_match or has_email_indicators:
+        # 檢查是否包含郵件地址格式
+        email_address_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+        has_email_address = re.search(email_address_pattern, user_message)
+        
+        # 檢查是否包含典型的郵件服務格式（如您的案例）
+        service_patterns = [
+            r'[A-Z]+\.[A-Z]+-服務[A-Z]+\.[A-Z]+',  # RTK.UI-服務FETC.Service
+            r'[A-Z]+-[^<]+<[^>]+@[^>]+>',  # YTA-未於期限理 <casinto@telenet.be>
+        ]
+        has_service_pattern = any(re.search(pattern, user_message) for pattern in service_patterns)
+        
+        # 如果符合任一郵件特徵，進行郵件分析
+        if email_match or has_email_indicators or has_email_address or has_service_pattern:
             logger.info(f"檢測到郵件內容，進行專門分析")
-            sender_email = email_match.group(1) if email_match else None
+            sender_email = None
+            
+            # 嘗試提取發信者郵件地址
+            if email_match:
+                sender_email = email_match.group(1)
+            elif has_email_address:
+                # 提取第一個找到的郵件地址
+                email_addresses = re.findall(email_address_pattern, user_message)
+                if email_addresses:
+                    sender_email = email_addresses[0]
+            
             return analyze_email_fraud(user_message, sender_email, display_name)
         
         original_url = None
@@ -3399,7 +3421,7 @@ def is_credit_card_3d_verification(message):
 
 def analyze_email_fraud(email_content, sender_email=None, display_name="朋友"):
     """
-    智能分析郵件詐騙，根據內容、發信者、敏感詞彙等進行綜合判斷
+    使用ChatGPT智能分析郵件詐騙，根據內容、發信者、敏感詞彙等進行綜合判斷
     
     Args:
         email_content: 郵件內容
@@ -3408,6 +3430,135 @@ def analyze_email_fraud(email_content, sender_email=None, display_name="朋友")
         
     Returns:
         dict: 分析結果
+    """
+    import re
+    import urllib.parse
+    
+    # 如果沒有OpenAI客戶端，使用基礎規則分析
+    if not openai_client:
+        logger.warning("OpenAI客戶端未初始化，使用基礎規則分析")
+        return analyze_email_fraud_basic(email_content, sender_email, display_name)
+    
+    # 準備分析提示
+    analysis_prompt = f"""
+請分析以下郵件內容是否為詐騙郵件。請特別注意以下幾個關鍵點：
+
+1. **郵件內容分析**：
+   - 檢查是否包含繳費、付款、費用等敏感詞彙
+   - 識別郵件中聲稱的發信機構（如台電、遠通電收、銀行等）
+   - 分析語言表達是否專業、是否有錯字或奇怪用詞
+
+2. **發信者驗證**：
+   - 發信者郵件地址：{sender_email if sender_email else '未提供'}
+   - 如果有發信者地址，請檢查網域是否與聲稱的機構匹配
+   - 台灣主要機構的正確網域：
+     * 遠通電收：fetc.net.tw
+     * 台灣電力公司：taipower.com.tw
+     * 中華電信：cht.com.tw
+     * 台灣自來水公司：water.gov.tw
+     * 政府機構：通常以 .gov.tw 結尾
+
+3. **詐騙手法識別**：
+   - 網域偽裝攻擊（使用相似但不同的網域）
+   - 緊急性語言（立即、馬上、限時等）
+   - 威脅性內容（停用服務、法律責任等）
+
+郵件內容：
+{email_content}
+
+請以JSON格式回應，包含以下欄位：
+{{
+    "risk_level": "極高風險/高風險/中風險/低風險",
+    "fraud_type": "詐騙類型描述",
+    "explanation": "詳細分析說明",
+    "suggestions": ["建議1", "建議2", "建議3"],
+    "is_emerging": false,
+    "analysis_details": {{
+        "sender_domain": "發信者網域",
+        "claimed_organization": "聲稱的機構",
+        "expected_domain": "該機構的正確網域",
+        "domain_mismatch": true/false,
+        "sensitive_keywords": ["發現的敏感詞彙"],
+        "threat_indicators": ["威脅性指標"]
+    }}
+}}
+"""
+
+    try:
+        logger.info(f"使用ChatGPT分析郵件詐騙內容")
+        
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "你是一個專業的郵件詐騙分析專家，專門識別各種郵件詐騙手法，特別是台灣地區的詐騙模式。"},
+                {"role": "user", "content": analysis_prompt}
+            ],
+            temperature=0.1,
+            max_tokens=1500
+        )
+        
+        analysis_result = response.choices[0].message.content.strip()
+        logger.info(f"ChatGPT郵件分析完成，結果長度: {len(analysis_result)}")
+        
+        # 解析JSON回應
+        import json
+        try:
+            result_data = json.loads(analysis_result)
+            
+            # 確保必要欄位存在
+            if "risk_level" not in result_data:
+                result_data["risk_level"] = "中風險"
+            if "fraud_type" not in result_data:
+                result_data["fraud_type"] = "郵件內容分析"
+            if "explanation" not in result_data:
+                result_data["explanation"] = analysis_result
+            if "suggestions" not in result_data:
+                result_data["suggestions"] = ["建議謹慎處理此郵件", "如有疑慮請聯繫相關機構確認"]
+            
+            # 添加額外資訊
+            result_data["display_name"] = display_name
+            result_data["analysis_type"] = "ChatGPT郵件詐騙分析"
+            result_data["sender_email"] = sender_email
+            
+            return {
+                "success": True,
+                "message": "ChatGPT郵件詐騙分析完成",
+                "result": result_data,
+                "raw_result": analysis_result
+            }
+            
+        except json.JSONDecodeError:
+            logger.warning("ChatGPT回應不是有效的JSON格式，使用文字分析")
+            return {
+                "success": True,
+                "message": "ChatGPT郵件詐騙分析完成",
+                "result": {
+                    "risk_level": "中風險",
+                    "fraud_type": "郵件內容分析",
+                    "explanation": analysis_result,
+                    "suggestions": [
+                        "建議謹慎處理此郵件",
+                        "如有疑慮請聯繫相關機構確認",
+                        "不要點擊郵件中的可疑連結",
+                        "不要提供個人敏感資料"
+                    ],
+                    "is_emerging": False,
+                    "display_name": display_name,
+                    "analysis_type": "ChatGPT郵件詐騙分析",
+                    "sender_email": sender_email
+                },
+                "raw_result": analysis_result
+            }
+            
+    except Exception as e:
+        logger.error(f"ChatGPT郵件分析時發生錯誤: {e}")
+        # 降級到基礎規則分析
+        return analyze_email_fraud_basic(email_content, sender_email, display_name)
+
+
+def analyze_email_fraud_basic(email_content, sender_email=None, display_name="朋友"):
+    """
+    基礎規則的郵件詐騙分析（當ChatGPT不可用時使用）
     """
     import re
     import urllib.parse
