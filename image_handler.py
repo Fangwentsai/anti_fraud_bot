@@ -123,6 +123,23 @@ class ImageHandler:
         # 首先提取文字以判斷是否需要特殊分析
         extracted_text = extract_text_from_image(image_content)
         
+        # 優先檢查是否為郵件截圖
+        if self._contains_email_keywords(extracted_text):
+            logger.info("檢測到郵件相關關鍵詞，使用郵件分析")
+            # 使用郵件分析邏輯
+            from anti_fraud_clean_app import analyze_email_fraud
+            try:
+                email_analysis_result = analyze_email_fraud(extracted_text, None, "朋友")
+                if email_analysis_result.get("success", False):
+                    result = email_analysis_result.get("result", {})
+                    # 添加提取的文字到分析結果中
+                    result["extracted_text"] = extracted_text
+                    result["analysis_source"] = "郵件分析"
+                    return result
+            except Exception as e:
+                logger.error(f"郵件分析失敗: {e}")
+                # 如果郵件分析失敗，繼續使用一般分析
+        
         # 檢查文字內容，選擇最合適的分析類型
         if analysis_type == "GENERAL":
             # 如果用戶沒有指定分析類型，根據圖片內容自動選擇
@@ -139,8 +156,8 @@ class ImageHandler:
         # 檢查提取的文字中是否包含網址，進行網域變形檢測
         domain_spoofing_result = self._check_domain_spoofing_in_text(extracted_text)
         
-        # 如果檢測到網域變形攻擊，直接返回高風險結果
-        if domain_spoofing_result.get("is_spoofing", False):
+        # 如果檢測到網域變形攻擊，但不是郵件內容，才直接返回高風險結果
+        if domain_spoofing_result.get("is_spoofing", False) and not self._contains_email_keywords(extracted_text):
             logger.info(f"檢測到網域變形攻擊: {domain_spoofing_result.get('spoofed_domain', '')}")
             return {
                 "success": True,
@@ -158,6 +175,16 @@ class ImageHandler:
         # 進行一般詐騙分析
         analysis_result = analyze_image(image_content, analysis_type, context_message)
         
+        # 如果檢測到網域變形攻擊且是郵件內容，將此信息添加到分析結果中
+        if domain_spoofing_result.get("is_spoofing", False) and self._contains_email_keywords(extracted_text):
+            spoofing_info = f"\n\n⚠️ 額外發現：此郵件包含可疑網域「{domain_spoofing_result.get('spoofed_domain', '')}」，" \
+                          f"疑似假冒「{domain_spoofing_result.get('original_domain', '')}」的詐騙網站！"
+            analysis_result["explanation"] = analysis_result.get("explanation", "") + spoofing_info
+            analysis_result["spoofing_details"] = domain_spoofing_result
+            # 提升風險等級
+            if analysis_result.get("risk_level") in ["低風險", "中風險"]:
+                analysis_result["risk_level"] = "高風險"
+        
         # 如果發現QR碼且風險等級高，更新分析結果
         if qr_result.get("success", False) and qr_result.get("contains_qr_code", False):
             if qr_result.get("risk_level") == "高":
@@ -172,6 +199,31 @@ class ImageHandler:
         analysis_result["extracted_text"] = extracted_text
         
         return analysis_result
+    
+    def _contains_email_keywords(self, text: str) -> bool:
+        """檢查文字是否包含郵件相關關鍵詞"""
+        email_keywords = [
+            "寄件者", "發信者", "主旨", "收件者", "From:", "To:", "Subject:", "郵件", "email",
+            "週一", "週二", "週三", "週四", "週五", "週六", "週日", "上午", "下午", "小時前",
+            "分鐘前", "昨天", "前天", "月", "日", "年", "時間", "發送時間"
+        ]
+        
+        # 檢查郵件地址格式
+        import re
+        email_address_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+        has_email_address = re.search(email_address_pattern, text)
+        
+        # 檢查郵件服務格式
+        service_patterns = [
+            r'[A-Z]+\.[A-Z]+-服務[A-Z]+\.[A-Z]+',  # RTK.UI-服務FETC.Service
+            r'[A-Z]+-[^<]+<[^>]+@[^>]+>',  # YTA-未於期限理 <casinto@telenet.be>
+        ]
+        has_service_pattern = any(re.search(pattern, text) for pattern in service_patterns)
+        
+        # 如果包含郵件關鍵詞、郵件地址或服務格式，就認為是郵件
+        return (any(keyword in text for keyword in email_keywords) or 
+                has_email_address is not None or 
+                has_service_pattern)
     
     def _contains_banking_keywords(self, text: str) -> bool:
         """檢查文字是否包含銀行或支付相關關鍵詞"""
