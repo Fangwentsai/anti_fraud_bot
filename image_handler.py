@@ -74,7 +74,7 @@ class ImageHandler:
             # 使用統一的 Flex Message 創建方法
             flex_message = create_analysis_flex_message(result, display_name, "圖片分析", user_id)
             
-            return flex_message, result.get("raw_result", "")
+            return flex_message, result
             
         except Exception as e:
             logger.exception(f"處理圖片訊息時發生錯誤: {e}")
@@ -102,7 +102,7 @@ class ImageHandler:
             # 使用統一的 Flex Message 創建方法
             flex_message = create_analysis_flex_message(result, display_name, "圖片分析", user_id)
             
-            return flex_message, result.get("raw_result", "")
+            return flex_message, result
             
         except Exception as e:
             logger.exception(f"處理圖片URL時發生錯誤: {e}")
@@ -135,6 +135,8 @@ class ImageHandler:
                     # 添加提取的文字到分析結果中
                     result["extracted_text"] = extracted_text
                     result["analysis_source"] = "郵件分析"
+                    # 確保包含raw_result欄位，用於Firebase記錄
+                    result["raw_result"] = email_analysis_result.get("raw_result", "")
                     return result
             except Exception as e:
                 logger.error(f"郵件分析失敗: {e}")

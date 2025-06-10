@@ -2479,11 +2479,26 @@ if handler:
                     logger.info(f"使用舊版API回覆圖片分析成功: {user_id}")
                     
                     # 保存互動記錄到Firebase
+                    # 處理raw_result現在是完整的分析結果字典
+                    risk_level = None
+                    fraud_type = None
+                    is_fraud_related = False
+                    
+                    if raw_result:
+                        if isinstance(raw_result, dict):
+                            risk_level = raw_result.get("risk_level")
+                            fraud_type = raw_result.get("fraud_type")
+                            is_fraud_related = risk_level not in ["無風險", "低", "低風險"] if risk_level else False
+                        elif isinstance(raw_result, str):
+                            # 向後兼容：如果仍然是字串，設定預設值
+                            logger.warning(f"raw_result是字串格式，可能是舊版本的返回值: {raw_result[:100]}...")
+                            is_fraud_related = True  # 保守估計
+                    
                     firebase_manager.save_user_interaction(
                         user_id, display_name, "上傳圖片分析", "圖片分析結果",
-                        is_fraud_related=True if raw_result and raw_result.get("risk_level") not in ["無風險", "低"] else False,
-                        fraud_type=raw_result.get("fraud_type") if raw_result else None,
-                        risk_level=raw_result.get("risk_level") if raw_result else None
+                        is_fraud_related=is_fraud_related,
+                        fraud_type=fraud_type,
+                        risk_level=risk_level
                     )
                 except LineBotApiError as e:
                     logger.error(f"使用LINE API回覆圖片分析時發生錯誤: {e}")
@@ -2495,9 +2510,9 @@ if handler:
                             # 保存互動記錄到Firebase
                             firebase_manager.save_user_interaction(
                                 user_id, display_name, "上傳圖片分析", "圖片分析結果(push)",
-                                is_fraud_related=True if raw_result and raw_result.get("risk_level") not in ["無風險", "低"] else False,
-                                fraud_type=raw_result.get("fraud_type") if raw_result else None,
-                                risk_level=raw_result.get("risk_level") if raw_result else None
+                                is_fraud_related=is_fraud_related,
+                                fraud_type=fraud_type,
+                                risk_level=risk_level
                             )
                         except Exception as push_error:
                             logger.error(f"圖片分析使用push_message也失敗: {push_error}")
