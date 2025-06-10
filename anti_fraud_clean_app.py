@@ -583,6 +583,19 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
             logger.info(f"檢測到信用卡3D驗證簡訊，進行專門分析")
             return analyze_credit_card_3d_verification(user_message, display_name)
         
+        # 檢查是否為郵件內容（包含發信者資訊）
+        email_pattern = r'(?:寄件者|發信者|From|from)[:：]\s*([^\n\r]+@[^\n\r\s]+)'
+        email_match = re.search(email_pattern, user_message)
+        
+        # 或檢查是否包含郵件特徵關鍵詞
+        email_indicators = ['寄件者', '發信者', '主旨', '收件者', 'From:', 'To:', 'Subject:', '郵件', 'email']
+        has_email_indicators = any(indicator in user_message for indicator in email_indicators)
+        
+        if email_match or has_email_indicators:
+            logger.info(f"檢測到郵件內容，進行專門分析")
+            sender_email = email_match.group(1) if email_match else None
+            return analyze_email_fraud(user_message, sender_email, display_name)
+        
         original_url = None
         expanded_url = None
         is_short_url = False
@@ -3383,6 +3396,283 @@ def is_credit_card_3d_verification(message):
     )
     
     return has_amount and has_verification_keywords
+
+def analyze_email_fraud(email_content, sender_email=None, display_name="朋友"):
+    """
+    智能分析郵件詐騙，根據內容、發信者、敏感詞彙等進行綜合判斷
+    
+    Args:
+        email_content: 郵件內容
+        sender_email: 發信者郵件地址（可選）
+        display_name: 用戶顯示名稱
+        
+    Returns:
+        dict: 分析結果
+    """
+    import re
+    import urllib.parse
+    
+    # 1. 檢查郵件內容是否包含URL
+    # 更精確的URL檢測，避免誤判郵件標題等內容
+    url_patterns = [
+        r'https?://[^\s<>"{}|\\^`\[\]]+',  # http/https URL
+        r'(?:^|\s)(www\.[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/[^\s<>"{}|\\^`\[\]]*)?)',  # www開頭的URL
+    ]
+    
+    found_urls = []
+    for pattern in url_patterns:
+        matches = re.findall(pattern, email_content)
+        if isinstance(matches[0], tuple) if matches else False:
+            # 如果是tuple，取第一個元素（捕獲組）
+            found_urls.extend([match[0] if isinstance(match, tuple) else match for match in matches])
+        else:
+            found_urls.extend(matches)
+    
+    # 過濾掉明顯不是URL的內容
+    filtered_urls = []
+    for url in found_urls:
+        # 排除郵件地址
+        if '@' in url and not url.startswith(('http://', 'https://', 'www.')):
+            continue
+        # 排除過短的內容
+        if len(url) < 5:
+            continue
+        # 排除明顯的郵件標題格式和非URL內容
+        if (url.upper() in ['RTK.UI', 'FETC.SERVICE', 'TELENET.BE'] or 
+            '.' not in url or 
+            len(url.split('.')) < 2 or
+            not any(char.isalpha() for char in url.split('.')[-1])):
+            continue
+        filtered_urls.append(url)
+    
+    # 移除重複的URL
+    found_urls = list(set(filtered_urls))
+    
+    # 如果有URL，優先分析URL
+    if found_urls:
+        for url in found_urls:
+            # 確保URL有協議
+            if not url.startswith(('http://', 'https://')):
+                if url.startswith('www.'):
+                    url = 'https://' + url
+                else:
+                    url = 'https://' + url
+            
+            # 檢查是否為短網址
+            short_url_domains = [
+                'bit.ly', 'tinyurl.com', 'goo.gl', 't.co', 'ow.ly', 
+                'is.gd', 'buff.ly', 'adf.ly', 'short.link', 'tiny.cc',
+                'reurl.cc', 'pse.is', 'lihi.io', 'lin.ee'
+            ]
+            
+            domain = urllib.parse.urlparse(url).netloc.lower()
+            if any(short_domain in domain for short_domain in short_url_domains):
+                # 短網址處理
+                expanded_url = expand_short_url(url)
+                if expanded_url and expanded_url != url:
+                    # 分析展開後的URL - 簡化版本，不依賴OpenAI
+                    return {
+                        "success": True,
+                        "message": "郵件詐騙分析完成",
+                        "result": {
+                            "risk_level": "中風險",
+                            "fraud_type": "郵件包含短網址",
+                            "explanation": f"郵件中包含短網址，已展開為：{expanded_url}\n\n建議您謹慎處理，確認網址的安全性。",
+                            "suggestions": [
+                                "不要立即點擊郵件中的連結",
+                                "確認發信者身份是否可信",
+                                "可以複製網址到瀏覽器手動輸入",
+                                "如有疑慮請聯繫相關機構確認"
+                            ],
+                            "is_emerging": False,
+                            "display_name": display_name,
+                            "analysis_type": "郵件詐騙分析",
+                            "original_url": url,
+                            "expanded_url": expanded_url
+                        }
+                    }
+                else:
+                    return {
+                        "success": True,
+                        "message": "郵件詐騙分析完成",
+                        "result": {
+                            "risk_level": "高風險",
+                            "fraud_type": "可疑短網址郵件",
+                            "explanation": f"郵件中包含無法展開的短網址：{url}",
+                            "suggestions": ["不要點擊郵件中的可疑連結", "直接聯繫官方客服確認"],
+                            "is_emerging": False,
+                            "display_name": display_name,
+                            "analysis_type": "郵件詐騙分析"
+                        }
+                    }
+            else:
+                # 一般URL - 簡化版本，不依賴OpenAI
+                return {
+                    "success": True,
+                    "message": "郵件詐騙分析完成",
+                    "result": {
+                        "risk_level": "中風險",
+                        "fraud_type": "郵件包含網址連結",
+                        "explanation": f"郵件中包含網址：{url}\n\n建議您謹慎處理，確認網址的安全性和發信者身份。",
+                        "suggestions": [
+                            "不要立即點擊郵件中的連結",
+                            "確認發信者身份是否可信",
+                            "檢查網址是否為官方網站",
+                            "如有疑慮請聯繫相關機構確認"
+                        ],
+                        "is_emerging": False,
+                        "display_name": display_name,
+                        "analysis_type": "郵件詐騙分析",
+                        "url": url
+                    }
+                }
+    
+    # 2. 沒有URL的情況，檢查敏感文字
+    sensitive_keywords = [
+        '繳費', '付款', '費用', '暫停使用', '銀行往來', '帳單', '欠費', 
+        '催繳', '逾期', '停用', '恢復服務', '立即繳費', '點擊繳費',
+        '信用卡', '轉帳', '匯款', '驗證', '更新資料', '確認身分'
+    ]
+    
+    has_sensitive_content = any(keyword in email_content for keyword in sensitive_keywords)
+    
+    if not has_sensitive_content:
+        return {
+            "success": True,
+            "message": "郵件詐騙分析完成",
+            "result": {
+                "risk_level": "低風險",
+                "fraud_type": "一般郵件",
+                "explanation": "郵件內容未發現明顯的詐騙特徵或敏感詞彙。",
+                "suggestions": ["保持警覺", "如有疑慮可聯繫相關機構確認"],
+                "is_emerging": False,
+                "display_name": display_name,
+                "analysis_type": "郵件詐騙分析"
+            }
+        }
+    
+    # 3. 有敏感文字，尋找發信來源
+    legitimate_organizations = {
+        '台灣電力公司': 'taipower.com.tw',
+        '台電': 'taipower.com.tw',
+        '台灣自來水公司': 'water.gov.tw',
+        '自來水公司': 'water.gov.tw',
+        '台北自來水事業處': 'water.taipei.gov.tw',
+        '台北自來水': 'water.taipei.gov.tw',
+        '欣欣天然氣': 'sinshin.com.tw',
+        '遠通電收': 'fetc.net.tw',
+        '中華電信': 'cht.com.tw',
+        '台灣大哥大': 'taiwanmobile.com',
+        '遠傳電信': 'fetnet.net',
+        '亞太電信': 'aptg.com.tw',
+        '台灣之星': 'tstartel.com',
+        '國稅局': 'gov.tw',
+        '健保署': 'nhi.gov.tw',
+        '勞保局': 'bli.gov.tw'
+    }
+    
+    # 在郵件內容中尋找機構名稱
+    found_organization = None
+    expected_domain = None
+    
+    for org_name, domain in legitimate_organizations.items():
+        if org_name in email_content:
+            found_organization = org_name
+            expected_domain = domain
+            break
+    
+    if not found_organization:
+        # 沒找到合法機構但有敏感詞彙
+        return {
+            "success": True,
+            "message": "郵件詐騙分析完成",
+            "result": {
+                "risk_level": "中風險",
+                "fraud_type": "可疑繳費郵件",
+                "explanation": f"郵件包含繳費相關敏感詞彙，但無法確認發信機構身分。發現的敏感詞彙包括：{', '.join([kw for kw in sensitive_keywords if kw in email_content])}",
+                "suggestions": [
+                    "不要點擊郵件中的任何連結",
+                    "直接聯繫相關機構官方客服確認",
+                    "透過官方網站或APP查詢帳單狀態",
+                    "如有疑慮可撥打165反詐騙專線"
+                ],
+                "is_emerging": False,
+                "display_name": display_name,
+                "analysis_type": "郵件詐騙分析"
+            }
+        }
+    
+    # 4. 找到合法機構，檢查發信者網域
+    if sender_email:
+        sender_domain = sender_email.split('@')[-1].lower() if '@' in sender_email else None
+        
+        if sender_domain and expected_domain:
+            if expected_domain.lower() in sender_domain or sender_domain == expected_domain.lower():
+                # 網域匹配，可能是合法郵件
+                return {
+                    "success": True,
+                    "message": "郵件詐騙分析完成",
+                    "result": {
+                        "risk_level": "低風險",
+                        "fraud_type": f"疑似{found_organization}官方郵件",
+                        "explanation": f"郵件聲稱來自{found_organization}，發信網域({sender_domain})與預期網域({expected_domain})相符。",
+                        "suggestions": [
+                            "雖然網域相符，仍建議透過官方管道確認",
+                            "不要在郵件連結中輸入敏感資料",
+                            "可直接前往官方網站查詢帳單"
+                        ],
+                        "is_emerging": False,
+                        "display_name": display_name,
+                        "analysis_type": "郵件詐騙分析"
+                    }
+                }
+            else:
+                # 網域不匹配，可能是詐騙
+                return {
+                    "success": True,
+                    "message": "郵件詐騙分析完成",
+                    "result": {
+                        "risk_level": "極高風險",
+                        "fraud_type": f"假冒{found_organization}的詐騙郵件",
+                        "explanation": f"🚨 **網域偽裝攻擊警告！**\n\n郵件聲稱來自{found_organization}，但發信網域({sender_domain})與官方網域({expected_domain})不符。\n\n這是典型的網域偽裝攻擊，詐騙集團假冒合法機構騙取個人資料或金錢。",
+                        "suggestions": [
+                            "🚨 立即刪除此郵件，絕不要點擊任何連結",
+                            "🚫 不要提供任何個人資料或付款資訊",
+                            f"📞 如有疑慮，請直接撥打{found_organization}官方客服電話",
+                            "🛡️ 可撥打165反詐騙專線檢舉此詐騙郵件",
+                            f"🌐 如需繳費，請直接前往{found_organization}官方網站"
+                        ],
+                        "is_emerging": False,
+                        "display_name": display_name,
+                        "analysis_type": "郵件詐騙分析",
+                        "spoofed_domain": sender_domain,
+                        "legitimate_domain": expected_domain,
+                        "organization": found_organization
+                    }
+                }
+    
+    # 5. 沒有發信者資訊但找到合法機構
+    return {
+        "success": True,
+        "message": "郵件詐騙分析完成",
+        "result": {
+            "risk_level": "高風險",
+            "fraud_type": f"疑似假冒{found_organization}的郵件",
+            "explanation": f"⚠️ **需要特別注意！**\n\n郵件聲稱來自{found_organization}並包含繳費相關內容，但無法確認發信者身分。\n\n由於涉及敏感的繳費資訊，建議您格外謹慎。",
+            "suggestions": [
+                "🔍 不要點擊郵件中的任何連結",
+                f"📞 直接撥打{found_organization}官方客服電話確認",
+                f"🌐 透過{found_organization}官方網站查詢帳單狀態",
+                "🛡️ 如有疑慮可撥打165反詐騙專線諮詢",
+                "💡 合法機構通常不會透過郵件要求立即付款"
+            ],
+            "is_emerging": False,
+            "display_name": display_name,
+            "analysis_type": "郵件詐騙分析",
+            "organization": found_organization,
+            "expected_domain": expected_domain
+        }
+    }
 
 if __name__ == '__main__':
     # 檢查環境變數
