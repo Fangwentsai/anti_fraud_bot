@@ -213,18 +213,7 @@ class FlexMessageService:
                     "type": "box",
                     "layout": "vertical",
                     "spacing": "sm",
-                    "contents": [
-                        {
-                            "type": "button",
-                            "style": "primary",
-                            "height": "sm",
-                            "action": {
-                                "type": "message",
-                                "label": "🏠 回到首頁",
-                                "text": "土豆"
-                            }
-                        }
-                    ],
+                    "contents": self._get_analysis_footer_buttons(user_id),
                     "flex": 0
                 }
             }
@@ -258,6 +247,68 @@ class FlexMessageService:
         except Exception as e:
             logger.error(f"創建詐騙分析Flex Message時出錯: {e}")
             return None
+
+    def _get_analysis_footer_buttons(self, user_id: str) -> List:
+        """取得分析結果頁面的底部按鈕，有10%機率顯示贊助按鈕"""
+        import random
+        
+        # 確保用戶ID有值
+        safe_user_id = user_id if user_id else "unknown"
+        
+        # 基本按鈕
+        buttons = [
+            {
+                "type": "button",
+                "style": "primary",
+                "height": "sm",
+                "action": {
+                    "type": "message",
+                    "label": "🔄 再測一次",
+                    "text": "土豆 請幫我分析這則訊息"
+                },
+                "color": "#2E86C1"
+            },
+            {
+                "type": "button",
+                "style": "primary",
+                "height": "sm",
+                "action": {
+                    "type": "message",
+                    "label": "🏠 回到首頁",
+                    "text": "土豆"
+                },
+                "color": "#27AE60"
+            }
+        ]
+        
+        # 10%的機率顯示贊助按鈕
+        if random.random() < 0.10:
+            buttons.append({
+                "type": "separator",
+                "margin": "md"
+            })
+            buttons.append({
+                "type": "text",
+                "text": "喜歡土豆的服務嗎？歡迎點擊贊助土豆一杯咖啡，讓網站能持續運作☕️",
+                "size": "xs",
+                "color": "#888888",
+                "margin": "md",
+                "align": "center",
+                "wrap": True
+            })
+            buttons.append({
+                "type": "button",
+                "style": "primary",
+                "height": "sm",
+                "action": {
+                    "type": "uri",
+                    "label": "給我們鼓勵☕️",
+                    "uri": "https://portaly.cc/todao-antifraud"
+                },
+                "color": "#9C27B0"  # 紫色按鈕
+            })
+        
+        return buttons
 
     def create_domain_spoofing_flex_message(self, spoofing_result: Dict, display_name: str,
                                           message_to_analyze: str, user_id: Optional[str] = None) -> FlexSendMessage:
@@ -385,31 +436,76 @@ class FlexMessageService:
                     )
                 ]
             ),
-            # footer=BoxComponent(
-            #     layout='vertical',
-            #     spacing='sm',
-            #     contents=[
-            #         ButtonComponent(
-            #             style='primary',
-            #             height='sm',
-            #             action=URIAction(
-            #                 label='📞 立即撥打165專線',
-            #                 uri='tel:165'
-            #             )
-            #         ),
-            #         ButtonComponent(
-            #             style='secondary',
-            #             height='sm',
-            #             action=PostbackAction(
-            #                 label='🎮 玩土豆遊戲放鬆一下',
-            #                 data=f'action=potato_game&user_id={safe_user_id}'
-            #             )
-            #         )
-            #     ]
-            # )
+            footer=BoxComponent(
+                layout='vertical',
+                spacing='sm',
+                contents=self._get_domain_spoofing_footer_buttons(safe_user_id)
+            )
         )
         
         return FlexSendMessage(alt_text=f"網域偽裝攻擊警告：{suspicious_domain}", contents=bubble)
+
+    def _get_domain_spoofing_footer_buttons(self, user_id: str) -> List:
+        """取得網域變形警告頁面的底部按鈕，有10%機率顯示贊助按鈕"""
+        import random
+        
+        # 基本按鈕
+        buttons = [
+            ButtonComponent(
+                style='primary',
+                height='sm',
+                action=URIAction(
+                    label='📞 立即撥打165專線',
+                    uri='tel:165'
+                ),
+                color='#E74C3C'
+            ),
+            ButtonComponent(
+                style='primary',
+                height='sm',
+                action=MessageAction(
+                    label='🔄 再測一次',
+                    text='土豆 請幫我分析這則訊息'
+                ),
+                color='#1E88E5'
+            ),
+            ButtonComponent(
+                style='primary',
+                height='sm',
+                action=MessageAction(
+                    label='🏠 回到首頁',
+                    text='土豆'
+                ),
+                color='#26A69A'
+            )
+        ]
+        
+        # 10%的機率顯示贊助按鈕
+        if random.random() < 0.10:
+            buttons.append(SeparatorComponent(margin='md'))
+            buttons.append(
+                TextComponent(
+                    text="喜歡土豆的服務嗎？歡迎點擊贊助土豆一杯咖啡，讓網站能持續運作☕️",
+                    size="xs",
+                    color="#888888",
+                    margin="md",
+                    align="center",
+                    wrap=True
+                )
+            )
+            buttons.append(
+                ButtonComponent(
+                    style='primary',
+                    height='sm',
+                    action=URIAction(
+                        label='給我們鼓勵☕️',
+                        uri='https://portaly.cc/todao-antifraud'
+                    ),
+                    color='#9C27B0'  # 紫色按鈕
+                )
+            )
+        
+        return buttons
 
     def _generate_suspicious_domain_explanation(self, suspicious_domain: str, legitimate_domain: str, attack_type: str) -> str:
         """生成可疑網域的說明文字"""
@@ -509,7 +605,7 @@ class FlexMessageService:
                         height='sm',
                         action=URIAction(
                             label='☕ 贊助土豆',
-                            uri='https://buymeacoffee.com/todao_antifraud'
+                            uri='https://portaly.cc/todao-antifraud'
                         )
                     ),
                     ButtonComponent(
