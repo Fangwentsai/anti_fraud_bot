@@ -578,6 +578,11 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
     from urllib.parse import urlparse
     
     try:
+        # 優先檢查是否為信用卡3D驗證簡訊
+        if is_credit_card_3d_verification(user_message):
+            logger.info(f"檢測到信用卡3D驗證簡訊，進行專門分析")
+            return analyze_credit_card_3d_verification(user_message, display_name)
+        
         original_url = None
         expanded_url = None
         is_short_url = False
@@ -3195,6 +3200,189 @@ def summarize_website_title(title, domain=None):
     except Exception as e:
         logger.warning(f"摘要標題時發生錯誤: {e}")
         return title[:10] + "..." if len(title) > 10 else title
+
+def analyze_credit_card_3d_verification(message, display_name="朋友"):
+    """
+    智能分析信用卡3D驗證簡訊，根據金額、幣別、卡號末四碼等因素判定風險等級
+    
+    Args:
+        message: 簡訊內容
+        display_name: 用戶顯示名稱
+        
+    Returns:
+        dict: 分析結果
+    """
+    import re
+    
+    # 檢測是否為3D驗證簡訊的關鍵詞
+    verification_keywords = [
+        '驗證', '認證', '確認', '交易', '刷卡', '消費', '網路交易', 
+        '信用卡', '末四碼', '驗證碼', '認證碼', '3D', 'OTP'
+    ]
+    
+    # 檢查是否包含3D驗證相關關鍵詞
+    if not any(keyword in message for keyword in verification_keywords):
+        return None
+    
+    # 提取金額信息
+    amount_patterns = [
+        r'([A-Z]{3})\$(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)',  # USD$1,200
+        r'新臺幣([A-Z]{3})\$(\d{1,3}(?:,\d{3})*)',  # 新臺幣TWD$1,200
+        r'交易新臺幣([A-Z]{3})\$(\d{1,3}(?:,\d{3})*)',  # 交易新臺幣TWD$1,200
+        r'([A-Z]{3})(\d{1,3}(?:,\d{3})*)',  # TWD1200
+        r'NT\$(\d{1,3}(?:,\d{3})*)',  # NT$1200
+        r'新台幣\s*(\d{1,3}(?:,\d{3})*)',  # 新台幣1200
+        r'(\d{1,3}(?:,\d{3})*)\s*元',  # 1200元
+    ]
+    
+    currency = "TWD"  # 預設台幣
+    amount = 0
+    
+    for pattern in amount_patterns:
+        matches = re.findall(pattern, message)
+        if matches:
+            if isinstance(matches[0], tuple) and len(matches[0]) == 2:
+                # 有幣別的情況
+                currency, amount_str = matches[0]
+                amount = int(amount_str.replace(',', ''))
+                break
+            elif isinstance(matches[0], str):
+                # 只有金額的情況
+                amount = int(matches[0].replace(',', ''))
+                break
+    
+    # 提取卡號末四碼 - 改進正則表達式
+    card_last_four_patterns = [
+        r'末四碼[：:\s]*(\d{4})',  # 末四碼 8219
+        r'卡末四碼[：:\s]*(\d{4})',  # 卡末四碼 8219
+        r'信用卡[（(]末四碼[：:\s]*(\d{4})[）)]',  # 信用卡(末四碼:8219)
+    ]
+    
+    card_last_four = None
+    for pattern in card_last_four_patterns:
+        matches = re.findall(pattern, message)
+        if matches:
+            card_last_four = matches[0]
+            break
+    
+    # 風險評估邏輯
+    risk_level = "低風險"
+    fraud_type = "信用卡3D驗證簡訊"
+    explanation = ""
+    suggestions = []
+    
+    # 1. 境外交易（非台幣）- 高風險
+    if currency and currency.upper() not in ['TWD', 'NT']:
+        risk_level = "高風險"
+        fraud_type = "境外信用卡交易驗證"
+        explanation = f"⚠️ 這是一筆境外信用卡交易驗證簡訊。\n\n"
+        explanation += f"💳 交易金額：{currency.upper()}{amount:,}\n"
+        if card_last_four:
+            explanation += f"🔢 卡號末四碼：{card_last_four}\n"
+        explanation += f"\n🌍 境外交易風險相對較高，詐騙集團常利用海外支付平台進行詐騙。"
+        
+        suggestions = [
+            "🔍 仔細核對刷卡項目、金額與幣別是否正確",
+            "⚠️ 確認是否為您本人進行的海外交易",
+            "🛡️ 如非本人交易，立即聯繫信用卡客服停卡",
+            "💡 海外交易詐騙風險較高，請特別謹慎",
+            "📞 有疑慮時可撥打信用卡背面客服電話確認"
+        ]
+    
+    # 2. 高金額交易（>3000台幣或等值） - 中風險
+    elif amount > 3000:
+        risk_level = "中風險"
+        fraud_type = "高金額信用卡交易驗證"
+        explanation = f"💳 這是一筆金額較高的信用卡交易驗證。\n\n"
+        explanation += f"💰 交易金額：{currency}${amount:,}\n"
+        if card_last_four:
+            explanation += f"🔢 卡號末四碼：{card_last_four}\n"
+        explanation += f"\n⚠️ 由於單筆金額較高，建議您仔細確認交易內容。"
+        
+        suggestions = [
+            "🔍 確認刷卡項目與金額是否符合您的消費",
+            "💡 高金額交易請特別謹慎核對",
+            "✅ 確認是本人交易後再輸入驗證碼",
+            "🛡️ 如有疑慮，可先聯繫商家或信用卡客服",
+            "⚠️ 不要在可疑網站或陌生連結輸入驗證碼"
+        ]
+    
+    # 3. 一般小額台幣交易 - 低風險
+    else:
+        risk_level = "低風險"
+        fraud_type = "一般信用卡3D驗證"
+        explanation = f"✅ 這看起來是一般的信用卡3D驗證簡訊。\n\n"
+        explanation += f"💰 交易金額：NT${amount:,}\n"
+        if card_last_four:
+            explanation += f"🔢 卡號末四碼：{card_last_four}\n"
+        explanation += f"\n💡 金額不高且為台幣交易，風險相對較低。"
+        
+        suggestions = [
+            "✅ 確認是您本人的交易後可安心輸入驗證碼",
+            "🔍 養成習慣：每次都確認交易金額與商家",
+            "🛡️ 驗證碼只能在正確的交易頁面輸入",
+            "💡 如有任何疑慮，可聯繫信用卡客服確認",
+            "⚠️ 絕不要將驗證碼提供給任何人（包括客服）"
+        ]
+    
+    # 添加通用安全提醒
+    explanation += f"\n\n🔐 重要提醒：3D驗證碼是您的交易密碼，只能在銀行或商家的安全頁面輸入，絕不要透過電話、簡訊或其他方式提供給任何人。"
+    
+    return {
+        "success": True,
+        "message": "信用卡3D驗證分析完成",
+        "result": {
+            "risk_level": risk_level,
+            "fraud_type": fraud_type,
+            "explanation": explanation,
+            "suggestions": suggestions,
+            "is_emerging": False,
+            "display_name": display_name,
+            "transaction_amount": amount,
+            "currency": currency,
+            "card_last_four": card_last_four,
+            "analysis_type": "信用卡3D驗證分析"
+        }
+    }
+
+def is_credit_card_3d_verification(message):
+    """
+    檢測訊息是否為信用卡3D驗證簡訊
+    
+    Args:
+        message: 訊息內容
+        
+    Returns:
+        bool: 是否為3D驗證簡訊
+    """
+    # 3D驗證簡訊的特徵關鍵詞組合
+    verification_indicators = [
+        ('末四碼', '驗證'),
+        ('末四碼', '認證'),
+        ('信用卡', '驗證碼'),
+        ('網路交易', '驗證'),
+        ('刷卡', '驗證碼'),
+        ('交易', '認證碼'),
+        ('消費', '驗證'),
+        ('3D', '驗證'),
+        ('OTP', '驗證')
+    ]
+    
+    # 檢查是否包含金額格式
+    amount_patterns = [
+        r'([A-Z]{3})\$?\d{1,3}(?:,\d{3})*',  # USD$1,200
+        r'NT\$?\d{1,3}(?:,\d{3})*',  # NT$1200
+        r'新台幣\s*\d{1,3}(?:,\d{3})*',  # 新台幣1200
+        r'\d{1,3}(?:,\d{3})*\s*元',  # 1200元
+    ]
+    
+    has_amount = any(re.search(pattern, message) for pattern in amount_patterns)
+    has_verification_keywords = any(
+        all(keyword in message for keyword in keywords) 
+        for keywords in verification_indicators
+    )
+    
+    return has_amount and has_verification_keywords
 
 if __name__ == '__main__':
     # 檢查環境變數
