@@ -123,6 +123,32 @@ class ImageHandler:
         # 首先提取文字以判斷是否需要特殊分析
         extracted_text = extract_text_from_image(image_content)
         
+        # 檢查是否為土豆防詐機器人相關內容
+        if self._is_potato_antifraud_content(extracted_text):
+            logger.info("檢測到土豆防詐機器人相關內容，評為極低風險")
+            return {
+                "success": True,
+                "risk_level": "極低風險",
+                "fraud_type": "正當防詐騙服務推薦",
+                "explanation": "這張截圖顯示有個帳號被「土豆防詐機器人」提醒查個人檔案，這是正當的防詐騙服務，通常代表對方有被系統標記為可疑或有詐騙紀錄，要小心這類帳號可能會嘗試騙取個人資料或推銷不合理的東西。",
+                "suggestions": "🔍 遇到可疑帳號先查證或詢問信任的親友\n🛡️ 保持警覺不透露個人重要資訊。",
+                "extracted_text": extracted_text,
+                "analysis_source": "土豆防詐機器人檢測"
+            }
+        
+        # 檢查是否為簡單的好友推薦行為
+        if self._is_simple_recommendation(extracted_text):
+            logger.info("檢測到簡單的好友推薦行為，評為極低風險")
+            return {
+                "success": True,
+                "risk_level": "極低風險", 
+                "fraud_type": "正常好友推薦",
+                "explanation": "這張截圖看起來是朋友在推薦某個帳號或服務，內容很簡單沒有涉及金錢、投資等可疑內容。不過還是要注意，如果後續有人要求轉帳、投資或提供個人資料，就要提高警覺。",
+                "suggestions": "💡 推薦內容看起來正常，但保持警覺\n🔍 如有金錢相關要求請再次確認\n🛡️ 不隨意提供個人重要資訊",
+                "extracted_text": extracted_text,
+                "analysis_source": "推薦行為檢測"
+            }
+        
         # 優先檢查是否為郵件截圖
         if self._contains_email_keywords(extracted_text):
             logger.info("檢測到郵件相關關鍵詞，使用郵件分析")
@@ -274,11 +300,65 @@ class ImageHandler:
     
     def _contains_social_media_keywords(self, text: str) -> bool:
         """檢查文字是否包含社交媒體相關關鍵詞"""
-        social_keywords = [
-            "FB", "Facebook", "臉書", "IG", "Instagram", "推特", "Twitter", "TikTok", "抖音",
-            "YouTube", "頻道", "訂閱", "追蹤", "按讚", "分享", "留言", "直播", "私訊", "限時動態"
-        ]
+        social_keywords = ["按讚", "分享", "追蹤", "粉絲", "直播", "限時動態", "貼文", "留言"]
         return any(keyword in text for keyword in social_keywords)
+    
+    def _is_potato_antifraud_content(self, text: str) -> bool:
+        """檢查是否為土豆防詐機器人相關內容"""
+        potato_keywords = [
+            "土豆防詐機器人", "土豆防詐", "土豆", "防詐機器人", 
+            "查看個人檔案", "個人檔案", "防詐騙機器人"
+        ]
+        
+        # 檢查是否包含土豆防詐相關關鍵詞
+        has_potato_keywords = any(keyword in text for keyword in potato_keywords)
+        
+        # 檢查是否為推薦或提醒行為（而非詐騙內容）
+        recommendation_indicators = [
+            "查看個人檔案", "個人檔案", "提醒", "建議", "推薦", "注意"
+        ]
+        has_recommendation = any(indicator in text for indicator in recommendation_indicators)
+        
+        # 排除明顯的詐騙關鍵詞
+        fraud_keywords = [
+            "轉帳", "匯款", "投資", "獲利", "賺錢", "中獎", "免費", "限時", 
+            "緊急", "立即", "馬上", "銀行帳號", "密碼", "個資"
+        ]
+        has_fraud_keywords = any(keyword in text for keyword in fraud_keywords)
+        
+        # 如果包含土豆相關關鍵詞且有推薦行為，但沒有詐騙關鍵詞，則認為是正當內容
+        return has_potato_keywords and has_recommendation and not has_fraud_keywords
+    
+    def _is_simple_recommendation(self, text: str) -> bool:
+        """檢查是否為簡單的好友推薦行為"""
+        # 推薦行為的關鍵詞
+        recommendation_keywords = [
+            "查看個人檔案", "個人檔案", "推薦", "介紹", "認識", "加好友",
+            "這個人", "這個帳號", "可以看看", "不錯", "很好"
+        ]
+        
+        # 詐騙相關關鍵詞（如果包含這些就不是簡單推薦）
+        fraud_keywords = [
+            "轉帳", "匯款", "投資", "獲利", "賺錢", "中獎", "免費贈送", "限時優惠",
+            "緊急", "立即行動", "馬上", "銀行帳號", "密碼", "個資", "身分證",
+            "保證", "穩賺", "高報酬", "零風險", "快速致富", "被動收入"
+        ]
+        
+        # 檢查文字長度（簡單推薦通常文字較少）
+        is_short_text = len(text.strip()) < 200
+        
+        # 檢查是否包含推薦關鍵詞
+        has_recommendation = any(keyword in text for keyword in recommendation_keywords)
+        
+        # 檢查是否包含詐騙關鍵詞
+        has_fraud_keywords = any(keyword in text for keyword in fraud_keywords)
+        
+        # 檢查是否為純聊天內容（包含時間、表情符號等）
+        chat_indicators = ["上午", "下午", "今天", "昨天", "已讀", "：", ":", "😊", "😄", "👍"]
+        has_chat_indicators = any(indicator in text for indicator in chat_indicators)
+        
+        # 如果是短文字、有推薦行為或聊天指標、但沒有詐騙關鍵詞，則認為是簡單推薦
+        return (is_short_text and (has_recommendation or has_chat_indicators) and not has_fraud_keywords)
     
     def _load_safe_domains(self) -> Dict:
         """載入安全網域列表"""
