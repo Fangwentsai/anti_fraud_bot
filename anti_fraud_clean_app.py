@@ -587,9 +587,13 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         email_pattern = r'(?:寄件者|發信者|From|from)[:：]\s*([^\n\r]+@[^\n\r\s]+)'
         email_match = re.search(email_pattern, user_message)
         
-        # 檢查郵件特徵關鍵詞
-        email_indicators = ['寄件者', '發信者', '主旨', '收件者', 'From:', 'To:', 'Subject:', '郵件', 'email']
-        has_email_indicators = any(indicator in user_message for indicator in email_indicators)
+        # 檢查強郵件特徵關鍵詞（更嚴格的判斷）
+        strong_email_indicators = ['寄件者', '發信者', '主旨', '收件者', 'From:', 'To:', 'Subject:', '郵件', 'email', '發送時間', '收信時間', '回覆', '轉寄', '附件', '信箱']
+        has_strong_email_indicators = any(indicator in user_message for indicator in strong_email_indicators)
+        
+        # 檢查是否為 LINE 聊天內容（排除條件）
+        line_chat_indicators = ['< ', '> ', 'https://www.youtube.com', 'https://youtu.be', 'https://line.me', 'https://lin.ee']
+        has_line_chat_indicators = any(indicator in user_message for indicator in line_chat_indicators)
         
         # 檢查是否包含郵件地址格式
         email_address_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
@@ -602,8 +606,8 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         ]
         has_service_pattern = any(re.search(pattern, user_message) for pattern in service_patterns)
         
-        # 如果符合任一郵件特徵，進行郵件分析
-        if email_match or has_email_indicators or has_email_address or has_service_pattern:
+        # 如果符合郵件特徵且不是 LINE 聊天內容，進行郵件分析
+        if (email_match or has_strong_email_indicators or has_email_address or has_service_pattern) and not has_line_chat_indicators:
             logger.info(f"檢測到郵件內容，進行專門分析")
             sender_email = None
             

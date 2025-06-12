@@ -204,11 +204,20 @@ class ImageHandler:
     
     def _contains_email_keywords(self, text: str) -> bool:
         """檢查文字是否包含郵件相關關鍵詞"""
-        email_keywords = [
-            "寄件者", "發信者", "主旨", "收件者", "From:", "To:", "Subject:", "郵件", "email",
-            "週一", "週二", "週三", "週四", "週五", "週六", "週日", "上午", "下午", "小時前",
-            "分鐘前", "昨天", "前天", "月", "日", "年", "時間", "發送時間"
+        # 強郵件特徵關鍵詞（必須包含這些才認為是郵件）
+        strong_email_keywords = [
+            "寄件者", "發信者", "主旨", "收件者", "From:", "To:", "Subject:",
+            "發送時間", "收信時間", "回覆", "轉寄", "附件", "信箱"
         ]
+        
+        # 弱郵件特徵關鍵詞（在非聊天環境中可能表示郵件）
+        weak_email_keywords = ["郵件", "email"]
+        
+        # 檢查是否包含強郵件特徵
+        has_strong_email_features = any(keyword in text for keyword in strong_email_keywords)
+        
+        # 檢查是否包含弱郵件特徵
+        has_weak_email_features = any(keyword in text for keyword in weak_email_keywords)
         
         # 檢查郵件地址格式
         import re
@@ -222,8 +231,28 @@ class ImageHandler:
         ]
         has_service_pattern = any(re.search(pattern, text) for pattern in service_patterns)
         
-        # 如果包含郵件關鍵詞、郵件地址或服務格式，就認為是郵件
-        return (any(keyword in text for keyword in email_keywords) or 
+        # 檢查是否為 LINE 聊天截圖（排除條件）
+        line_chat_indicators = [
+            "< ", "> ",  # LINE 聊天中的用戶名稱格式
+            "上午11:", "下午", "上午", "PM", "AM",  # 時間格式但沒有郵件上下文
+            "https://www.youtube.com", "https://youtu.be",  # YouTube 連結
+            "https://line.me", "https://lin.ee"  # LINE 相關連結
+        ]
+        
+        # 如果包含 LINE 聊天指標，則需要更嚴格的郵件判斷
+        has_line_chat_indicators = any(indicator in text for indicator in line_chat_indicators)
+        
+        if has_line_chat_indicators:
+            # 如果是 LINE 聊天，只有在同時包含強郵件特徵和郵件地址時才認為是郵件
+            # 但如果只是在聊天中提到郵件地址，不應該被認為是郵件
+            if has_strong_email_features and has_email_address is not None:
+                return True
+            else:
+                return False
+        
+        # 非 LINE 聊天的情況，包含強郵件特徵、弱郵件特徵、郵件地址或服務格式時，才認為是郵件
+        return (has_strong_email_features or 
+                has_weak_email_features or
                 has_email_address is not None or 
                 has_service_pattern)
     
