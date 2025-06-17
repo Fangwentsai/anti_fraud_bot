@@ -165,7 +165,9 @@
             "ebay.com": "eBay (國際拍賣電商)",
             "taobao.com": "淘寶網 (中國電商)",
             "tmall.com": "天貓 (中國電商)",
-            "jd.com": "京東 (中國電商)"
+            "jd.com": "京東 (中國電商)",
+            "tw.coupang.com": "酷澎 Coupang (韓國電商台灣站)",
+            "coupang.surveycake.biz": "酷澎 Coupang 招募調查表單 (SurveyCake 問卷平台)"
         },
         "台灣媒體": {
             "udn.com": "聯合新聞網",

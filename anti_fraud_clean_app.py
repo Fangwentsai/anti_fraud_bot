@@ -592,7 +592,12 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         has_strong_email_indicators = any(indicator in user_message for indicator in strong_email_indicators)
         
         # 檢查是否為 LINE 聊天內容（排除條件）
-        line_chat_indicators = ['< ', '> ', 'https://www.youtube.com', 'https://youtu.be', 'https://line.me', 'https://lin.ee']
+        line_chat_indicators = [
+            '< ', '> ', 'https://www.youtube.com', 'https://youtu.be', 'https://line.me', 'https://lin.ee',
+            '哈囉', '你好', '我要查價', '感謝您的訊息', '感謝您加入好友', '敬請期待', 
+            '此官方帳號將定期發放最新資訊給您', '很抱歉，本帳號無法個別回覆用戶的訊息',
+            '整新機查詢', 'Apple整新機', '感謝您加入好友', '已讀', '正在自動回覆訊息'
+        ]
         has_line_chat_indicators = any(indicator in user_message for indicator in line_chat_indicators)
         
         # 檢查是否包含郵件地址格式
@@ -606,8 +611,15 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
         ]
         has_service_pattern = any(re.search(pattern, user_message) for pattern in service_patterns)
         
-        # 如果符合郵件特徵且不是 LINE 聊天內容，進行郵件分析
-        if (email_match or has_strong_email_indicators or has_email_address or has_service_pattern) and not has_line_chat_indicators:
+        # 檢查是否為正常的服務查詢或客服對話（排除條件）
+        service_query_indicators = [
+            '查詢', '詢問', '服務', '客服', '整新機', '二手', '官方帳號', '自動回覆',
+            '定期發放', '最新資訊', '敬請期待', '無法個別回覆', '感謝加入'
+        ]
+        is_service_query = any(indicator in user_message for indicator in service_query_indicators)
+        
+        # 如果符合郵件特徵且不是 LINE 聊天內容且不是服務查詢，進行郵件分析
+        if (email_match or has_strong_email_indicators or has_email_address or has_service_pattern) and not has_line_chat_indicators and not is_service_query:
             logger.info(f"檢測到郵件內容，進行專門分析")
             sender_email = None
             
@@ -785,8 +797,29 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                             original_domain, site_description = normalized_safe_domains[domain]
                             logger.info(f"短網址展開後檢測到白名單網域: {domain} -> {original_domain}")
                             
+                            # 特殊處理：酷澎招募表單 - 需要填寫個人資料，設為中風險
+                            if domain == 'coupang.surveycake.biz':
+                                return {
+                                    "success": True,
+                                    "message": "分析完成",
+                                    "result": {
+                                        "risk_level": "中風險",
+                                        "fraud_type": "假冒招募詐騙",
+                                        "explanation": f"⚠️ 這是一個短網址，展開後連到酷澎的招募調查表單。\n\n🔍 短網址：{original_url}\n🎯 真實目的地：{expanded_url}\n\n雖然酷澎是知名的韓國電商平台，但這個招募表單使用的是第三方問卷平台 SurveyCake，網域與酷澎官方網站 tw.coupang.com 不同。\n\n💡 建議謹慎處理：雖然可能是合法招募，但詐騙集團也會假冒知名企業進行招募詐騙。",
+                                        "suggestions": "🔍 建議先到酷澎官方網站 tw.coupang.com 確認是否有相關招募資訊\n📞 可以致電酷澎客服確認招募活動的真實性\n⚠️ 填寫個人資料前要特別小心，避免提供過多敏感資訊\n🛡️ 如果要求提供銀行帳號、身分證號等重要資料，務必再次確認\n💡 正當的招募通常會透過官方管道或知名求職網站進行",
+                                        "is_emerging": False,
+                                        "display_name": display_name,
+                                        "original_url": original_url,
+                                        "expanded_url": expanded_url,
+                                        "is_short_url": is_short_url,
+                                        "url_expanded_successfully": url_expanded_successfully,
+                                        "page_title": page_title
+                                    },
+                                    "raw_result": f"酷澎招募表單（中風險）：{site_description}"
+                                }
+                            
                             # 特殊處理：lin.ee 短網址 - 展開後連到安全網站
-                            if original_url and 'lin.ee' in original_url.lower():
+                            elif original_url and 'lin.ee' in original_url.lower():
                                 return {
                                     "success": True,
                                     "message": "分析完成",
@@ -806,24 +839,25 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                                 }
                             
                             # 其他安全網域的一般處理
-                            return {
-                                "success": True,
-                                "message": "分析完成",
-                                "result": {
-                                    "risk_level": "低風險",
-                                    "fraud_type": "短網址連結到安全網站",
-                                    "explanation": f"✅ 這是一個短網址，展開後連到安全的網站。\n\n🔍 短網址：{original_url}\n🎯 真實目的地：{expanded_url}\n\n這個網站是 {original_domain}，{site_description}，可以安心使用。\n\n💡 雖然這次是安全的，但建議以後遇到短網址時還是要小心，最好先確認來源再點擊。",
-                                    "suggestions": "✅ 這個短網址是安全的，可以放心使用\n🔍 建議直接從官方管道進入該網站會更安全\n💡 以後遇到短網址時，可以先詢問傳送者內容\n🛡️ 養成良好的網路安全習慣，不隨意點擊不明連結",
-                                    "is_emerging": False,
-                                    "display_name": display_name,
-                                    "original_url": original_url,
-                                    "expanded_url": expanded_url,
-                                    "is_short_url": is_short_url,
-                                    "url_expanded_successfully": url_expanded_successfully,
-                                    "page_title": page_title
-                                },
-                                "raw_result": f"短網址展開後連到安全網站：{site_description}"
-                            }
+                            else:
+                                return {
+                                    "success": True,
+                                    "message": "分析完成",
+                                    "result": {
+                                        "risk_level": "低風險",
+                                        "fraud_type": "短網址連結到安全網站",
+                                        "explanation": f"✅ 這是一個短網址，展開後連到安全的網站。\n\n🔍 短網址：{original_url}\n🎯 真實目的地：{expanded_url}\n\n這個網站是 {original_domain}，{site_description}，可以安心使用。\n\n💡 雖然這次是安全的，但建議以後遇到短網址時還是要小心，最好先確認來源再點擊。",
+                                        "suggestions": "✅ 這個短網址是安全的，可以放心使用\n🔍 建議直接從官方管道進入該網站會更安全\n💡 以後遇到短網址時，可以先詢問傳送者內容\n🛡️ 養成良好的網路安全習慣，不隨意點擊不明連結",
+                                        "is_emerging": False,
+                                        "display_name": display_name,
+                                        "original_url": original_url,
+                                        "expanded_url": expanded_url,
+                                        "is_short_url": is_short_url,
+                                        "url_expanded_successfully": url_expanded_successfully,
+                                        "page_title": page_title
+                                    },
+                                    "raw_result": f"短網址展開後連到安全網站：{site_description}"
+                                }
                         
                         # 檢查子網域是否屬於白名單網域
                         for safe_domain_lower, (safe_domain, description) in normalized_safe_domains.items():
@@ -3460,12 +3494,17 @@ def analyze_email_fraud(email_content, sender_email=None, display_name="朋友")
     
     # 準備分析提示
     analysis_prompt = f"""
-請分析以下郵件內容是否為詐騙郵件。請特別注意以下幾個關鍵點：
+請分析以下內容是否為詐騙郵件。請特別注意以下幾個關鍵點：
+
+**重要：首先判斷這是否真的是郵件內容**
+- 如果內容看起來像是 LINE 聊天對話、客服自動回覆、或正常的服務查詢對話，請判定為「低風險」
+- 如果內容包含「感謝加入好友」、「整新機查詢」、「官方帳號」、「自動回覆」等字眼，很可能是正常的客服對話
 
 1. **郵件內容分析**：
    - 檢查是否包含繳費、付款、費用等敏感詞彙
    - 識別郵件中聲稱的發信機構（如台電、遠通電收、銀行等）
    - 分析語言表達是否專業、是否有錯字或奇怪用詞
+   - **特別注意**：正常的服務查詢或客服對話不應判定為詐騙
 
 2. **發信者驗證**：
    - 發信者郵件地址：{sender_email if sender_email else '未提供'}

@@ -52,7 +52,7 @@ SHORT_URL_DOMAINS = [
     # 台灣短網址服務
     'reurl.cc', 'pse.is', '0rz.tw', 'ppt.cc', 'tinyurl.tw', 'lihi.cc',
     'lihi1.com', 'lihi2.com', 'lihi3.com', 'lihi4.com',
-    'short.link', 'url.tw', 'myppt.cc', 'myurl.com.tw',
+    'short.link', 'url.tw', 'myppt.cc', 'myurl.com.tw', 'bsms.tw',
     
     # LINE 官方短網址服務
     'lin.ee',
