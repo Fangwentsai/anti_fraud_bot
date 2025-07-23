@@ -45,6 +45,11 @@ def detect_domain_spoofing(url_or_message, safe_domains):
             # 移除 www. 前綴進行比較
             domain_without_www = domain[4:] if domain.startswith('www.') else domain
             
+            # 🚨 新增：專門檢測政府網域變形攻擊
+            gov_spoofing_result = _detect_government_domain_spoofing(domain_without_www)
+            if gov_spoofing_result['is_spoofed']:
+                return gov_spoofing_result
+            
             # 創建標準化的安全網域列表（包含www和非www版本）
             normalized_safe_domains = set()
             for safe_domain in safe_domains.keys():
@@ -541,3 +546,62 @@ def _has_sufficient_similarity(domain1, domain2):
     
     # 要求至少80%的字元相似度
     return similarity_ratio >= 0.8 
+
+def _detect_government_domain_spoofing(domain):
+    """
+    專門檢測政府網域變形攻擊
+    
+    Args:
+        domain: 要檢測的域名（已移除www前綴）
+        
+    Returns:
+        dict: 檢測結果
+    """
+    # 首先檢查是否是正確的政府網域格式
+    if domain.endswith('.gov.tw'):
+        return {'is_spoofed': False}  # 正確的政府網域格式，不是詐騙
+    
+    # 檢查是否是頂級的gov.tw域名（這是合法的）
+    if domain == 'gov.tw':
+        return {'is_spoofed': False}  # gov.tw本身是合法的
+    
+    # 檢查是否包含 "gov" 但不是正確的格式
+    has_gov = 'gov' in domain.lower()
+    
+    if has_gov:
+        # 常見的政府網域變形模式
+        suspicious_patterns = [
+            '-gov.com',  # example-gov.com
+            'gov.com',   # somegovdepartment.com  
+            'gov.net',   # gov.net
+            'gov.org',   # gov.org
+            '.com/tw',   # 如 cdic-gov.com/tw
+            '-gov.net',  # example-gov.net
+            'gov-',      # gov-something.com
+            'govtw',     # govtw.com
+            'gov.tw.',   # gov.tw.fake.com
+        ]
+        
+        # 檢查是否匹配可疑模式
+        for pattern in suspicious_patterns:
+            if pattern in domain.lower():
+                return {
+                    'is_spoofed': True,
+                    'original_domain': 'gov.tw',
+                    'spoofed_domain': domain,
+                    'spoofing_type': '政府網域變形攻擊',
+                    'risk_explanation': f"🚨 極高風險警告！\n\n這個網址「{domain}」是假冒政府網站的詐騙網址！\n\n✅ 真正的政府網站都是以「.gov.tw」結尾\n❌ 這個網址使用了錯誤的格式來冒充政府機關\n\n詐騙集團常用這種手法製作假的政府網站來：\n• 騙取個人資料（身分證、健保卡號）\n• 騙取銀行帳戶資訊\n• 詐騙退稅、補助金等款項\n\n🛡️ 請記住：政府機關的官方網站一律以「.gov.tw」結尾，任何其他格式都是假的！\n\n📞 如有疑問請撥打165反詐騙專線確認"
+                }
+        
+        # 如果包含gov但沒有匹配到特定模式，給出較溫和的警告
+        # 但要排除一些可能的合法情況
+        if not any(legitimate in domain.lower() for legitimate in ['google', 'govtech', 'government']):
+            return {
+                'is_spoofed': True,
+                'original_domain': 'gov.tw',
+                'spoofed_domain': domain,
+                'spoofing_type': '疑似政府網域變形攻擊',
+                'risk_explanation': f"⚠️ 高風險警告！\n\n這個網址「{domain}」包含「gov」字樣但不是正確的政府網站格式！\n\n✅ 真正的政府網站都是以「.gov.tw」結尾\n❌ 這個網址格式可疑，可能是詐騙網站\n\n請務必確認：\n• 政府機關官網一律以「.gov.tw」結尾\n• 如需辦理政府業務，請直接到官方網站\n• 不要在可疑網站輸入個人資料\n\n📞 如有疑問請撥打165反詐騙專線確認"
+            }
+    
+    return {'is_spoofed': False} 

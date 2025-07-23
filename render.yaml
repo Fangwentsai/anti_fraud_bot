@@ -3,7 +3,7 @@ services:
     name: anti-fraud-linebot
     env: python
     region: oregon
-    plan: free
+    plan: starter  # 改為付費方案
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn --config gunicorn.conf.py anti_fraud_clean_app:app
     envVars:

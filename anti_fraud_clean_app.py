@@ -26,6 +26,7 @@ from firebase_manager import FirebaseManager
 from domain_spoofing_detector import detect_domain_spoofing
 from dotenv import load_dotenv
 import time
+import threading
 
 # 導入新的模組化組件
 from config import *
@@ -172,6 +173,21 @@ user_last_chat_time = {}
 user_pending_analysis = {}
 first_time_chatters = set()
 user_conversation_state = {}
+
+# 服務監控變數
+import psutil
+app_start_time = datetime.now()
+process = psutil.Process()
+
+# 啟動內建 Keep-Alive 服務
+def start_internal_keep_alive():
+    """啟動內建的 keep-alive 服務"""
+    keep_alive_thread = threading.Thread(target=internal_keep_alive, daemon=True)
+    keep_alive_thread.start()
+    logger.info("🔄 內建 Keep-Alive 服務已啟動")
+
+# 在應用啟動時啟動 keep-alive
+start_internal_keep_alive()
 
 # 載入醫美服務和健康知識的白名單
 def load_beauty_health_whitelist():
@@ -1515,8 +1531,52 @@ def keep_alive():
     return {
         "status": "alive",
         "timestamp": datetime.now().isoformat(),
-        "message": "Service is active"
+        "message": "Service is active",
+        "uptime": str(datetime.now() - app_start_time) if 'app_start_time' in globals() else "unknown",
+        "memory_usage": f"{process.memory_info().rss / 1024 / 1024:.1f}MB" if 'process' in globals() else "unknown",
+        "active_users": len(user_conversation_state),
+        "server": "gunicorn"
     }
+
+# 內建 Keep-Alive 機制
+def internal_keep_alive():
+    """內建的 keep-alive 機制，定期自我 ping"""
+    while True:
+        try:
+            time.sleep(5 * 60)  # 每5分鐘 ping 一次
+            
+            # 簡單的內部健康檢查，不需要發送 HTTP 請求
+            current_time = datetime.now()
+            logger.info(f"[Internal Keep-Alive] Service is alive at {current_time}")
+            
+            # 清理過期的用戶狀態（可選的內存清理）
+            cleanup_expired_states()
+            
+        except Exception as e:
+            logger.error(f"Internal keep-alive error: {e}")
+
+def cleanup_expired_states():
+    """清理過期的用戶狀態"""
+    try:
+        current_time = datetime.now()
+        expired_users = []
+        
+        for user_id, state in user_conversation_state.items():
+            last_time = state.get("last_time")
+            if last_time and (current_time - last_time).total_seconds() > 3600:  # 1小時後清理
+                expired_users.append(user_id)
+        
+        for user_id in expired_users:
+            user_conversation_state.pop(user_id, None)
+            user_game_state.pop(user_id, None)
+            user_last_chat_time.pop(user_id, None)
+            user_pending_analysis.pop(user_id, None)
+            
+        if expired_users:
+            logger.info(f"Cleaned up {len(expired_users)} expired user states")
+            
+    except Exception as e:
+        logger.error(f"Error cleaning up expired states: {e}")
 
 @app.route("/fraud-statistics", methods=['GET'])
 def fraud_statistics():

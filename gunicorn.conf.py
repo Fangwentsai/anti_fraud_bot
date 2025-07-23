@@ -10,12 +10,12 @@ import multiprocessing
 # 伺服器設定
 port = os.environ.get('PORT', 8080)
 bind = f"0.0.0.0:{port}"
-# 減少 worker 數量以加快啟動速度（免費方案資源有限）
-workers = min(multiprocessing.cpu_count() + 1, 2)  # 最多 2 個 worker
+# 付費方案優化：增加 worker 數量以提升性能
+workers = min(multiprocessing.cpu_count() + 1, 4)  # 最多 4 個 worker（付費方案）
 worker_class = "sync"
 worker_connections = 1000
-max_requests = 1000
-max_requests_jitter = 50
+max_requests = 2000  # 增加請求處理數
+max_requests_jitter = 100
 
 # 超時設定 - 針對冷啟動優化
 timeout = 60  # 增加到 60 秒，給冷啟動更多時間
