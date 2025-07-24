@@ -312,6 +312,9 @@ def expand_short_url(url):
                     title_tag = soup.find('title')
                     if title_tag:
                         page_title = title_tag.get_text().strip()
+                        # 解碼HTML實體
+                        import html
+                        page_title = html.unescape(page_title)
                     
                     # 檢查 meta refresh
                     meta_refresh = soup.find('meta', attrs={'http-equiv': 'refresh'})
@@ -372,6 +375,9 @@ def expand_short_url(url):
                         title_tag = soup.find('title')
                         if title_tag:
                             page_title = title_tag.get_text().strip()
+                            # 解碼HTML實體
+                            import html
+                            page_title = html.unescape(page_title)
                         
                         # 檢查隱藏的 input 元素（如 reurl.cc 的做法）
                         target_input = soup.find('input', {'id': 'target'}) or soup.find('input', {'name': 'target'})
@@ -391,13 +397,32 @@ def expand_short_url(url):
         # 如果成功展開，獲取目標頁面的標題
         if expanded_url and expanded_url != url:
             try:
-                title_response = session.get(expanded_url, timeout=5, stream=True)
+                title_response = session.get(expanded_url, timeout=5)
                 if title_response.status_code == 200:
+                    # 使用與 get_website_title 相同的編碼處理邏輯
+                    content = title_response.text
+                    
+                    # 檢測並修復編碼問題
+                    if any(char in content for char in ['â', 'ã', 'Ã', 'å']):
+                        try:
+                            content = title_response.content.decode('utf-8')
+                        except UnicodeDecodeError:
+                            try:
+                                content = title_response.content.decode('big5')
+                            except UnicodeDecodeError:
+                                try:
+                                    content = title_response.content.decode('gb2312')
+                                except UnicodeDecodeError:
+                                    content = title_response.content.decode('utf-8', errors='ignore')
+                    
                     # 只讀取前 1KB 來獲取標題
-                    content = title_response.raw.read(1024).decode('utf-8', errors='ignore')
+                    content = content[:1024]
                     title_match = re.search(r'<title[^>]*>([^<]+)</title>', content, re.IGNORECASE)
                     if title_match:
                         page_title = title_match.group(1).strip()
+                        # 解碼HTML實體
+                        import html
+                        page_title = html.unescape(page_title)
                 title_response.close()
             except Exception:
                 pass  # 獲取標題失敗不影響主要功能
@@ -3242,13 +3267,35 @@ def get_website_title(url):
     try:
         session = requests.Session()
         session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br',
         })
         
         response = session.get(url, timeout=10)
         if response.status_code == 200:
-            # 只讀取前 4KB 來獲取標題，避免下載整個頁面
-            content = response.text[:4096]
+            # 先嘗試自動檢測的編碼
+            content = response.text
+            
+            # 如果自動檢測的編碼有問題，嘗試手動指定常見的中文編碼
+            if any(char in content for char in ['â', 'ã', 'Ã', 'å']):  # 常見的UTF-8亂碼特徵
+                # 嘗試重新用UTF-8解碼
+                try:
+                    content = response.content.decode('utf-8')
+                except UnicodeDecodeError:
+                    # 如果UTF-8失敗，嘗試其他編碼
+                    try:
+                        content = response.content.decode('big5')
+                    except UnicodeDecodeError:
+                        try:
+                            content = response.content.decode('gb2312')
+                        except UnicodeDecodeError:
+                            # 最後嘗試忽略錯誤
+                            content = response.content.decode('utf-8', errors='ignore')
+            
+            # 只讀取前 4KB 來獲取標題，避免處理整個頁面
+            content = content[:4096]
             
             # 使用正則表達式提取標題
             import re
@@ -3257,6 +3304,9 @@ def get_website_title(url):
                 title = title_match.group(1).strip()
                 # 清理標題中的多餘空白和換行
                 title = re.sub(r'\s+', ' ', title)
+                # 解碼HTML實體
+                import html
+                title = html.unescape(title)
                 logger.info(f"成功獲取網站標題: {url} -> {title}")
                 return title
         
