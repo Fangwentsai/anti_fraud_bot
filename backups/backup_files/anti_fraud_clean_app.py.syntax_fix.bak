@@ -1,0 +1,1936 @@
+# -*- coding: utf-8 -*-
+import os
+import json
+import logging
+import random
+import re
+import requests
+from urllib.parse import urlparse
+from datetime import datetime, timedelta
+import openai
+from openai import OpenAI
+from flask import Flask, request, abort, render_template, jsonify
+from linebot import LineBotApi, WebhookHandler
+from linebot.exceptions import InvalidSignatureError, LineBotApiError
+from linebot.models import (
+    MessageEvent, TextMessage, TextSendMessage, FlexSendMessage,
+    PostbackEvent, QuickReply, QuickReplyButton, MessageAction,
+    BubbleContainer, BoxComponent, TextComponent, SeparatorComponent,
+    ButtonComponent, URIAction, PostbackAction, ImageMessage
+)
+from linebot.v3 import WebhookHandler as V3WebhookHandler
+from linebot.v3.messaging import Configuration, ApiClient, MessagingApi
+from linebot.v3.webhooks import MessageEvent as V3MessageEvent
+from linebot.v3.messaging import TextMessage as V3TextMessage
+from firebase_manager import FirebaseManager
+from domain_spoofing_detector import detect_domain_spoofing
+from dotenv import load_dotenv
+import time
+
+# 導入新的模組化組件
+from config import *
+from fraud_knowledge import load_fraud_tactics, get_anti_fraud_tips, get_fraud_features, analyze_fraud_keywords
+from weather_service import handle_weather_query, is_weather_related, handle_weather_query_data
+from flex_message_service import (
+    create_analysis_flex_message, create_domain_spoofing_flex_message,
+    create_donation_flex_message, create_weather_flex_message,
+    create_fraud_types_flex_message, create_fraud_detail_flex_message,
+    FlexMessageService
+)
+from game_service import (
+    start_potato_game, handle_potato_game_answer, is_game_trigger, get_user_game_state
+)
+
+# 添加圖片分析功能
+import image_handler
+from image_analysis_service import ANALYSIS_TYPES
+
+# 首先在頂部添加導入城市選擇器
+from city_selector import get_city_selector
+
+# 指定 .env 文件的路徑
+# 優先從當前目錄載入，然後嘗試其他路徑
+current_dir_env = os.path.join(os.path.dirname(__file__), '.env')
+parent_dir_env = os.path.join(os.path.dirname(__file__), '..', 'linebot-anti-fraud', '.env')
+
+# 嘗試載入.env文件
+if os.path.exists(current_dir_env):
+    load_dotenv(dotenv_path=current_dir_env)
+    print(f"載入環境變數從: {current_dir_env}")
+elif os.path.exists(parent_dir_env):
+    load_dotenv(dotenv_path=parent_dir_env)
+    print(f"載入環境變數從: {parent_dir_env}")
+else:
+    # 嘗試載入預設的.env
+    load_dotenv()
+    print("嘗試載入預設的.env文件")
+
+# 設置環境變數（如果在Render等平台上）
+
+# 使用配置模組中的常數
+# SHORT_URL_DOMAINS 現在從 config.py 導入
+
+# 從JSON文件載入安全網域列表
+def load_safe_domains():
+    """從safe_domains.json文件載入安全網域列表"""
+    try:
+        # 獲取當前腳本的目錄
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        safe_domains_path = os.path.join(script_dir, 'safe_domains.json')
+        
+        with open(safe_domains_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            
+            # 扁平化分類的安全網域字典
+            flattened_safe_domains = {}
+            for category, domains in data['safe_domains'].items():
+                if isinstance(domains, dict):
+                    flattened_safe_domains.update(domains)
+                else:
+                    logger.warning(f"類別 '{category}' 的格式不正確: {type(domains)}")
+            
+            return flattened_safe_domains, data['donation_domains']
+    except FileNotFoundError:
+        print("找不到safe_domains.json文件，使用預設的安全網域列表")
+        # 提供基本的預設列表作為備用
+        default_safe_domains = {
+            "google.com": "Google 搜尋引擎",
+            "facebook.com": "Facebook 社群網站",
+            "youtube.com": "YouTube 影音平台",
+            "gov.tw": "中華民國政府網站",
+            "165.npa.gov.tw": "165反詐騙諮詢專線"
+        }
+        default_donation_domains = []
+        return default_safe_domains, default_donation_domains
+    except Exception as e:
+        print(f"載入safe_domains.json時發生錯誤: {e}")
+        # 提供基本的預設列表作為備用
+        default_safe_domains = {
+            "google.com": "Google 搜尋引擎",
+            "facebook.com": "Facebook 社群網站",
+            "youtube.com": "YouTube 影音平台",
+            "gov.tw": "中華民國政府網站",
+            "165.npa.gov.tw": "165反詐騙諮詢專線"
+        }
+        default_donation_domains = []
+        return default_safe_domains, default_donation_domains
+
+# 用戶狀態管理
+def get_user_state(user_id):
+    """獲取用戶狀態"""
+    if user_id not in user_conversation_state:
+        user_conversation_state[user_id] = {"last_time": datetime.now()}
+    return user_conversation_state[user_id]
+
+def update_user_state(user_id, state):
+    """更新用戶狀態"""
+    user_conversation_state[user_id] = state
+
+# 設置日誌（需要在載入安全網域之前初始化）
+logging.basicConfig(level=getattr(logging, LOG_LEVEL), format=LOG_FORMAT)
+logger = logging.getLogger(__name__)
+
+# 檢查重要的環境變數
+logger.info(f"CWB_API_KEY 狀態: {'已設定' if os.environ.get('CWB_API_KEY') else '未設定'}")
+logger.info(f"LINE_CHANNEL_ACCESS_TOKEN 狀態: {'已設定' if os.environ.get('LINE_CHANNEL_ACCESS_TOKEN') else '未設定'}")
+logger.info(f"OPENAI_API_KEY 狀態: {'已設定' if os.environ.get('OPENAI_API_KEY') else '未設定'}")
+
+# 載入安全網域和贊助網域
+SAFE_DOMAINS, DONATION_DOMAINS = load_safe_domains()
+
+logger.info(f"成功載入 {len(SAFE_DOMAINS)} 個安全網域和 {len(DONATION_DOMAINS)} 個贊助網域")
+
+app = Flask(__name__)
+
+# Line API 設定 - 使用配置模組，添加安全檢查
+if LINE_CHANNEL_ACCESS_TOKEN and LINE_CHANNEL_SECRET:
+    line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
+    handler = WebhookHandler(LINE_CHANNEL_SECRET)
+    
+    # 初始化新版 LINE API
+    v3_configuration = Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN)
+    v3_api_client = ApiClient(v3_configuration)
+    v3_messaging_api = MessagingApi(v3_api_client)
+    
+    # 初始化圖片處理器
+    image_handler.init_image_handler(line_bot_api)
+    
+    logger.info("LINE Bot API 初始化成功")
+else:
+    line_bot_api = None
+    handler = None
+    v3_messaging_api = None
+    logger.info("LINE Bot API 初始化失敗：缺少必要的環境變數")
+
+# OpenAI設定 - 使用新版本的客戶端初始化，添加錯誤處理
+if OPENAI_API_KEY:
+    try:
+        openai_client = OpenAI(
+            api_key=OPENAI_API_KEY,
+            timeout=30.0,  # 設置超時
+            max_retries=3   # 設置重試次數
+        )
+        logger.info("OpenAI API 初始化成功")
+    except Exception as e:
+        logger.error(f"OpenAI API 初始化失敗: {e}")
+        openai_client = None
+else:
+    openai_client = None
+    logger.warning("OpenAI API 初始化失敗：缺少 API 金鑰")
+
+# 初始化Firebase管理器
+firebase_manager = FirebaseManager.get_instance()
+
+# 用戶遊戲狀態
+user_game_state = {}
+
+# 用戶最後聊天時間記錄
+user_last_chat_time = {}
+user_pending_analysis = {} # 用於追蹤等待用戶澄清的分析請求
+first_time_chatters = set()  # 追蹤首次聊天的用戶
+
+# 用戶對話狀態
+user_conversation_state = {}  # 格式: {user_id: {"last_time": timestamp, "waiting_for_analysis": True/False}}
+
+# 使用配置模組中的常數
+# CHAT_TIP_PROBABILITY, BOT_TRIGGER_KEYWORD 等現在從 config.py 導入
+# 關鍵詞和模式現在從 config.py 導入：
+# - FUNCTION_INQUIRY_KEYWORDS (原 function_inquiry_keywords)
+# - FOLLOW_UP_PATTERNS (原 follow_up_patterns)
+# - FRAUD_PREVENTION_GAME_TRIGGER_KEYWORDS (原 fraud_prevention_game_trigger_keywords)  
+# - BOT_TRIGGER_KEYWORD (原 bot_trigger_keyword)
+# - ANALYSIS_PROMPTS (原 analysis_prompts)
+
+# 為了向下兼容，保留舊的變數名稱
+function_inquiry_keywords = FUNCTION_INQUIRY_KEYWORDS
+follow_up_patterns = FOLLOW_UP_PATTERNS
+fraud_prevention_game_trigger_keywords = FRAUD_PREVENTION_GAME_TRIGGER_KEYWORDS
+bot_trigger_keyword = BOT_TRIGGER_KEYWORD
+analysis_prompts = ANALYSIS_PROMPTS
+
+def expand_short_url(url):
+    """
+    嘗試展開短網址，返回原始URL和展開後的URL
+    
+    Args:
+        url: 可能的短網址
+    
+    Returns:
+        tuple: (原始URL, 展開後的URL, 是否為短網址, 是否成功展開)
+    """
+    # 檢查是否為短網址
+    parsed_url = urlparse(url)
+    is_short_url = False
+    for domain in SHORT_URL_DOMAINS:
+        if domain in parsed_url.netloc:
+            is_short_url = True
+            break
+    
+    if not is_short_url:
+        return url, url, False, False
+    
+    # 嘗試展開短網址
+    try:
+        session = requests.Session()
+        response = session.head(url, allow_redirects=True, timeout=5)
+        expanded_url = response.url
+        
+        if expanded_url != url:
+            logger.info(f"成功展開短網址: {url} -> {expanded_url}")
+            return url, expanded_url, True, True
+        else:
+            logger.warning(f"URL可能不是短網址或無法展開: {url}")
+            return url, url, True, False
+    except Exception as e:
+        logger.error(f"展開短網址時出錯: {e}")
+        return url, url, True, False
+
+# 定義防詐小知識
+anti_fraud_tips = []  # 現在使用 get_anti_fraud_tips() 函數
+fraud_types = load_fraud_tactics()  # 從模組載入
+
+
+# 載入詐騙話術資料 - 使用模組化版本
+fraud_tactics = load_fraud_tactics()
+logger.info(f"成功載入詐騙類型：{', '.join(fraud_tactics.keys())}")
+
+def create_suspicious_ad_warning_message(display_name, ad_description="兼職計劃旅程"):
+    """創建可疑廣告警告訊息，使用emoji代替數字編號"""
+    warning_message = f"@{display_name} 聽起來這個廣告有點讓人疑惑，尤其是牽涉到「{ad_description}」這類說法時，我們要特別小心。這類廣告常見於詐騙手法裡，可能會利用「兼職」或「免費旅遊」的誘因，誘使你留下個人資料，甚至進一步要求匯款或購買昂貴課程。\n\n建議你可以先做以下幾件事：\n\n"
+    
+    warning_message += "🚫 不要急著留下信箱或任何個人資料，先觀察和詢問更多細節。\n"
+    warning_message += "🔍 查詢這個廣告的來源，例如公司名稱或負責人資料，看看是否有正當的背景。\n"
+    warning_message += "🌐 搜尋網路評價或負評，看看其他人有沒有遭遇過類似的詐騙。\n"
+    warning_message += "🛡️ 如果覺得不安全，直接忽略或封鎖廣告，避免被騙。\n\n"
+    
+    warning_message += "如果方便的話，可以把廣告內容或截圖分享給我，我可以幫你分析得更詳細喔！你的安全最重要，我會一直陪著你。😊"
+    
+    return warning_message
+load_fraud_tactics()
+
+# 獲取用戶個人資料
+def get_user_profile(user_id):
+    try:
+        profile = line_bot_api.get_profile(user_id)
+        return profile
+    except Exception as e:
+        logger.error(f"獲取用戶 {user_id} 個人資料失敗: {e}")
+        return None
+
+# 解析OpenAI返回的詐騙分析結果
+def parse_fraud_analysis(analysis_result):
+    """解析OpenAI返回的詐騙分析結果"""
+    try:
+        lines = analysis_result.strip().split('\n')
+        result = {
+            "risk_level": "中風險",
+            "fraud_type": "未知",
+            "explanation": "無法解析分析結果。",
+            "suggestions": "建議謹慎處理。",
+            "is_emerging": False
+        }
+        
+        for line in lines:
+            line = line.strip()
+            if line.startswith("風險等級：") or line.startswith("風險等級:"):
+                result["risk_level"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+            elif line.startswith("詐騙類型：") or line.startswith("詐騙類型:"):
+                result["fraud_type"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+            elif line.startswith("說明：") or line.startswith("說明:"):
+                result["explanation"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+            elif line.startswith("建議：") or line.startswith("建議:"):
+                result["suggestions"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+            elif line.startswith("新興手法：") or line.startswith("新興手法:"):
+                emerging_text = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+                result["is_emerging"] = emerging_text in ["是", "Yes", "true", "True"]
+        
+        # 如果說明為空，嘗試從整個回應中提取
+        if not result["explanation"] or result["explanation"] == "無法解析分析結果。":
+            # 移除標籤，取得剩餘內容作為說明
+            clean_text = analysis_result
+            for prefix in ["風險等級：", "風險等級:", "詐騙類型：", "詐騙類型:", "說明：", "說明:", "建議：", "建議:", "新興手法：", "新興手法:"]:
+                clean_text = clean_text.replace(prefix, "")
+            
+            # 清理並取得有意義的內容
+            clean_lines = [line.strip() for line in clean_text.split('\n') if line.strip()]
+            if clean_lines:
+                result["explanation"] = clean_lines[0]
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"解析詐騙分析結果時發生錯誤: {e}")
+        return {
+            "risk_level": "中風險",
+            "fraud_type": "解析錯誤",
+            "explanation": "分析結果解析失敗，建議人工檢查。",
+            "suggestions": "🔍 請仔細檢查內容\n🛡️ 如有疑慮請諮詢專家",
+            "is_emerging": False
+        }
+
+def _is_legitimate_subdomain(subdomain_part):
+    """檢查子網域部分是否合法"""
+    # 合法的子網域特徵
+    if not subdomain_part or len(subdomain_part) > 20:  # 太長的子網域可疑
+        return False
+    
+    # 常見的合法子網域前綴
+    legitimate_prefixes = [
+        'www', 'mail', 'email', 'webmail', 'smtp', 'pop', 'imap',
+        'ftp', 'sftp', 'api', 'app', 'mobile', 'm', 'wap',
+        'admin', 'secure', 'ssl', 'login', 'auth', 'account',
+        'shop', 'store', 'buy', 'order', 'cart', 'checkout',
+        'news', 'blog', 'forum', 'support', 'help', 'service',
+        'event', 'events', 'promo', 'promotion', 'campaign',
+        'member', 'members', 'user', 'users', 'profile',
+        'search', 'find', 'discover', 'explore',
+        'download', 'upload', 'file', 'files', 'doc', 'docs',
+        'img', 'image', 'images', 'pic', 'pics', 'photo', 'photos',
+        'video', 'videos', 'media', 'cdn', 'static', 'assets',
+        'dev', 'test', 'staging', 'beta', 'alpha', 'demo',
+        'tw', 'taiwan', 'hk', 'hongkong', 'cn', 'china',
+        'en', 'english', 'zh', 'chinese',
+        'playing', 'play', 'game', 'games', 'entertainment', 'fun',
+        'amp', 'article', 'articles', 'read', 'view', 'content'
+    ]
+    
+    # 檢查是否為已知的合法前綴
+    if subdomain_part.lower() in legitimate_prefixes:
+        return True
+    
+    # 檢查是否包含可疑字元或模式
+    suspicious_patterns = [
+        '-tw-', '-official-', '-secure-', '-login-', '-bank-',
+        'phishing', 'fake', 'scam', 'fraud', 'malware'
+    ]
+    
+    for pattern in suspicious_patterns:
+        if pattern in subdomain_part.lower():
+            return False
+    
+    # 檢查是否只包含字母、數字和連字符
+    import re
+    if not re.match(r'^[a-zA-Z0-9-]+$', subdomain_part):
+        return False
+    
+    # 不能以連字符開始或結束
+    if subdomain_part.startswith('-') or subdomain_part.endswith('-'):
+        return False
+    
+    return True
+
+def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None):
+    """使用OpenAI的API檢測詐騙信息"""
+    import re
+    from urllib.parse import urlparse
+    
+    try:
+        # 檢查訊息是否包含URL
+        original_url = None
+        expanded_url = None
+        is_short_url = False
+        url_expanded_successfully = False
+        
+        # 改進的URL提取正則表達式，確保只提取有效的URL部分
+        # 支援二級域名如 .com.tw, .co.uk 等
+        url_pattern = re.compile(r'(https?://[^\s\u4e00-\u9fff，。！？；：]+|www\.[^\s\u4e00-\u9fff，。！？；：]+|[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?(?:/[^\s\u4e00-\u9fff，。！？；：]*)?)')
+        url_match = url_pattern.search(user_message)
+        
+        if url_match:
+            original_url = url_match.group(0)
+            # 移除末尾可能的標點符號
+            original_url = re.sub(r'[，。！？；：]+$', '', original_url)
+            
+            # 確保URL開頭是http://或https://
+            if not original_url.startswith(('http://', 'https://')):
+                original_url = 'https://' + original_url
+                
+            # 展開可能的短網址
+            original_url, expanded_url, is_short_url, url_expanded_successfully = expand_short_url(original_url)
+            
+            # 如果是短網址且成功展開，調整分析訊息
+            if is_short_url and url_expanded_successfully:
+                # 將原始訊息中的短網址替換為展開後的URL，以便於分析
+                analysis_message = user_message.replace(url_match.group(0), f"{original_url} (展開後: {expanded_url})")
+                logger.info(f"已展開短網址進行分析: {original_url} -> {expanded_url}")
+            else:
+                analysis_message = user_message
+        else:
+            analysis_message = user_message
+
+        # 首先檢查網域變形攻擊
+        spoofing_result = detect_domain_spoofing(analysis_message, SAFE_DOMAINS)
+        if spoofing_result['is_spoofed']:
+            logger.warning(f"檢測到網域變形攻擊: {spoofing_result['spoofed_domain']} 模仿 {spoofing_result['original_domain']}")
+            return {
+                "success": True,
+                "message": "分析完成",
+                "result": {
+                    "risk_level": "高風險",
+                    "fraud_type": "網域變形詐騙",
+                    "explanation": spoofing_result['risk_explanation'],
+                    "suggestions": f"• 立即停止使用這個網站\n• 不要輸入任何個人資料或密碼\n• 如需使用正牌網站，請直接搜尋 {spoofing_result['original_domain']} 或從書籤進入\n• 將此可疑網址回報給165反詐騙專線",
+                    "is_emerging": False,
+                    "display_name": display_name,
+                    "original_url": original_url,
+                    "expanded_url": expanded_url,
+                    "is_short_url": is_short_url,
+                    "url_expanded_successfully": url_expanded_successfully,
+                    "is_domain_spoofing": True,  # 特殊標記
+                    "spoofing_result": spoofing_result  # 包含完整的變形檢測結果
+                },
+                "raw_result": f"網域變形攻擊檢測：{spoofing_result['spoofing_type']} - {spoofing_result['risk_explanation']}"
+            }
+
+        # 檢查訊息是否包含白名單中的網址 - 改進版
+        # 提取URL進行精確匹配，支援二級域名
+        url_pattern_detailed = re.compile(r'https?://[^\s\u4e00-\u9fff，。！？；：]+|www\.[^\s\u4e00-\u9fff，。！？；：]+|[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?(?:/[^\s\u4e00-\u9fff，。！？；：]*)?')
+        urls = url_pattern_detailed.findall(analysis_message)
+        
+        # 清理提取的URL，移除末尾標點符號
+        cleaned_urls = []
+        for url in urls:
+            cleaned_url = re.sub(r'[，。！？；：]+$', '', url)
+            if cleaned_url:  # 確保不是空字串
+                cleaned_urls.append(cleaned_url)
+        
+        # 創建標準化的安全網域列表（包含www和非www版本）
+        normalized_safe_domains = {}
+        for safe_domain, description in SAFE_DOMAINS.items():
+            safe_domain_lower = safe_domain.lower()
+            normalized_safe_domains[safe_domain_lower] = (safe_domain, description)
+            
+            # 添加www和非www版本
+            if safe_domain_lower.startswith('www.'):
+                normalized_safe_domains[safe_domain_lower[4:]] = (safe_domain, description)
+            else:
+                normalized_safe_domains['www.' + safe_domain_lower] = (safe_domain, description)
+        
+        # 檢查每個提取的URL
+        for url in cleaned_urls:
+            # 標準化URL
+            if not url.startswith(('http://', 'https://')):
+                if url.startswith('www.'):
+                    url = 'https://' + url
+                else:
+                    url = 'https://' + url
+            
+            try:
+                parsed = urlparse(url)
+                domain = parsed.netloc.lower()
+                
+                # 檢查是否完全匹配白名單網域
+                if domain in normalized_safe_domains:
+                    original_domain, site_description = normalized_safe_domains[domain]
+                    logger.info(f"檢測到白名單中的域名: {domain} -> {original_domain}")
+                    return {
+                        "success": True,
+                        "message": "分析完成",
+                        "result": {
+                            "risk_level": "低風險",
+                            "fraud_type": "非詐騙相關",
+                            "explanation": f"這個網站是 {original_domain}，{site_description}，可以安心使用。",
+                            "suggestions": "這是正規網站，不必特別擔心。如有疑慮，建議您直接從官方管道進入該網站。",
+                            "is_emerging": False,
+                            "display_name": display_name,
+                            "original_url": original_url,
+                            "expanded_url": expanded_url,
+                            "is_short_url": is_short_url,
+                            "url_expanded_successfully": url_expanded_successfully
+                        },
+                        "raw_result": f"經過分析，這是已知的可信任網站：{site_description}"
+                    }
+                
+                # 檢查是否為合法的子網域（例如 event.liontravel.com）
+                for safe_domain_key in SAFE_DOMAINS.keys():
+                    safe_domain_lower = safe_domain_key.lower()
+                    # 移除www前綴進行比較
+                    safe_domain_clean = safe_domain_lower[4:] if safe_domain_lower.startswith('www.') else safe_domain_lower
+                    domain_clean = domain[4:] if domain.startswith('www.') else domain
+                    
+                    # 檢查是否為合法子網域（必須是 *.safe_domain 的格式）
+                    # 修改後的邏輯：更好地處理多層子域名
+                    if domain_clean.endswith('.' + safe_domain_clean):
+                        # 確保不是網域本身
+                        if domain_clean != safe_domain_clean:
+                            # 提取子域名部分
+                            subdomain_part = domain_clean[:-len('.' + safe_domain_clean)]
+                            
+                            # 檢查子域名部分是否合法
+                            if _is_legitimate_subdomain(subdomain_part):
+                                site_description = SAFE_DOMAINS.get(safe_domain_key, "台灣常見的可靠網站")
+                                logger.info(f"檢測到合法子網域: {domain} -> {safe_domain_key}")
+                                return {
+                                    "success": True,
+                                    "message": "分析完成",
+                                    "result": {
+                                        "risk_level": "低風險",
+                                        "fraud_type": "非詐騙相關",
+                                        "explanation": f"這個網站是 {safe_domain_key} 的子網域，{site_description}，可以安心使用。",
+                                        "suggestions": "這是正規網站的子網域，不必特別擔心。如有疑慮，建議您直接從官方管道進入該網站。",
+                                        "is_emerging": False,
+                                        "display_name": display_name,
+                                        "original_url": original_url,
+                                        "expanded_url": expanded_url,
+                                        "is_short_url": is_short_url,
+                                        "url_expanded_successfully": url_expanded_successfully
+                                    },
+                                    "raw_result": f"經過分析，這是已知可信任網站的子網域：{site_description}"
+                                }
+            except Exception as e:
+                # URL解析失敗，繼續檢查下一個
+                continue
+        # 如果是短網址但無法展開，提高風險評估
+        special_notes = ""
+        if is_short_url and not url_expanded_successfully:
+            special_notes = "這是個短網址，但我們無法展開查看真正的目的地，這種情況要特別小心。短網址常被詐騙者利用來隱藏真實的惡意網站。除非您非常確定這個連結安全，否則不建議點擊。"
+            logger.warning(f"無法展開的短網址: {original_url}，建議提高警覺")
+        
+        openai_prompt = f"""
+        你是一位名為「防詐騙助手」的AI聊天機器人，專門幫助50-60歲的長輩防範詐騙。
+        
+        {special_notes}
+        
+        以下是需要分析的信息：
+        ---
+        {analysis_message}
+        ---
+        
+        請按照以下固定格式回答，每一行都必須包含：
+        
+        風險等級：[極高/高/中高/中/低/極低/無風險]
+        詐騙類型：[具體的詐騙類型，如：釣魚網站、假交友詐騙、投資詐騙等]
+        說明：[用簡單易懂的話解釋為什麼有風險或沒有風險，像鄰居朋友在聊天的語氣，避免複雜術語]
+        建議：[用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號，給出簡單明確的防範建議]
+        新興手法：[是/否]
+        """
+        
+        # 調用OpenAI API (修正為新版API格式)
+        if not openai_client:
+            logger.error("OpenAI客戶端未初始化，無法進行分析")
+            return {
+                "success": False,
+                "message": "AI分析服務暫時不可用，請稍後再試"
+            }
+        
+        chat_response = openai_client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[
+                {"role": "system", "content": "你是一位名為「防詐騙助手」的AI聊天機器人，專門幫助50-60歲的長輩防範詐騙。你的說話風格要：\n1. 非常簡單易懂，像鄰居朋友在聊天\n2. 用溫暖親切的語氣，不要太正式\n3. 當給建議時，一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號\n4. 避免複雜的專業術語，用日常生活的話來解釋\n5. 當用戶提到投資、轉帳、可疑訊息時，要特別關心並給出簡單明確的建議\n6. 回應要簡短，不要太長篇大論"},
+                {"role": "user", "content": openai_prompt}
+            ],
+            temperature=0.2,
+            max_tokens=1000
+        )
+        
+        if chat_response and chat_response.choices:
+            analysis_result = chat_response.choices[0].message.content.strip()
+            logger.info(f"風險分析結果: {analysis_result[:100]}...")  # 僅記錄部分結果
+            
+            # 將結果解析成結構化格式
+            parsed_result = parse_fraud_analysis(analysis_result)
+            
+            # 添加一個使用者可識別的標識
+            parsed_result["display_name"] = display_name
+            
+            # 添加URL相關信息
+            parsed_result["original_url"] = original_url
+            parsed_result["expanded_url"] = expanded_url
+            parsed_result["is_short_url"] = is_short_url
+            parsed_result["url_expanded_successfully"] = url_expanded_successfully
+            
+            # 如果是短網址但無法展開，提高風險等級
+            if is_short_url and not url_expanded_successfully:
+                if parsed_result["risk_level"] == "低風險":
+                    parsed_result["risk_level"] = "中風險"
+                    parsed_result["explanation"] = f"{parsed_result['explanation']}\n\n⚠️ 此外，這是一個短網址但無法展開查看真正的目的地，這點也要特別小心。"
+                
+                if "短網址" not in parsed_result["explanation"]:
+                    parsed_result["explanation"] = f"{parsed_result['explanation']}\n\n⚠️ 要注意這是一個短網址(像是縮短過的網址)，無法看到真正要去的網站，這種情況要特別小心。"
+                
+                if "短網址" not in parsed_result["suggestions"]:
+                    parsed_result["suggestions"] = f"{parsed_result['suggestions']}\n• 遇到短網址時，最好先詢問傳送連結的人是什麼內容，或者乾脆不要點擊。"
+            
+            # 如果是短網址且成功展開，在結果中加入說明
+            if is_short_url and url_expanded_successfully:
+                parsed_result["explanation"] = f"{parsed_result['explanation']}\n\n這個連結是短網址，已經幫您展開查看真正的目的地是: {expanded_url}"
+            
+            # 檢查解析結果，確保所有必要欄位都有值
+            if not parsed_result.get("explanation") or parsed_result["explanation"] == "無法解析分析結果。":
+                # 如果無法正確解析理由，直接使用原始回應
+                logger.warning("無法正確解析分析理由，使用原始回應替代")
+                parsed_result["explanation"] = analysis_result.replace("風險等級：", "").replace("詐騙類型：", "").replace("說明：", "").replace("建議：", "").replace("新興手法：", "").strip()
+                
+                # 確保理由不為空
+                if not parsed_result["explanation"] or parsed_result["explanation"].strip() == "":
+                    parsed_result["explanation"] = "這個內容看起來有點奇怪，建議不要輕易點擊或提供個人資料。如果不確定，可以請家人幫忙確認一下。"
+            
+            return {
+                "success": True,
+                "message": "分析完成",
+                "result": parsed_result,
+                "raw_result": analysis_result
+            }
+        else:
+            logger.error("OpenAI API 返回空結果")
+            return {
+                "success": False,
+                "message": "分析失敗，請稍後再試"
+            }
+            
+    except Exception as e:
+        logger.exception(f"使用OpenAI分析詐騙信息時發生錯誤: {e}")
+        return {
+            "success": False,
+            "message": f"分析過程中發生錯誤: {str(e)}"
+        }
+
+@app.route("/callback", methods=['POST'])
+def callback():
+    signature = request.headers['X-Line-Signature']
+    body = request.get_data(as_text=True)
+    app.logger.info("Request body: " + body)
+    
+    try:
+        handler.handle(body, signature)
+    except InvalidSignatureError:
+        abort(400)
+        
+    return 'OK'
+
+@app.route("/", methods=['GET'])
+def home():
+    return "Line Bot Anti-Fraud is running!"
+
+@app.route("/fraud-statistics", methods=['GET'])
+def fraud_statistics():
+    """顯示詐騙統計數據頁面"""
+    stats = firebase_manager.get_fraud_statistics()
+    return render_template('statistics.html', stats=stats)
+
+# 只有在handler存在時才添加事件處理器
+if handler:
+    @handler.add(MessageEvent, message=TextMessage)
+    def handle_message(event):
+        user_id = event.source.user_id
+        profile = get_user_profile(user_id)
+        display_name = profile.display_name if profile else "未知用戶"
+        text_message = event.message.text
+        reply_token = event.reply_token
+        current_time = datetime.now()
+
+        logger.info(f"Received message from {display_name} ({user_id}): {text_message}")
+
+        # 檢查是否為群組訊息
+        is_group_message = False
+        group_id = None
+        if hasattr(event.source, "type") and event.source.type in ["group", "room"]:
+            is_group_message = True
+            group_id = event.source.group_id if event.source.type == "group" else event.source.room_id
+            logger.info(f"這是一則群組訊息 (類型: {event.source.type}, ID: {group_id})")
+            
+        # 更新用戶狀態
+        current_state = user_conversation_state.get(user_id, {})
+        current_state["last_time"] = current_time
+        
+        # 檢查是否包含觸發關鍵詞 "土豆"或者用戶處於等待分析狀態
+        waiting_for_analysis = current_state.get("waiting_for_analysis", False)
+        
+        # 個人和群組訊息都需要檢查是否包含觸發關鍵詞，或者用戶處於等待分析狀態
+        if bot_trigger_keyword not in text_message and not waiting_for_analysis:
+            logger.info(f"訊息不包含觸發關鍵詞 '{bot_trigger_keyword}'，也不在等待分析狀態，忽略此訊息")
+
+        # 移除觸發關鍵詞，以便後續處理
+        cleaned_message = text_message
+        if bot_trigger_keyword in text_message:
+            cleaned_message = text_message.replace(bot_trigger_keyword, "").strip()
+            logger.info(f"移除觸發關鍵詞後的訊息: {cleaned_message}")
+
+        # 檢查是否為空訊息（移除觸發詞後）
+        if not cleaned_message.strip():
+            # 土豆的熱情自我介紹
+            reply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐小助手，記得用土豆開頭喔！\n" \
+                        f"我用4大服務保護你：\n\n" \
+                        f"🔍 網站安全檢查：\n立刻分析假冒、釣魚網站！\n" \
+                        f"📷 上傳截圖分析：\n不想輸入文字嗎？！直接截圖給我！\n" \
+                        f"🎯 防詐騙測驗：\n玩問答提升你的防詐意識，輕鬆識破詐騙！\n" \
+                        f"📚 詐騙案例：\n案例分析分享，了解9大詐騙類型。\n" \
+                        f"☁️ 天氣預報：\n全台即時天氣隨時查（開發中）。\n" \
+                        f"💬 日常閒聊：\n陪你談天說地 甚至可以輸入：\n土豆 蔥爆牛肉怎麼做😂\n\n" \
+                        f"💡 點擊下方按鈕，或直接告訴我你需要什麼！"
+                
+            # 統一QuickReply按鈕（個人和群組完全一樣）
+            quick_reply = QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label="🔍 檢查網站安全", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
+                QuickReplyButton(action=MessageAction(label="📷 上傳截圖分析", text=f"{bot_trigger_keyword} 請幫我分析圖片：")),
+                QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text=f"{bot_trigger_keyword} 防詐騙測試")),
+                QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text=f"{bot_trigger_keyword} 詐騙類型列表")),
+                QuickReplyButton(action=MessageAction(label="☁️ 查詢天氣", text=f"{bot_trigger_keyword} 今天天氣"))
+            ])
+            
+            # 統一使用mention功能（個人和群組完全一樣）
+            mention_text = f"@{display_name} {reply_text}"
+            if len(mention_text) <= LINE_MESSAGE_MAX_LENGTH:
+                reply_text = mention_text
+            
+            line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
+            
+            # 統一發送彩色的Flex Message按鈕（群組和個人聊天都一樣）
+            try:
+                import time
+                time.sleep(1)  # 稍等一下再發送按鈕
+                
+                # 創建統一的彩色Flex Message按鈕
+                unified_flex = FlexSendMessage(
+                    alt_text="土豆的服務選單",
+                    contents=BubbleContainer(
+                        size="kilo",
+                        header=BoxComponent(
+                            layout="vertical",
+                            contents=[
+                                TextComponent(
+                                    text="🥜 土豆的服務選單",
+                                    weight="bold",
+                                    size="lg",
+                                    color="#1DB446"
+                                )
+                            ],
+                            background_color="#F0F0F0",
+                            padding_all="sm"
+                        ),
+                        body=BoxComponent(
+                            layout="vertical",
+                            spacing="sm",
+                            contents=[
+                                ButtonComponent(
+                                    style="primary",
+                                    color="#FF6B6B",
+                                    action=MessageAction(
+                                        label="🔍 檢查網站安全",
+                                        text=f"{bot_trigger_keyword} 請幫我分析這則訊息："
+                                    )
+                                ),
+                                ButtonComponent(
+                                    style="primary", 
+                                    color="#F39C12",
+                                    action=MessageAction(
+                                        label="📷 上傳截圖分析",
+                                        text=f"{bot_trigger_keyword} 請幫我分析圖片："
+                                    )
+                                ),
+                                ButtonComponent(
+                                    style="primary",
+                                    color="#4ECDC4",
+                                    action=MessageAction(
+                                        label="🎯 防詐騙測驗",
+                                        text=f"{bot_trigger_keyword} 防詐騙測試"
+                                    )
+                                ),
+                                ButtonComponent(
+                                    style="primary",
+                                    color="#45B7D1", 
+                                    action=MessageAction(
+                                        label="📚 詐騙案例",
+                                        text=f"{bot_trigger_keyword} 詐騙類型列表"
+                                    )
+                                ),
+                                ButtonComponent(
+                                    style="primary",
+                                    color="#96CEB4",
+                                    action=MessageAction(
+                                        label="☁️ 查詢天氣", 
+                                        text=f"{bot_trigger_keyword} 今天天氣"
+                                    )
+                                )
+                            ]
+                        )
+                    )
+                )
+                
+                # 統一發送到正確的目標
+                if is_group_message:
+                    line_bot_api.push_message(event.source.group_id, unified_flex)
+                else:
+                    line_bot_api.push_message(user_id, unified_flex)
+                logger.info("已發送統一的彩色Flex Message按鈕")
+                
+            except LineBotApiError as e:
+                if e.status_code == 429:
+                    logger.warning(f"達到LINE API月度限制，無法發送額外按鈕: {e}")
+                    # 不需要採取額外行動，基本的reply_message仍可正常工作
+                else:
+                    logger.error(f"LINE API其他錯誤: {e}")
+            except Exception as e:
+                logger.error(f"發送統一按鈕時發生未知錯誤: {e}")
+            
+
+        
+            return# 處理遊戲觸發 - 移到詐騙檢測前面
+        if is_game_trigger(cleaned_message):
+            logger.info(f"檢測到防詐騙測試觸發: {cleaned_message}")
+            flex_message, error_message = start_potato_game(user_id)
+            
+            if flex_message:
+                line_bot_api.reply_message(reply_token, flex_message)
+            else:
+                line_bot_api.reply_message(reply_token, TextSendMessage(text=error_message))
+
+        # 檢查用戶詢問詐騙類型清單
+        if any(keyword in cleaned_message for keyword in ["詐騙類型列表", "詐騙類型", "詐騙手法", "詐騙種類", "常見詐騙"]):
+            logger.info(f"檢測到詐騙類型列表查詢: {cleaned_message}")
+            
+            try:
+                from fraud_knowledge import load_fraud_tactics
+                fraud_tactics = load_fraud_tactics()
+                
+                if fraud_tactics:
+                    # 創建詐騙類型列表Flex訊息
+                    fraud_types_flex = create_fraud_types_flex_message(fraud_tactics, display_name)
+                    line_bot_api.reply_message(reply_token, fraud_types_flex)
+                else:
+                    error_text = "抱歉，詐騙類型資料載入失敗。\n\n💡 您可以：\n• 直接傳送可疑訊息給我分析\n• 說「防詐騙測試」進行知識測驗"
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
+            except Exception as e:
+                logger.error(f"處理詐騙類型查詢時發生錯誤: {e}")
+                error_text = "抱歉，詐騙類型查詢功能暫時無法使用。\n\n💡 您可以：\n• 直接傳送可疑訊息給我分析\n• 說「防詐騙測試」進行知識測驗"
+                line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
+
+        # 檢查是否詢問特定詐騙類型
+        for fraud_type, info in fraud_types.items():
+            if fraud_type in cleaned_message:
+                logger.info(f"檢測到特定詐騙類型查詢: {fraud_type}")
+                
+                try:
+                    # 檢查是否包含頁碼請求
+                    page_match = re.search(r'第(\d+)頁', cleaned_message)
+                    page = int(page_match.group(1)) if page_match else 1
+                    
+                    # 創建詐騙類型詳情Flex Message
+                    fraud_detail_flex = flex_message_service.create_fraud_detail_flex_message(
+                        fraud_type, 
+                        info, 
+                        display_name, 
+                        page
+                    )
+                    
+                    line_bot_api.reply_message(reply_token, fraud_detail_flex)
+                    return
+                except Exception as e:
+                    logger.error(f"創建詐騙類型詳細信息Flex Message失敗: {e}")
+                    
+                    # 降級處理：如果Flex Message失敗，使用文字訊息
+                    response_text = f"🚨 **{fraud_type}詳細說明** 🚨\n\n"
+                    
+                    # 獲取description字段，如果info是字典而非字符串
+                    if isinstance(info, dict) and "description" in info:
+                        description = info["description"]
+                        response_text += f"📋 **說明**：{description}\n\n"
+                        
+                        # 如果有SOP（防範步驟），也顯示出來
+                        if "sop" in info and isinstance(info["sop"], list) and info["sop"]:
+                            response_text += "💡 **防範建議**：\n"
+                            for step in info["sop"]:
+                                response_text += f"{step}\n"
+                        else:
+                            response_text += "💡 **防範建議**：\n"
+                            response_text += "🛡️ 遇到任何要求提供個人資料或金錢的情況，請先暫停並諮詢家人\n"
+                            response_text += "🔍 對於可疑訊息，可以傳給我幫您分析\n"
+                            response_text += "📞 如有疑慮，請撥打165反詐騙專線\n"
+                    else:
+                        # 如果info不是預期的字典結構，使用fallback描述
+                        response_text += f"📋 **說明**：{str(info)}\n\n"
+                        response_text += "💡 **防範建議**：\n"
+                        response_text += "🛡️ 遇到任何要求提供個人資料或金錢的情況，請先暫停並諮詢家人\n"
+                        response_text += "🔍 對於可疑訊息，可以傳給我幫您分析\n"
+                        response_text += "📞 如有疑慮，請撥打165反詐騙專線\n"
+                    
+                    response_text += f"\n如果您收到疑似{fraud_type}的訊息，歡迎直接傳給我分析！"
+                    
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text=response_text))
+                
+                return
+
+        # 處理詐騙類型列表查詢 - 使用Flex Message
+        if any(keyword in cleaned_message for keyword in ["詐騙類型列表", "詐騙類型", "詐騙手法", "詐騙種類", "常見詐騙"]):
+            logger.info(f"檢測到詐騙類型列表查詢: {cleaned_message}")
+            
+            try:
+                from fraud_knowledge import load_fraud_tactics
+                fraud_tactics = load_fraud_tactics()
+                
+                if fraud_tactics:
+                    # 創建詐騙類型列表Flex訊息
+                    fraud_types_flex = create_fraud_types_flex_message(fraud_tactics, display_name)
+                    line_bot_api.reply_message(reply_token, fraud_types_flex)
+                else:
+                    error_text = "抱歉，詐騙類型資料載入失敗。\n\n💡 您可以：\n• 直接傳送可疑訊息給我分析\n• 說「防詐騙測試」進行知識測驗"
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
+            except Exception as e:
+                logger.error(f"處理詐騙類型查詢時發生錯誤: {e}")
+                error_text = "抱歉，詐騙類型查詢功能暫時無法使用。\n\n💡 您可以：\n• 直接傳送可疑訊息給我分析\n• 說「防詐騙測試」進行知識測驗"
+                line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
+
+        # 檢查是否為分析請求但沒有內容
+        analysis_request_keywords = ["請幫我分析這則訊息", "幫我分析訊息", "請分析這則訊息", "請幫我分析", "分析這則訊息"]
+        is_analysis_request = any(keyword in cleaned_message for keyword in analysis_request_keywords)
+        
+        # 如果是分析請求但內容太短或只是請求本身，則提示用戶提供內容
+        if is_analysis_request and (len(cleaned_message) < 20 or cleaned_message.rstrip("：:") in analysis_request_keywords):
+            logger.info(f"檢測到分析請求但沒有提供具體內容: {cleaned_message}")
+            
+            # 設置用戶狀態為等待分析
+            current_state["waiting_for_analysis"] = True
+            user_conversation_state[user_id] = current_state
+            
+            prompt_message = f"好的 {display_name}，我會幫您分析可疑訊息！\n\n" \
+                           f"請直接把您收到的可疑訊息或網址傳給我，我會立即為您分析風險程度。\n\n" \
+                           f"💡 您可以：\n" \
+                           f"• 轉傳可疑的文字訊息\n" \
+                           f"• ⚠️FB,IG不易判別，請提供貼文內網址\n" \
+                           f"• 貼上可疑的網址連結\n" \
+                           f"• 描述您遇到的可疑情況"
+            
+            # 使用新版 API 回覆
+            try:
+                if v3_messaging_api:
+                    from linebot.v3.messaging import TextMessage as V3TextMessage
+                    from linebot.v3.messaging import ReplyMessageRequest
+                    v3_messaging_api.reply_message(
+                        ReplyMessageRequest(
+                            reply_token=reply_token,
+                            messages=[V3TextMessage(text=prompt_message)]
+                        )
+                    )
+                else:
+                    # 舊版 API 作為備用
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text=prompt_message))
+            except LineBotApiError as e:
+                logger.error(f"發送分析提示訊息時發生LINE API錯誤: {e}")
+                # 如果連等待訊息都無法發送，則不繼續分析
+                return
+            except Exception as e:
+                logger.error(f"發送分析提示訊息時發生未知錯誤: {e}")
+                return
+
+        # 執行詐騙分析
+        if should_perform_fraud_analysis(cleaned_message, user_id) or waiting_for_analysis:
+            logger.info(f"開始詐騙分析: {cleaned_message[:50]}...")
+            
+            # 清除等待分析狀態
+            if waiting_for_analysis:
+                current_state["waiting_for_analysis"] = False
+                user_conversation_state[user_id] = current_state
+            
+            # 分析前先發送等待訊息（在重要分析時，但不包括等待分析狀態）
+            should_send_wait = False  # 已禁用等待訊息，避免消耗API額度
+            reply_token_used = False
+            
+            # if should_send_wait:
+            #     try:
+            #         wait_message = "🔍 正在分析中，請稍候..."
+            #         line_bot_api.reply_message(reply_token, TextSendMessage(text=wait_message))
+            #         reply_token_used = True
+            #     except LineBotApiError as e:
+            #         logger.error(f"發送等待訊息時發生LINE API錯誤: {e}")
+            #         # 如果連等待訊息都無法發送，則不繼續分析
+            #         return
+            #     except Exception as e:
+            #         logger.error(f"發送等待訊息時發生未知錯誤: {e}")
+            #         return
+            
+            analysis_result = detect_fraud_with_chatgpt(cleaned_message, display_name, user_id)
+            
+            if analysis_result["success"]:
+                # 記錄到Firebase
+                try:
+                    firebase_manager.save_user_interaction(
+                        user_id=user_id,
+                        display_name=display_name,
+                        message=cleaned_message,
+                        response=str(analysis_result["result"]),
+                        is_fraud_related=True,
+                        fraud_type=analysis_result["result"].get("fraud_type"),
+                        risk_level=analysis_result["result"].get("risk_level")
+                    )
+                except Exception as e:
+                    logger.error(f"記錄到Firebase時發生錯誤: {e}")
+                
+                # 檢查是否為網域變形攻擊
+                if analysis_result["result"].get("is_domain_spoofing", False):
+                    spoofing_result = analysis_result["result"]["spoofing_result"]
+                    flex_message = create_domain_spoofing_flex_message(spoofing_result, display_name, cleaned_message)
+                    
+                    try:
+                        if reply_token_used:
+                            # 已經用過reply，使用push
+                            if event.source.type == 'group':
+                                line_bot_api.push_message(event.source.group_id, flex_message)
+                            else:
+                                line_bot_api.push_message(user_id, flex_message)
+                        else:
+                            # 還沒用過reply，直接用reply
+                            line_bot_api.reply_message(reply_token, flex_message)
+                            reply_token_used = True
+                    except LineBotApiError as e:
+                        logger.error(f"發送網域變形警告時發生LINE API錯誤: {e}")
+                        if e.status_code == 429:
+                            logger.warning("達到LINE API月度限制，無法發送詳細分析結果")
+                        elif not reply_token_used:
+                            # 如果還沒用過reply且不是429錯誤，嘗試發送簡單訊息
+                            try:
+                                simple_warning = f"⚠️ 高風險警告！\n\n{spoofing_result.get('risk_explanation', '這個網址可能是詐騙網站')}"
+                                line_bot_api.reply_message(reply_token, TextSendMessage(text=simple_warning))
+                                reply_token_used = True
+                            except Exception as fallback_error:
+                                logger.error(f"發送簡單警告也失敗: {fallback_error}")
+                else:
+                    # 一般詐騙分析結果
+                    flex_message = create_analysis_flex_message(analysis_result["result"], display_name, cleaned_message)
+                    
+                    try:
+                        if reply_token_used:
+                            # 已經用過reply，使用push
+                            if event.source.type == 'group':
+                                line_bot_api.push_message(event.source.group_id, flex_message)
+                            else:
+                                line_bot_api.push_message(user_id, flex_message)
+                        else:
+                            # 還沒用過reply，直接用reply
+                            line_bot_api.reply_message(reply_token, flex_message)
+                            reply_token_used = True
+                    except LineBotApiError as e:
+                        logger.error(f"發送分析結果時發生LINE API錯誤: {e}")
+                        if e.status_code == 429:
+                            logger.warning("達到LINE API月度限制，無法發送詳細分析結果")
+                        elif not reply_token_used:
+                            # 如果還沒用過reply且不是429錯誤，嘗試發送簡單訊息
+                            try:
+                                simple_result = f"📊 分析結果\n\n{analysis_result['result'].get('explanation', '請小心這個訊息')}"
+                                line_bot_api.reply_message(reply_token, TextSendMessage(text=simple_result))
+                                reply_token_used = True
+                            except Exception as fallback_error:
+                                logger.error(f"發送簡單分析結果也失敗: {fallback_error}")
+                
+                # 隨機顯示贊助信息（只在沒有API限制時）
+                if random.random() < DONATION_SHOW_PROBABILITY:
+                    try:
+                        donation_flex = create_donation_flex_message()
+                        line_bot_api.push_message(user_id, donation_flex)
+                    except LineBotApiError as e:
+                        if e.status_code != 429:  # 只有非429錯誤才記錄
+                            logger.error(f"發送贊助訊息時發生錯誤: {e}")
+                    except Exception as e:
+                        logger.error(f"發送贊助訊息時發生錯誤: {e}")
+            else:
+                error_message = f"抱歉，分析過程中遇到問題：{analysis_result['message']}\n\n如果是緊急情況，建議您：\n🚫 暫時不要點擊任何連結\n📞 撥打165反詐騙專線諮詢\n👨‍👩‍👧‍👦 請家人朋友幫忙確認"
+                
+                try:
+                    if reply_token_used:
+                        # 已經用過reply，使用push
+                        if event.source.type == 'group':
+                            line_bot_api.push_message(event.source.group_id, TextSendMessage(text=error_message))
+                        else:
+                            line_bot_api.push_message(user_id, TextSendMessage(text=error_message))
+                    else:
+                        # 還沒用過reply，直接用reply
+                        line_bot_api.reply_message(reply_token, TextSendMessage(text=error_message))
+                        reply_token_used = True
+                except LineBotApiError as e:
+                    logger.error(f"發送錯誤訊息時發生LINE API錯誤: {e}")
+                except Exception as e:
+                    logger.error(f"發送錯誤訊息時發生未知錯誤: {e}")
+            
+            # 詐騙分析完成，直接返回，不繼續執行其他邏輯
+
+            return
+        # 檢查是否詢問功能
+        if any(keyword in cleaned_message for keyword in function_inquiry_keywords):
+            reply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐騙，記得用土豆開頭喔！\n" \
+                        f"我用4大服務保護你：\n\n" \
+                        f"🔍 網站安全檢查：\n立刻分析假冒、釣魚網站！\n" \
+                        f"📷 上傳截圖分析：\n不想輸入文字嗎？！直接截圖給我！\n" \
+                        f"🎯 防詐騙測驗：\n玩問答提升防詐意識，輕鬆識破詐騙！\n" \
+                        f"📚 詐騙案例：\n案例分析分享，了解9大詐騙類型。\n" \
+                        f"☁️ 天氣預報：\n全台即時天氣隨時查（開發中）。\n" \
+                        f"💬 日常閒聊：\n陪你談天說地 甚至可以輸入：\n土豆 蔥爆牛肉怎麼做😂\n\n" \
+                        f"💡 點擊下方按鈕，或直接告訴我你需要什麼！"
+            
+            # 統一QuickReply按鈕（個人和群組完全一樣）
+            quick_reply = QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label="🔍 檢查網站安全", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
+                QuickReplyButton(action=MessageAction(label="📷 上傳截圖分析", text=f"{bot_trigger_keyword} 請幫我分析圖片：")),
+                QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text=f"{bot_trigger_keyword} 防詐騙測試")),
+                QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text=f"{bot_trigger_keyword} 詐騙類型列表")),
+                QuickReplyButton(action=MessageAction(label="☁️ 查詢天氣", text=f"{bot_trigger_keyword} 今天天氣"))
+            ])
+            
+            line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
+            
+            # 統一發送彩色的Flex Message按鈕（群組和個人聊天都一樣）
+            try:
+                import time
+                time.sleep(1)  # 稍等一下再發送按鈕
+                
+                # 創建統一的彩色Flex Message按鈕
+                unified_flex = FlexSendMessage(
+                    alt_text="土豆的服務選單",
+                    contents=BubbleContainer(
+                        size="kilo",
+                        header=BoxComponent(
+                            layout="vertical",
+                            contents=[
+                                TextComponent(
+                                    text="🥜 土豆的服務選單",
+                                    weight="bold",
+                                    size="lg",
+                                    color="#1DB446"
+                                )
+                            ],
+                            background_color="#F0F0F0",
+                            padding_all="sm"
+                        ),
+                        body=BoxComponent(
+                            layout="vertical",
+                            spacing="sm",
+                            contents=[
+                                ButtonComponent(
+                                    style="primary",
+                                    color="#FF6B6B",
+                                    action=MessageAction(
+                                        label="🔍 檢查網站安全",
+                                        text=f"{bot_trigger_keyword} 請幫我分析這則訊息："
+                                    )
+                                ),
+                                ButtonComponent(
+                                    style="primary", 
+                                    color="#F39C12",
+                                    action=MessageAction(
+                                        label="📷 上傳截圖分析",
+                                        text=f"{bot_trigger_keyword} 請幫我分析圖片："
+                                    )
+                                ),
+                                ButtonComponent(
+                                    style="primary",
+                                    color="#4ECDC4",
+                                    action=MessageAction(
+                                        label="🎯 防詐騙測驗",
+                                        text=f"{bot_trigger_keyword} 防詐騙測試"
+                                    )
+                                ),
+                                ButtonComponent(
+                                    style="primary",
+                                    color="#45B7D1", 
+                                    action=MessageAction(
+                                        label="📚 詐騙案例",
+                                        text=f"{bot_trigger_keyword} 詐騙類型列表"
+                                    )
+                                ),
+                                ButtonComponent(
+                                    style="primary",
+                                    color="#96CEB4",
+                                    action=MessageAction(
+                                        label="☁️ 查詢天氣", 
+                                        text=f"{bot_trigger_keyword} 今天天氣"
+                                    )
+                                )
+                            ]
+                        )
+                    )
+                )
+                
+                # 統一發送到正確的目標
+                if is_group_message:
+                    line_bot_api.push_message(event.source.group_id, unified_flex)
+                else:
+                    line_bot_api.push_message(user_id, unified_flex)
+                logger.info("已發送統一的彩色Flex Message按鈕")
+                
+            except LineBotApiError as e:
+                if e.status_code == 429:
+                    logger.warning(f"達到LINE API月度限制，無法發送額外按鈕: {e}")
+                    # 不需要採取額外行動，基本的reply_message仍可正常工作
+                else:
+                    logger.error(f"LINE API其他錯誤: {e}")
+            except Exception as e:
+                logger.error(f"發送統一按鈕時發生未知錯誤: {e}")
+            
+
+        
+        
+            return# 處理天氣查詢
+        if is_weather_related(cleaned_message):
+            logger.info(f"檢測到天氣查詢: {cleaned_message}")
+            
+            try:
+                # 檢查是否指定了城市
+                from weather_service import weather_service
+                has_weather_query, mentioned_location = weather_service.detect_weather_query(cleaned_message)
+                
+                # 如果沒有指定城市，顯示城市選擇器
+                if not mentioned_location:
+                    logger.info("未指定城市，顯示城市選擇器")
+                    city_selector = get_city_selector(display_name)
+                    
+                    # 使用新版 API 回覆
+                    if v3_messaging_api:
+                        v3_messaging_api.reply_message(
+                            ReplyMessageRequest(
+                reply_token=reply_token,
+                            messages=[city_selector]
+                        )
+            )
+                    else:
+                        # 舊版 API 作為備用
+                        line_bot_api.reply_message(reply_token, city_selector)
+                    return
+                
+                # 指定了城市，繼續正常處理
+                # 先嘗試使用結構化數據創建Flex Message
+                weather_data = handle_weather_query_data(cleaned_message)
+                
+                if weather_data.get("success"):
+                    # 創建天氣Flex Message
+                    weather_flex = create_weather_flex_message(weather_data.get("data", {}), display_name)
+                    
+                    # 使用新版 API 回覆
+                    if v3_messaging_api:
+                        v3_messaging_api.reply_message(
+                            ReplyMessageRequest(
+                reply_token=reply_token,
+                            messages=[weather_flex]
+                        )
+            )
+                    else:
+                        # 舊版 API 作為備用
+                        line_bot_api.reply_message(reply_token, weather_flex)
+                else:
+                    # 如果結構化數據獲取失敗，退回到文字格式
+                    weather_text = handle_weather_query(cleaned_message, display_name)
+                    if weather_text:
+                        # 使用新版 API 回覆
+                        if v3_messaging_api:
+                            v3_messaging_api.reply_message(
+                                ReplyMessageRequest(
+                reply_token=reply_token,
+                                messages=[V3TextMessage(text=weather_text)]
+                            )
+            )
+                        else:
+                            # 舊版 API 作為備用
+                            line_bot_api.reply_message(reply_token, TextSendMessage(text=weather_text))
+                    else:
+                        # 發送錯誤訊息
+                        error_text = f"抱歉，無法處理您的天氣查詢。\n\n💡 您可以試著這樣問：\n• 今天天氣如何\n• 台北天氣\n• 明天會下雨嗎"
+                        
+                        # 使用新版 API 回覆
+                        if v3_messaging_api:
+                            v3_messaging_api.reply_message(
+                                ReplyMessageRequest(
+                reply_token=reply_token,
+                                messages=[V3TextMessage(text=error_text)]
+                            )
+            )
+                        else:
+                            # 舊版 API 作為備用
+                            line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
+            
+            returnexcept Exception as e:
+                logger.error(f"處理天氣查詢時發生錯誤: {e}")
+                # 使用文字格式作為備用方案
+                weather_text = handle_weather_query(cleaned_message, display_name)
+                if weather_text:
+                    # 使用新版 API 回覆
+                    if v3_messaging_api:
+                        v3_messaging_api.reply_message(
+                            ReplyMessageRequest(
+                reply_token=reply_token,
+                            messages=[V3TextMessage(text=weather_text)]
+                        )
+            )
+                    else:
+                        # 舊版 API 作為備用
+                        line_bot_api.reply_message(reply_token, TextSendMessage(text=weather_text))
+                else:
+                    # 發送錯誤訊息
+                    error_text = f"抱歉，無法處理您的天氣查詢。\n\n💡 您可以試著這樣問：\n• 今天天氣如何\n• 台北天氣\n• 明天會下雨嗎"
+                    
+                    # 使用新版 API 回覆
+                    if v3_messaging_api:
+                        v3_messaging_api.reply_message(
+                            ReplyMessageRequest(
+                reply_token=reply_token,
+                            messages=[V3TextMessage(text=error_text)]
+                        )
+            )
+                    else:
+                        # 舊版 API 作為備用
+                        line_bot_api.reply_message(reply_token, TextSendMessage(text=error_text))
+            
+
+        
+            return# 一般聊天回應
+        logger.info(f"進入一般聊天模式: {cleaned_message}")
+        try:
+            chat_response = openai_client.chat.completions.create(
+                model=OPENAI_MODEL,
+                messages=[
+                 {"role": "system", "content": "你是一位名為「土豆」的AI聊天機器人，專門幫助50-60歲的長輩防範詐騙。你的說話風格要：\n1. 非常簡單易懂，像鄰居朋友在聊天\n2. 用溫暖親切的語氣，不要太正式\n3. 當給建議時，一定要用emoji符號（🚫🔍🌐🛡️💡⚠️等）代替數字編號\n4. 避免複雜的專業術語，用日常生活的話來解釋\n5. 當用戶提到投資、轉帳、可疑訊息時，要特別關心並給出簡單明確的建議\n6. 回應要簡短，不要太長篇大論"},
+                 {"role": "user", "content": cleaned_message}
+                ],
+                temperature=CHAT_TEMPERATURE,
+                max_tokens=CHAT_MAX_TOKENS
+            )
+            
+            if chat_response and chat_response.choices:
+                chat_reply = chat_response.choices[0].message.content.strip()
+                
+                # 隨機添加防詐小知識
+                if random.random() < CHAT_TIP_PROBABILITY:
+                    tips = get_anti_fraud_tips()
+                    if tips:
+                        random_tip = random.choice(tips)
+                        chat_reply += f"\n\n💡 小提醒：{random_tip}"
+                
+                # 確保回覆不會太長
+                if len(chat_reply) > LINE_MESSAGE_SAFE_LENGTH:
+                    chat_reply = chat_reply[:LINE_MESSAGE_SAFE_LENGTH] + "..."
+                
+                introduction = f"\n\n💫 我是您的專業防詐騙助手！經過全面測試，我能為您提供：\n🔍 網站安全檢查\n🎯 防詐騙知識測驗\n📚 詐騙案例查詢\n☁️ 天氣預報查詢\n\n有任何可疑訊息都歡迎直接傳給我分析喔！"
+                
+                # 如果是首次聊天，添加自我介紹
+                if user_id not in first_time_chatters:
+                    first_time_chatters.add(user_id)
+                    if len(chat_reply + introduction) <= LINE_MESSAGE_SAFE_LENGTH:
+                        chat_reply += introduction
+                
+                # 嘗試使用新版API
+                try:
+                    if v3_messaging_api:
+                        from linebot.v3.messaging import TextMessage as V3TextMessage
+                        from linebot.v3.messaging import ReplyMessageRequest
+                        v3_messaging_api.reply_message(
+                            ReplyMessageRequest(
+                                reply_token=reply_token,
+                                messages=[V3TextMessage(text=chat_reply)]
+                            )
+                        )
+                        logger.info(f"使用v3 API回覆成功: {user_id}")
+                    else:
+                        # 舊版 API 作為備用
+                        line_bot_api.reply_message(reply_token, TextSendMessage(text=chat_reply))
+                except LineBotApiError as e:
+                    logger.error(f"使用LINE API回覆時發生錯誤: {e}")
+                    if "Invalid reply token" in str(e):
+                        # 如果是無效的回覆令牌，嘗試使用push_message作為備用
+                        try:
+                            if v3_messaging_api:
+                                from linebot.v3.messaging import TextMessage as V3TextMessage
+                                from linebot.v3.messaging import PushMessageRequest
+                                
+                                v3_messaging_api.push_message(
+                                    PushMessageRequest(
+                                        to=user_id,
+                                        messages=[V3TextMessage(text=chat_reply)]
+                                    )
+                                )
+                            else:
+                                line_bot_api.push_message(user_id, TextSendMessage(text=chat_reply))
+                            logger.info(f"回覆令牌無效，改用push_message成功: {user_id}")
+                        except Exception as push_error:
+                            logger.error(f"使用push_message也失敗: {push_error}")
+            else:
+                fallback_message = "我現在有點忙，不過如果您有可疑訊息需要分析，我隨時可以幫忙喔！ 😊"
+                
+                # 嘗試使用新版API
+                try:
+                    if v3_messaging_api:
+                        from linebot.v3.messaging import TextMessage as V3TextMessage
+                        from linebot.v3.messaging import ReplyMessageRequest
+                        v3_messaging_api.reply_message(
+                            ReplyMessageRequest(
+                                reply_token=reply_token,
+                                messages=[V3TextMessage(text=fallback_message)]
+                            )
+                        )
+                    else:
+                        # 舊版 API 作為備用
+                        line_bot_api.reply_message(reply_token, TextSendMessage(text=fallback_message))
+                except LineBotApiError as e:
+                    logger.error(f"發送fallback訊息時發生LINE API錯誤: {e}")
+                    if "Invalid reply token" in str(e):
+                        # 如果是無效的回覆令牌，嘗試使用push_message作為備用
+                        try:
+                            if v3_messaging_api:
+                                from linebot.v3.messaging import TextMessage as V3TextMessage
+                                from linebot.v3.messaging import PushMessageRequest
+                                
+                                v3_messaging_api.push_message(
+                                    PushMessageRequest(
+                                        to=user_id,
+                                        messages=[V3TextMessage(text=fallback_message)]
+                                    )
+                                )
+                            else:
+                                line_bot_api.push_message(user_id, TextSendMessage(text=fallback_message))
+                            logger.info(f"fallback訊息使用push_message成功: {user_id}")
+                        except Exception as push_error:
+                            logger.error(f"發送fallback訊息時使用push_message也失敗: {push_error}")
+                
+        except Exception as e:
+            logger.exception(f"生成聊天回應時發生錯誤: {e}")
+            fallback_message = "不好意思，我現在有點狀況，不過如果您有可疑訊息需要分析，我隨時可以幫忙！ 😊"
+            
+            # 嘗試使用新版API
+            try:
+                if v3_messaging_api:
+                    from linebot.v3.messaging import TextMessage as V3TextMessage
+                    from linebot.v3.messaging import ReplyMessageRequest
+                    v3_messaging_api.reply_message(
+                        ReplyMessageRequest(
+                            reply_token=reply_token,
+                            messages=[V3TextMessage(text=fallback_message)]
+                        )
+                    )
+                else:
+                    # 舊版 API 作為備用
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text=fallback_message))
+            except LineBotApiError as e:
+                logger.error(f"發送錯誤fallback訊息時發生LINE API錯誤: {e}")
+                if "Invalid reply token" in str(e):
+                    # 如果是無效的回覆令牌，嘗試使用push_message作為備用
+                    try:
+                        if v3_messaging_api:
+                            from linebot.v3.messaging import TextMessage as V3TextMessage
+                            from linebot.v3.messaging import PushMessageRequest
+                            
+                            v3_messaging_api.push_message(
+                                PushMessageRequest(
+                                    to=user_id,
+                                    messages=[V3TextMessage(text=fallback_message)]
+                                )
+                            )
+                        else:
+                            line_bot_api.push_message(user_id, TextSendMessage(text=fallback_message))
+                        logger.info(f"錯誤fallback訊息使用push_message成功: {user_id}")
+                    except Exception as push_error:
+                        logger.error(f"發送錯誤fallback訊息時使用push_message也失敗: {push_error}")
+        # 處理詐騙分析完成後直接返回，避免繼續執行其他邏輯
+        return
+
+    # 添加圖片分析命令處理
+    if "分析圖片" in cleaned_message or "檢查圖片" in cleaned_message:
+        # 設置用戶狀態，等待上傳圖片
+        user_state = get_user_state(user_id) or {}
+        
+        # 檢查是否有上下文信息
+        context_message = ""
+        analysis_type = "GENERAL"
+        
+        # 嘗試提取上下文信息
+        if "：" in cleaned_message:
+            context_part = cleaned_message.split("：", 1)[1].strip()
+            if context_part:
+                context_message = context_part
+        
+        # 嘗試判斷分析類型
+        if "釣魚" in cleaned_message or "網站" in cleaned_message:
+            analysis_type = "PHISHING"
+        elif "文件" in cleaned_message or "合約" in cleaned_message:
+            analysis_type = "DOCUMENT"
+        elif "社交" in cleaned_message or "交友" in cleaned_message:
+            analysis_type = "SOCIAL_MEDIA"
+        
+        # 更新用戶狀態
+        user_state["image_analysis_context"] = context_message
+        user_state["image_analysis_type"] = analysis_type
+        update_user_state(user_id, user_state)
+        
+        # 提示用戶上傳圖片
+        reply_text = "請上傳您想要分析的圖片，我會檢查它是否含有詐騙內容。"
+        if context_message:
+            reply_text += f"\n\n我會根據您提供的上下文「{context_message}」進行分析。"
+        
+        line_bot_api.reply_message(reply_token,
+            TextSendMessage(text=reply_text)
+        )
+        return
+
+    @handler.add(PostbackEvent)
+    def handle_postback(event):
+        """處理PostbackEvent（按鈕點擊事件）"""
+        user_id = event.source.user_id
+        postback_data = event.postback.data
+        reply_token = event.reply_token
+        
+        profile = get_user_profile(user_id)
+        display_name = profile.display_name if profile else "未知用戶"
+        
+        logger.info(f"Received postback from {display_name} ({user_id}): {postback_data}")
+        
+        try:
+            # 解析postback數據
+            if postback_data.startswith('action='):
+                parts = postback_data.split('&')
+                action_part = parts[0]
+                action = action_part.split('=')[1]
+                
+                # 提取其他參數
+                params = {}
+                for part in parts[1:]:
+                    if '=' in part:
+                        key, value = part.split('=', 1)
+                        params[key] = value
+                
+                logger.info(f"解析的動作: {action}, 參數: {params}")
+                
+                if action == 'start_potato_game':
+                    # 開始防詐騙測試
+                    flex_message, error_message = start_potato_game(user_id)
+                    
+                    if flex_message:
+                        line_bot_api.reply_message(reply_token, flex_message)
+                    else:
+                        line_bot_api.reply_message(reply_token, TextSendMessage(text=error_message))
+                        
+                elif action == 'potato_game_answer':
+                    # 處理防詐騙測試答案
+                    answer_index = int(params.get('answer', 0))
+                    is_correct, result_flex = handle_potato_game_answer(user_id, answer_index)
+                    line_bot_api.reply_message(reply_token, result_flex)
+                    
+                elif action == 'show_main_menu':
+                    # 顯示土豆主選單
+                    reply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐小助手，記得用土豆開頭喔！\n" \
+                                f"我用4大服務保護你：\n\n" \
+                                f"🔍 網站安全檢查：\n立刻分析假冒、釣魚網站！\n" \
+                                f"📷 上傳截圖分析：\n不想輸入文字嗎？！直接截圖給我！\n" \
+                                f"🎯 防詐騙測驗：\n玩問答提升你的防詐意識，輕鬆識破詐騙！\n" \
+                                f"📚 詐騙案例：\n案例分析分享，了解9大詐騙類型。\n" \
+                                f"☁️ 天氣預報：\n全台即時天氣隨時查（開發中）。\n" \
+                                f"💬 日常閒聊：\n陪你談天說地 甚至可以輸入：\n土豆 蔥爆牛肉怎麼做😂\n\n" \
+                                f"💡 點擊下方按鈕，或直接告訴我你需要什麼！"
+                    
+                    # 統一QuickReply按鈕
+                    quick_reply = QuickReply(items=[
+                        QuickReplyButton(action=MessageAction(label="🔍 檢查網站安全", text=f"{bot_trigger_keyword} 請幫我分析這則訊息：")),
+                        QuickReplyButton(action=MessageAction(label="📷 上傳截圖分析", text=f"{bot_trigger_keyword} 請幫我分析圖片：")),
+                        QuickReplyButton(action=MessageAction(label="🎯 防詐騙測驗", text=f"{bot_trigger_keyword} 防詐騙測試")),
+                        QuickReplyButton(action=MessageAction(label="📚 詐騙案例", text=f"{bot_trigger_keyword} 詐騙類型列表")),
+                        QuickReplyButton(action=MessageAction(label="☁️ 查詢天氣", text=f"{bot_trigger_keyword} 今天天氣"))
+                    ])
+                    
+                    # 統一使用mention功能
+                    mention_text = f"@{display_name} {reply_text}"
+                    if len(mention_text) <= LINE_MESSAGE_MAX_LENGTH:
+                        reply_text = mention_text
+                    
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
+                    
+                    # 發送彩色的Flex Message按鈕
+                    try:
+                        import time
+                        time.sleep(1)
+                        
+                        unified_flex = FlexSendMessage(
+                            alt_text="土豆的服務選單",
+                            contents=BubbleContainer(
+                                size="kilo",
+                                header=BoxComponent(
+                                    layout="vertical",
+                                    contents=[
+                                        TextComponent(
+                                            text="🥜 土豆的服務選單",
+                                            weight="bold",
+                                            size="lg",
+                                            color="#1DB446"
+                                        )
+                                    ],
+                                    background_color="#F0F0F0",
+                                    padding_all="sm"
+                                ),
+                                body=BoxComponent(
+                                    layout="vertical",
+                                    spacing="sm",
+                                    contents=[
+                                        ButtonComponent(
+                                            style="primary",
+                                            color="#FF6B6B",
+                                            action=MessageAction(
+                                                label="🔍 檢查網站安全",
+                                                text=f"{bot_trigger_keyword} 請幫我分析這則訊息："
+                                            )
+                                        ),
+                                        ButtonComponent(
+                                            style="primary", 
+                                            color="#F39C12",
+                                            action=MessageAction(
+                                                label="📷 上傳截圖分析",
+                                                text=f"{bot_trigger_keyword} 請幫我分析圖片："
+                                            )
+                                        ),
+                                        ButtonComponent(
+                                            style="primary",
+                                            color="#4ECDC4",
+                                            action=MessageAction(
+                                                label="🎯 防詐騙測驗",
+                                                text=f"{bot_trigger_keyword} 防詐騙測試"
+                                            )
+                                        ),
+                                        ButtonComponent(
+                                            style="primary",
+                                            color="#45B7D1", 
+                                            action=MessageAction(
+                                                label="📚 詐騙案例",
+                                                text=f"{bot_trigger_keyword} 詐騙類型列表"
+                                            )
+                                        ),
+                                        ButtonComponent(
+                                            style="primary",
+                                            color="#96CEB4",
+                                            action=MessageAction(
+                                                label="☁️ 查詢天氣", 
+                                                text=f"{bot_trigger_keyword} 今天天氣"
+                                            )
+                                        )
+                                    ]
+                                )
+                            )
+                        )
+                        
+                        line_bot_api.push_message(user_id, unified_flex)
+                        
+                    except LineBotApiError as e:
+                        if e.status_code == 429:
+                            logger.warning(f"達到LINE API月度限制，無法發送額外按鈕: {e}")
+                        else:
+                            logger.error(f"LINE API其他錯誤: {e}")
+                    except Exception as e:
+                        logger.error(f"發送統一按鈕時發生未知錯誤: {e}")
+                        
+                elif action == 'report_feedback':
+                    # 回報註記功能（開發中）
+                    feedback_message = f"📝 回報註記功能開發中！\n\n" \
+                                     f"感謝 {display_name} 想要回報分析結果的意見。\n\n" \
+                                     f"這個功能正在開發中，之後您可以：\n" \
+                                     f"• 👍 標記分析結果是否準確\n" \
+                                     f"• 📝 提供改善建議\n" \
+                                     f"• 🚨 回報漏判或誤判\n\n" \
+                                     f"敬請期待！🎉"
+                    
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text=feedback_message))
+                    
+                # elif action == 'fraud_stats':
+                else:
+                    logger.warning(f"未知的postback動作: {action}")
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text="抱歉，我不太明白您想要做什麼，請重新嘗試！"))
+            else:
+                logger.warning(f"無法解析的postback數據: {postback_data}")
+                line_bot_api.reply_message(reply_token, TextSendMessage(text="抱歉，我不太明白您想要做什麼，請重新嘗試！"))
+                
+        except Exception as e:
+            logger.exception(f"處理postback事件時發生錯誤: {e}")
+            line_bot_api.reply_message(reply_token, TextSendMessage(text="抱歉，處理您的請求時發生錯誤，請稍後再試！"))
+
+    @handler.add(MessageEvent, message=ImageMessage)
+    def handle_image_message(event):
+        """處理圖片訊息"""
+        try:
+            # 獲取用戶資料
+            user_id = event.source.user_id
+            profile = get_user_profile(user_id)
+            display_name = profile.display_name if profile else "未知用戶"
+            reply_token = event.reply_token
+            
+            # 檢查上下文（用戶可能提供了分析需求）
+            context_message = ""
+            analysis_type = "GENERAL"
+            
+            # 檢查是否有上下文信息
+            user_state = get_user_state(user_id)
+            if user_state and "image_analysis_context" in user_state:
+                context_message = user_state.get("image_analysis_context", "")
+                analysis_type = user_state.get("image_analysis_type", "GENERAL")
+                # 清除上下文
+                user_state.pop("image_analysis_context", None)
+                user_state.pop("image_analysis_type", None)
+                update_user_state(user_id, user_state)
+            
+            # 處理圖片
+            flex_message, raw_result = image_handler.handle_image_message(
+                event.message.id, user_id, display_name, context_message, analysis_type
+            )
+            
+            # 回覆分析結果
+            if flex_message:
+                # 使用新版 API 回覆
+                try:
+                    if v3_messaging_api:
+                        from linebot.v3.messaging import ReplyMessageRequest
+                        v3_messaging_api.reply_message(
+                            ReplyMessageRequest(
+                                reply_token=reply_token,
+                                messages=[flex_message]
+                            )
+                        )
+                        logger.info(f"使用v3 API回覆圖片分析成功: {user_id}")
+                    else:
+                        # 舊版 API 作為備用
+                        line_bot_api.reply_message(reply_token, flex_message)
+                except LineBotApiError as e:
+                    logger.error(f"使用LINE API回覆圖片分析時發生錯誤: {e}")
+                    if "Invalid reply token" in str(e):
+                        # 如果是無效的回覆令牌，嘗試使用push_message作為備用
+                        try:
+                            if v3_messaging_api:
+                                from linebot.v3.messaging import PushMessageRequest
+                                
+                                v3_messaging_api.push_message(
+                                    PushMessageRequest(
+                                        to=user_id,
+                                        messages=[flex_message]
+                                    )
+                                )
+                            else:
+                                line_bot_api.push_message(user_id, flex_message)
+                            logger.info(f"圖片分析回覆令牌無效，改用push_message成功: {user_id}")
+                        except Exception as push_error:
+                            logger.error(f"圖片分析使用push_message也失敗: {push_error}")
+            else:
+                error_message = "抱歉，無法分析此圖片，請稍後再試。"
+                
+                # 使用新版 API 回覆
+                try:
+                    if v3_messaging_api:
+                        from linebot.v3.messaging import TextMessage as V3TextMessage
+                        from linebot.v3.messaging import ReplyMessageRequest
+                        v3_messaging_api.reply_message(
+                            ReplyMessageRequest(
+                                reply_token=reply_token,
+                                messages=[V3TextMessage(text=error_message)]
+                            )
+                        )
+                    else:
+                        # 舊版 API 作為備用
+                        line_bot_api.reply_message(
+                            reply_token,
+                            TextSendMessage(text=error_message)
+                        )
+                except LineBotApiError as e:
+                    logger.error(f"使用LINE API回覆圖片錯誤訊息時發生錯誤: {e}")
+                    if "Invalid reply token" in str(e):
+                        # 如果是無效的回覆令牌，嘗試使用push_message作為備用
+                        try:
+                            if v3_messaging_api:
+                                from linebot.v3.messaging import TextMessage as V3TextMessage
+                                from linebot.v3.messaging import PushMessageRequest
+                                
+                                v3_messaging_api.push_message(
+                                    PushMessageRequest(
+                                        to=user_id,
+                                        messages=[V3TextMessage(text=error_message)]
+                                    )
+                                )
+                            else:
+                                line_bot_api.push_message(user_id, TextSendMessage(text=error_message))
+                            logger.info(f"圖片錯誤訊息回覆令牌無效，改用push_message成功: {user_id}")
+                        except Exception as push_error:
+                            logger.error(f"圖片錯誤訊息使用push_message也失敗: {push_error}")
+                
+        except LineBotApiError as e:
+            logger.error(f"處理圖片訊息時發生LINE API錯誤: {e}")
+        except Exception as e:
+            logger.exception(f"處理圖片訊息時發生錯誤: {e}")
+            try:
+                error_message = "處理圖片時發生錯誤，請稍後再試。"
+                
+                # 使用新版 API 回覆
+                try:
+                    if v3_messaging_api:
+                        from linebot.v3.messaging import TextMessage as V3TextMessage
+                        from linebot.v3.messaging import ReplyMessageRequest
+                        v3_messaging_api.reply_message(
+                            ReplyMessageRequest(
+                                reply_token=event.reply_token,
+                                messages=[V3TextMessage(text=error_message)]
+                            )
+                        )
+                    else:
+                        # 舊版 API 作為備用
+                        line_bot_api.reply_message(reply_token,
+                            TextSendMessage(text=error_message)
+                        )
+                except LineBotApiError as e:
+                    logger.error(f"使用LINE API回覆最終錯誤訊息時發生錯誤: {e}")
+                    if "Invalid reply token" in str(e):
+                        # 如果是無效的回覆令牌，嘗試使用push_message作為備用
+                        try:
+                            if v3_messaging_api:
+                                from linebot.v3.messaging import TextMessage as V3TextMessage
+                                from linebot.v3.messaging import PushMessageRequest
+                                
+                                v3_messaging_api.push_message(
+                                    PushMessageRequest(
+                                        to=user_id,
+                                        messages=[V3TextMessage(text=error_message)]
+                                    )
+                                )
+                            else:
+                                line_bot_api.push_message(user_id, TextSendMessage(text=error_message))
+                            logger.info(f"最終錯誤訊息回覆令牌無效，改用push_message成功: {user_id}")
+                        except Exception as push_error:
+                            logger.error(f"最終錯誤訊息使用push_message也失敗: {push_error}")
+            except:
+                pass
+
+else:
+    logger.warning("LINE Bot handler 未初始化，無法處理訊息事件")
+
+def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
+    """判斷是否應該進行詐騙分析"""
+    message_lower = message.lower().strip()
+    
+    # 如果訊息太短，可能不需要分析
+    if len(message_lower) < 3:
+        return False
+    
+    # 優先排除功能查詢（在問候語排除之前）
+    if any(keyword in message_lower for keyword in function_inquiry_keywords):
+        return False
+    
+    # 排除明確的問候語（但只有在不是功能查詢的情況下）
+    greetings = ["你好", "哈囉", "嗨", "hi", "hello", "早安", "午安", "晚安", "再見", "謝謝", "感謝"]
+    if any(greeting in message_lower for greeting in greetings) and len(message_lower) < 10:
+        return False
+    
+    # 排除詐騙類型查詢
+    if any(keyword in message_lower for keyword in ["詐騙類型", "詐騙手法", "詐騙種類", "常見詐騙"]):
+        return False
+    
+    # 排除防詐騙測試觸發
+    if is_game_trigger(message):
+        return False
+    
+    # 排除天氣查詢
+    if is_weather_related(message):
+        return False
+    
+    # 排除純粹的分析請求（沒有具體內容要分析）
+    analysis_request_keywords = ["請幫我分析這則訊息", "幫我分析訊息", "請分析這則訊息", "請幫我分析", "分析這則訊息"]
+    if any(keyword in message and len(message) < 20 for keyword in analysis_request_keywords):
+        return False
+    
+    # 排除一般遊戲討論（而非真正的遊戲觸發）
+    game_chat_patterns = ["遊戲推薦", "遊戲好玩", "什麼遊戲", "遊戲有趣"]
+    if any(pattern in message_lower for pattern in game_chat_patterns):
+        return False
+    
+    # 檢查URL存在（最高優先級）
+    import re
+    url_pattern = re.compile(r'https?://[^\\s]+|www\\.[^\\s]+|[a-zA-Z0-9][a-zA-Z0-9-]*\\.[a-zA-Z]{2,}(?:\\.[a-zA-Z]{2,})?')
+    if url_pattern.search(message):
+        logger.info("檢測到URL，觸發詐騙分析")
+        return True
+    
+    # 檢查明確的分析請求（但要有具體內容）
+    explicit_analysis_requests = [
+        "這是詐騙嗎", "這可靠嗎", "這是真的嗎", 
+        "這安全嗎", "可以相信嗎", "有問題嗎", "是騙人的嗎"
+    ]
+    if any(request in message_lower for request in explicit_analysis_requests):
+        logger.info("檢測到明確分析請求")
+        return True
+    
+    # 檢查分析關鍵詞+疑問詞的組合
+    analysis_keywords = ["分析", "詐騙", "安全", "可疑", "風險", "網站", "連結", "投資", "賺錢"]
+    question_words = ["嗎", "呢", "吧", "?", "？"]
+    
+    has_analysis_keyword = any(keyword in message_lower for keyword in analysis_keywords)
+    has_question_word = any(word in message_lower for word in question_words)
+    
+    if has_analysis_keyword and has_question_word:
+        logger.info("檢測到分析關鍵詞+疑問詞組合")
+        return True
+    
+    # 檢查多個詐騙關鍵詞
+    fraud_keywords = ["詐騙", "被騙", "轉帳", "匯款", "投資", "賺錢", "兼職", "工作", "銀行", "帳號", "密碼", "個資", "中獎", "免費", "限時", "急"]
+    fraud_count = sum(1 for keyword in fraud_keywords if keyword in message_lower)
+    
+    if fraud_count >= 2:
+        logger.info(f"檢測到 {fraud_count} 個詐騙關鍵詞")
+        return True
+    
+    return False
+
+# 初始化FlexMessageService
+flex_message_service = FlexMessageService()
+
+if __name__ == '__main__':
+    # 檢查環境變數
+    validate_environment()
+    
+    # 取得端口號（Render 會提供 PORT 環境變數）
+    port = int(os.environ.get('PORT', 5000))
+    
+    # 啟動 Flask 應用
+    logger.info(f"啟動防詐騙機器人服務，端口: {port}")
+    app.run(host='0.0.0.0', port=port, debug=False)
