@@ -503,13 +503,13 @@ def parse_fraud_analysis(analysis_result):
                 # 避免使用"未知"作為詐騙類型
                 if fraud_type and fraud_type not in ["未知", "不明", "無法確定"]:
                     result["fraud_type"] = fraud_type
-            elif line.startswith("說明：") or line.startswith("說明:"):
+            elif line.startswith("分析說明：") or line.startswith("分析說明:"):
                 explanation = line.split("：", 1)[-1].split(":", 1)[-1].strip()
                 # 清理可能的陣列格式
                 explanation = explanation.replace("[]", "").replace("[", "").replace("]", "").strip()
                 if explanation:
                     result["explanation"] = explanation
-            elif line.startswith("建議：") or line.startswith("建議:"):
+            elif line.startswith("土豆建議：") or line.startswith("土豆建議:"):
                 suggestions = line.split("：", 1)[-1].split(":", 1)[-1].strip()
                 # 清理可能的陣列格式和引號
                 suggestions = suggestions.replace("[]", "").replace("[", "").replace("]", "").strip()
@@ -541,7 +541,7 @@ def parse_fraud_analysis(analysis_result):
             if not result["explanation"] or len(result["explanation"]) < 10:
                 result["explanation"] = analysis_result.strip()
         
-        # 最終檢查：確保所有文字欄位都不包含 "[]"
+        # 最終檢查：確保所有文字欄位都不包含 "[]" 並限制字數
         for key in ["risk_level", "fraud_type", "explanation", "suggestions"]:
             if result[key]:
                 result[key] = str(result[key]).replace("[]", "").replace("[", "").replace("]", "").strip()
@@ -555,6 +555,26 @@ def parse_fraud_analysis(analysis_result):
                         result[key] = "無法獲取詳細分析。"
                     elif key == "suggestions":
                         result[key] = "建議謹慎處理。"
+                
+                # 特殊處理：限制分析說明字數並優化土豆建議
+                if key == "explanation" and len(result[key]) > 40:
+                    # 截斷到40字以內
+                    result[key] = result[key][:40].rstrip("，。、")
+                    if not result[key].endswith("。"):
+                        result[key] += "。"
+                
+                elif key == "suggestions":
+                    # 根據風險等級優化土豆建議
+                    risk_level = result.get("risk_level", "中風險")
+                    if risk_level in ["高風險", "極高風險"]:
+                        if len(result[key]) < 10 or "謹慎" in result[key]:
+                            result[key] = "立即停止操作，直接聯繫官方客服確認！📞🔒"
+                    elif risk_level in ["低風險", "極低風險"]:
+                        if len(result[key]) < 10:
+                            result[key] = "放心啦，這只是正常的通知而已😊"
+                    else:  # 中風險
+                        if len(result[key]) < 10:
+                            result[key] = "建議先暫停操作，確認來源後再決定！⚠️"
         
         # 智能推斷詐騙類型（如果仍然是預設值）
         if result["fraud_type"] == "需要進一步分析":
@@ -1490,8 +1510,8 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
 
 風險等級：[極低風險/低風險/中風險/高風險/極高風險]
 詐騙類型：[根據上述分類指南選擇具體類型，不要使用"未知"]
-分析說明：[用40字以內簡單易懂的話解釋為什麼這個訊息可疑或安全，要具體分析內容]
-土豆建議：[給出具體的防範建議，使用emoji符號。根據風險等級調整幽默感：極低風險和低風險可以幽默一點，中風險和高風險要更嚴肅精準]
+分析說明：[用40字以內單句解釋為什麼這個訊息可疑或安全，不得條列式，要具體分析內容]
+土豆建議：[給出具體的防範建議，使用emoji符號。高風險必須嚴肅具體，如"立即停止操作，直接聯繫官方客服確認！📞🔒"；低風險可幽默，如"放心啦，這只是正常的通知而已😊"]
 新興手法：[是/否]
 
 要分析的訊息：
