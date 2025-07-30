@@ -1404,28 +1404,10 @@ class FlexMessageService:
     def create_welcome_flex_message(self, display_name: str = "朋友", recovery_prefix: str = "") -> FlexSendMessage:
         """創建歡迎Flex Message"""
         try:
-            # 構建歡迎文字
-            welcome_text = f"{recovery_prefix}我是土豆🥜\n你的反詐小助手\n請提供想查證的圖片、文字或網址，讓我替你查證👍"
-            
-            # 創建Flex Message，使用與詐騙分析結果相同的字典格式
+            # 創建Flex Message，取消綠色底色，使用粗體和一般字體區分排版
             bubble = {
                 "type": "bubble",
                 "size": "mega",
-                "header": {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "🥜 您好！我是土豆",
-                            "weight": "bold",
-                            "size": "xl",
-                            "color": "#FFFFFF"
-                        }
-                    ],
-                    "backgroundColor": "#1DB446",  # 綠色，和低風險一樣
-                    "paddingAll": "20px"
-                },
                 "body": {
                     "type": "box",
                     "layout": "vertical",
@@ -1438,7 +1420,15 @@ class FlexMessageService:
                             "contents": [
                                 {
                                     "type": "text",
-                                    "text": welcome_text,
+                                    "text": "哈囉！我是你的防詐幫手土豆 👀",
+                                    "size": "md",
+                                    "weight": "bold",
+                                    "color": "#333333",
+                                    "wrap": True
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "只要你覺得這段話怪怪的、這個圖片好奇怪、或這個網址不太對勁\n都可以傳給我，讓土豆幫你看看是真的假的",
                                     "size": "md",
                                     "color": "#333333",
                                     "wrap": True
@@ -1454,7 +1444,7 @@ class FlexMessageService:
         except Exception as e:
             logger.error(f"創建歡迎Flex Message時發生錯誤: {e}")
             # 回退到簡單的文字訊息
-            fallback_text = f"{recovery_prefix}我是土豆🥜\n你的反詐小助手\n請提供想查證的圖片、文字或網址，讓我替你查證👍"
+            fallback_text = f"{recovery_prefix}哈囉！我是你的防詐幫手土豆 👀\n\n只要你覺得這段話怪怪的、這個圖片好奇怪、或這個網址不太對勁\n都可以傳給我，讓土豆幫你看看是真的假的"
             return TextSendMessage(text=fallback_text)
 
     def create_fraud_types_flex_message(self, fraud_tactics: Dict, display_name: str = "朋友") -> FlexSendMessage:
