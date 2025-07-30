@@ -15,7 +15,7 @@ OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
 OPENAI_MODEL = os.environ.get('OPENAI_MODEL', 'gpt-4.1-mini')
 
 # ===== 機器人行為配置 =====
-BOT_TRIGGER_KEYWORD = "土豆"  # 群組中觸發機器人服務的關鍵詞
+BOT_TRIGGER_KEYWORD = "土豆幫我看"  # 群組中觸發機器人服務的關鍵詞
 CHAT_TIP_PROBABILITY = 0.3  # 閒聊時回覆防詐小知識的機率
 DONATION_SHOW_PROBABILITY = 0.15  # 顯示贊助信息的機率
 

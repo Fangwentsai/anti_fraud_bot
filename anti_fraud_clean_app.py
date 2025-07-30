@@ -2997,7 +2997,7 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
 # 初始化FlexMessageService
 flex_message_service = FlexMessageService()
 
-def extract_health_product(query, bot_trigger_keyword='土豆'):
+def extract_health_product(query, bot_trigger_keyword='土豆幫我看'):
     """
     從用戶查詢中提取健康產品或醫美療程名稱。
     
