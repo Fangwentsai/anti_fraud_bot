@@ -338,8 +338,8 @@ class ImageAnalysisService:
 
 風險等級：[極高/高/中高/中/低/極低/無風險]
 詐騙類型：[具體的詐騙類型，如：釣魚網站、假交友詐騙、投資詐騙等]
-說明：[針對圖片中實際識別到的內容進行分析，用80-100字簡單易懂的話解釋為什麼要小心，像鄰居朋友在聊天的語氣，避免技術術語]
-建議：[用emoji符號（🚫🔍🌐🛡️💡⚠️等）開頭，給出3個以內的簡單明確防範建議]
+分析說明：[針對圖片中實際識別到的內容進行分析，用40字以內單句解釋為什麼要小心，像鄰居朋友在聊天的語氣，避免技術術語]
+土豆建議：[用emoji符號（🚫🔍🌐🛡️💡⚠️等）開頭，給出3個以內的簡單明確防範建議]
 
 重要分析要求：
 1. 仔細閱讀圖片中的所有文字內容
@@ -419,10 +419,10 @@ class ImageAnalysisService:
                 elif line.startswith("詐騙類型：") or line.startswith("詐騙類型:"):
                     value = line.split("：", 1)[-1].split(":", 1)[-1].strip()
                     parsed_result["fraud_type"] = value if value else "未知"
-                elif line.startswith("說明：") or line.startswith("說明:"):
+                elif line.startswith("分析說明：") or line.startswith("分析說明:"):
                     value = line.split("：", 1)[-1].split(":", 1)[-1].strip()
                     parsed_result["explanation"] = value if value else "無法解析分析結果。"
-                elif line.startswith("建議：") or line.startswith("建議:"):
+                elif line.startswith("土豆建議：") or line.startswith("土豆建議:"):
                     value = line.split("：", 1)[-1].split(":", 1)[-1].strip()
                     parsed_result["suggestions"] = value if value else "建議謹慎處理。"
             
@@ -430,13 +430,32 @@ class ImageAnalysisService:
             if not parsed_result["explanation"] or parsed_result["explanation"] == "無法解析分析結果。":
                 # 移除標籤，取得剩餘內容作為說明
                 clean_text = result
-                for prefix in ["風險等級：", "風險等級:", "詐騙類型：", "詐騙類型:", "說明：", "說明:", "建議：", "建議:"]:
+                for prefix in ["風險等級：", "風險等級:", "詐騙類型：", "詐騙類型:", "分析說明：", "分析說明:", "土豆建議：", "土豆建議:"]:
                     clean_text = clean_text.replace(prefix, "")
                 
                 # 清理並取得有意義的內容
                 clean_lines = [line.strip() for line in clean_text.split('\n') if line.strip()]
                 if clean_lines:
                     parsed_result["explanation"] = clean_lines[0]
+            
+            # 字數限制和內容優化
+            if parsed_result["explanation"] and len(parsed_result["explanation"]) > 40:
+                # 截斷到40字以內
+                parsed_result["explanation"] = parsed_result["explanation"][:40].rstrip("，。、")
+                if not parsed_result["explanation"].endswith("。"):
+                    parsed_result["explanation"] += "。"
+            
+            # 根據風險等級優化土豆建議
+            risk_level = parsed_result.get("risk_level", "中風險")
+            if risk_level in ["高風險", "極高風險"]:
+                if len(parsed_result["suggestions"]) < 10 or "謹慎" in parsed_result["suggestions"]:
+                    parsed_result["suggestions"] = "立即停止操作，直接聯繫官方客服確認！📞🔒"
+            elif risk_level in ["低風險", "極低風險"]:
+                if len(parsed_result["suggestions"]) < 10:
+                    parsed_result["suggestions"] = "放心啦，這只是正常的內容而已😊"
+            else:  # 中風險
+                if len(parsed_result["suggestions"]) < 10:
+                    parsed_result["suggestions"] = "建議先暫停操作，確認來源後再決定！⚠️"
             
             return parsed_result
             
