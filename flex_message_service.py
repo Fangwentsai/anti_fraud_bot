@@ -277,31 +277,8 @@ class FlexMessageService:
         # 確保用戶ID有值
         safe_user_id = user_id if user_id else "unknown"
         
-        # 基本按鈕
-        buttons = [
-            {
-                "type": "button",
-                "style": "primary",
-                "height": "sm",
-                "action": {
-                    "type": "message",
-                    "label": "🔄 再測一次",
-                    "text": "土豆 請幫我分析這則訊息"
-                },
-                "color": "#2E86C1"
-            },
-            {
-                "type": "button",
-                "style": "primary",
-                "height": "sm",
-                "action": {
-                    "type": "message",
-                    "label": "🏠 回到首頁",
-                    "text": "土豆"
-                },
-                "color": "#27AE60"
-            }
-        ]
+        # 移除基本按鈕，讓對話直接結束
+        buttons = []
         
         # 10%的機率顯示贊助按鈕
         if random.random() < 0.10:
@@ -471,7 +448,7 @@ class FlexMessageService:
         """取得網域變形警告頁面的底部按鈕，有10%機率顯示贊助按鈕"""
         import random
         
-        # 基本按鈕
+        # 基本按鈕 - 只保留緊急聯絡按鈕
         buttons = [
             ButtonComponent(
                 style='primary',
@@ -481,24 +458,6 @@ class FlexMessageService:
                     uri='tel:165'
                 ),
                 color='#E74C3C'
-            ),
-            ButtonComponent(
-                style='primary',
-                height='sm',
-                action=MessageAction(
-                    label='🔄 再測一次',
-                    text='土豆 請幫我分析這則訊息'
-                ),
-                color='#1E88E5'
-            ),
-            ButtonComponent(
-                style='primary',
-                height='sm',
-                action=MessageAction(
-                    label='🏠 回到首頁',
-                    text='土豆'
-                ),
-                color='#26A69A'
             )
         ]
         
