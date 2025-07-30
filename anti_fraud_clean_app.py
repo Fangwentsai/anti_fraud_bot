@@ -1814,14 +1814,21 @@ if handler:
         # 檢查是否包含觸發關鍵詞或用戶處於等待分析狀態
         waiting_for_analysis = current_state.get("waiting_for_analysis", False)
         
-        if bot_trigger_keyword not in text_message and not waiting_for_analysis:
-            logger.info(f"訊息不包含觸發關鍵詞 '{bot_trigger_keyword}'，也不在等待分析狀態，忽略此訊息")
+        # 檢查是否包含觸發關鍵詞或「土豆幫我查」
+        trigger_keywords = [bot_trigger_keyword, "土豆幫我查"]
+        has_trigger = any(keyword in text_message for keyword in trigger_keywords)
+        
+        if not has_trigger and not waiting_for_analysis:
+            logger.info(f"訊息不包含觸發關鍵詞，也不在等待分析狀態，忽略此訊息")
             return
 
         # 移除觸發關鍵詞
         cleaned_message = text_message
-        if bot_trigger_keyword in text_message:
-            cleaned_message = text_message.replace(bot_trigger_keyword, "").strip()
+        if has_trigger:
+            # 移除所有可能的觸發關鍵詞
+            for keyword in trigger_keywords:
+                cleaned_message = cleaned_message.replace(keyword, "")
+            cleaned_message = cleaned_message.strip()
             logger.info(f"移除觸發關鍵詞後的訊息: {cleaned_message}")
 
         # 檢查是否為空訊息
@@ -1829,41 +1836,14 @@ if handler:
             # 獲取恢復訊息前綴（如果需要的話）
             recovery_prefix = _get_recovery_message_prefix(current_state, display_name)
             user_conversation_state[user_id] = current_state  # 更新狀態
-            
-            reply_text = f"{recovery_prefix}嗨 {display_name}！我是土豆🥜\n你的反詐小助手，請提供你想查證的圖片、文字甚至是網址，我都能替你查證👍\n讓我用三大功能保護你！\n\n" \
-                        f"🔍 我要查詐：\n智能分析文字、網址或截圖，立刻識破詐騙！\n" \
-                        f"🎯 防詐騙測驗：\n玩問答提升你的防詐意識，輕鬆識破詐騙！\n" \
-                        f"📚 詐騙案例：\n案例分析分享，了解9大詐騙類型。\n" \
-                        f"💬 日常閒聊：\n陪你談天說地 甚至可以輸入：\n土豆 蔥爆牛肉怎麼做😂\n\n" \
-                        f"💡 點擊下方按鈕，或直接告訴我你需要什麼！"
+              
+            reply_text = f"{recovery_prefix}嗨我是土豆🥜\n你的反詐小助手\n請提供想查證的圖片、文字或網址，讓我替你查證👍"
                 
-            # 使用 emoji 的 QuickReply 格式，簡潔美觀
-            quick_reply = QuickReply(items=[
-                QuickReplyButton(
-                    action=MessageAction(
-                        label="🔍 我要查詐", 
-                        text=f"{bot_trigger_keyword} 我要查詐"
-                    )
-                ),
-                QuickReplyButton(
-                    action=MessageAction(
-                        label="🎯 防詐騙測驗", 
-                        text=f"{bot_trigger_keyword} 防詐騙測試"
-                    )
-                ),
-                QuickReplyButton(
-                    action=MessageAction(
-                        label="📚 詐騙案例", 
-                        text=f"{bot_trigger_keyword} 詐騙類型列表"
-                    )
-                ),
-            ])
-            
             mention_text = f"@{display_name} {reply_text}"
             if len(mention_text) <= LINE_MESSAGE_MAX_LENGTH:
                 reply_text = mention_text
             
-            line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
+            line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text))
             
             # 保存互動記錄到Firebase
             firebase_manager.save_user_interaction(
