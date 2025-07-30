@@ -1401,6 +1401,51 @@ class FlexMessageService:
         
         return FlexSendMessage(alt_text=f"{fraud_type}詳細說明 第{page}頁", contents=bubble)
 
+    def create_welcome_flex_message(self, display_name: str = "朋友", recovery_prefix: str = "") -> FlexSendMessage:
+        """創建歡迎Flex Message"""
+        try:
+            # 構建歡迎文字
+            welcome_text = f"{recovery_prefix}嗨我是土豆🥜\n你的反詐小助手\n\n請提供想查證的圖片、文字或網址，讓我替你查證👍"
+            
+            # 創建Flex Message容器
+            bubble = BubbleContainer(
+                size="kilo",
+                body=BoxComponent(
+                    layout="vertical",
+                    spacing="md",
+                    paddingAll="20px",
+                    contents=[
+                        safe_text_component(
+                            text=welcome_text,
+                            size="md",
+                            weight="bold",
+                            color="#333333",
+                            wrap=True
+                        ),
+                        SeparatorComponent(margin="md"),
+                        safe_text_component(
+                            text="💡 支援的內容類型：\n• 📝 文字訊息\n• 🌐 網址連結\n• 📷 圖片截圖",
+                            size="sm",
+                            color="#666666",
+                            wrap=True
+                        )
+                    ]
+                ),
+                styles={
+                    "footer": {
+                        "separator": True
+                    }
+                }
+            )
+            
+            return FlexSendMessage(alt_text="土豆反詐小助手", contents=bubble)
+            
+        except Exception as e:
+            logger.error(f"創建歡迎Flex Message時發生錯誤: {e}")
+            # 回退到簡單的文字訊息
+            fallback_text = f"{recovery_prefix}嗨我是土豆🥜\n你的反詐小助手\n請提供想查證的圖片、文字或網址，讓我替你查證👍"
+            return TextSendMessage(text=fallback_text)
+
     def create_fraud_types_flex_message(self, fraud_tactics: Dict, display_name: str = "朋友") -> FlexSendMessage:
         """創建詐騙類型列表Flex Message"""
         

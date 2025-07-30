@@ -1837,13 +1837,10 @@ if handler:
             recovery_prefix = _get_recovery_message_prefix(current_state, display_name)
             user_conversation_state[user_id] = current_state  # 更新狀態
               
-            reply_text = f"{recovery_prefix}嗨我是土豆🥜\n你的反詐小助手\n請提供想查證的圖片、文字或網址，讓我替你查證👍"
-                
-            mention_text = f"@{display_name} {reply_text}"
-            if len(mention_text) <= LINE_MESSAGE_MAX_LENGTH:
-                reply_text = mention_text
+            # 創建Flex Message歡迎訊息
+            welcome_flex = flex_message_service.create_welcome_flex_message(display_name, recovery_prefix)
             
-            line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text))
+            line_bot_api.reply_message(reply_token, welcome_flex)
             
             # 保存互動記錄到Firebase
             firebase_manager.save_user_interaction(
