@@ -1407,47 +1407,47 @@ class FlexMessageService:
             # 構建歡迎文字
             welcome_text = f"{recovery_prefix}我是土豆🥜\n你的反詐小助手\n請提供想查證的圖片、文字或網址，讓我替你查證👍"
             
-            # 創建Flex Message容器，使用詐騙分析結果的格式
-            bubble = BubbleContainer(
-                size="kilo",
-                header=BoxComponent(
-                    layout="horizontal",
-                    spacing="sm",
-                    paddingAll="20px",
-                    backgroundColor="#1DB446",  # 綠色，和低風險一樣
-                    contents=[
-                        safe_text_component(
-                            text="🥜",  # 土豆emoji
-                            size="lg",
-                            color="#FFFFFF"
-                        ),
-                        safe_text_component(
-                            text="您好！我是土豆",
-                            size="lg",
-                            weight="bold",
-                            color="#FFFFFF"
-                        )
+            # 創建Flex Message，使用與詐騙分析結果相同的字典格式
+            bubble = {
+                "type": "bubble",
+                "size": "mega",
+                "header": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "🥜 您好！我是土豆",
+                            "weight": "bold",
+                            "size": "xl",
+                            "color": "#FFFFFF"
+                        }
+                    ],
+                    "backgroundColor": "#1DB446",  # 綠色，和低風險一樣
+                    "paddingAll": "20px"
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "box",
+                            "layout": "vertical",
+                            "margin": "lg",
+                            "spacing": "sm",
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": welcome_text,
+                                    "size": "md",
+                                    "color": "#333333",
+                                    "wrap": True
+                                }
+                            ]
+                        }
                     ]
-                ),
-                body=BoxComponent(
-                    layout="vertical",
-                    spacing="md",
-                    paddingAll="20px",
-                    contents=[
-                        safe_text_component(
-                            text=welcome_text,
-                            size="md",
-                            color="#333333",
-                            wrap=True
-                        )
-                    ]
-                ),
-                styles={
-                    "footer": {
-                        "separator": True
-                    }
                 }
-            )
+            }
             
             return FlexSendMessage(alt_text="土豆反詐小助手", contents=bubble)
             
