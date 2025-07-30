@@ -3703,7 +3703,7 @@ def analyze_email_fraud(email_content, sender_email=None, display_name="朋友")
 {{
     "risk_level": "極高風險/高風險/中風險/低風險",
     "fraud_type": "詐騙類型描述",
-    "explanation": "詳細分析說明",
+    "explanation": "用40字以內單句解釋為什麼這個郵件可疑或安全",
     "suggestions": ["建議1", "建議2", "建議3"],
     "is_emerging": false,
     "analysis_details": {{
