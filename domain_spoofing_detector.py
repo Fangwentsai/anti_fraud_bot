@@ -590,7 +590,7 @@ def _detect_government_domain_spoofing(domain):
                     'original_domain': 'gov.tw',
                     'spoofed_domain': domain,
                     'spoofing_type': '政府網域變形攻擊',
-                    'risk_explanation': f"🚨 極高風險警告！\n\n這個網址「{domain}」是假冒政府網站的詐騙網址！\n\n✅ 真正的政府網站都是以「.gov.tw」結尾\n❌ 這個網址使用了錯誤的格式來冒充政府機關\n\n詐騙集團常用這種手法製作假的政府網站來：\n• 騙取個人資料（身分證、健保卡號）\n• 騙取銀行帳戶資訊\n• 詐騙退稅、補助金等款項\n\n🛡️ 請記住：政府機關的官方網站一律以「.gov.tw」結尾，任何其他格式都是假的！\n\n📞 如有疑問請撥打165反詐騙專線確認"
+                    'risk_explanation': f"🚨 極高風險警告！\n\n這個網址「{domain}」是假冒政府網站的詐騙網址！\n\n✅ 真正的政府網站都是以「.gov.tw」結尾\n❌ 這個網址使用了錯誤的格式來冒充政府機關\n\n網頁標題亂碼顯示，假冒政府機關詐騙。政府機關不會透過LINE要求個資或操作ATM。\n\n🛡️ 請記住：政府機關的官方網站一律以「.gov.tw」結尾，任何其他格式都是假的！\n\n📞 如有疑問請撥打165反詐騙專線確認"
                 }
         
         # 如果包含gov但沒有匹配到特定模式，給出較溫和的警告
@@ -601,7 +601,7 @@ def _detect_government_domain_spoofing(domain):
                 'original_domain': 'gov.tw',
                 'spoofed_domain': domain,
                 'spoofing_type': '疑似政府網域變形攻擊',
-                'risk_explanation': f"⚠️ 高風險警告！\n\n這個網址「{domain}」包含「gov」字樣但不是正確的政府網站格式！\n\n✅ 真正的政府網站都是以「.gov.tw」結尾\n❌ 這個網址格式可疑，可能是詐騙網站\n\n請務必確認：\n• 政府機關官網一律以「.gov.tw」結尾\n• 如需辦理政府業務，請直接到官方網站\n• 不要在可疑網站輸入個人資料\n\n📞 如有疑問請撥打165反詐騙專線確認"
+                'risk_explanation': f"⚠️ 高風險警告！\n\n這個網址「{domain}」包含「gov」字樣但不是正確的政府網站格式！\n\n✅ 真正的政府網站都是以「.gov.tw」結尾\n❌ 這個網址格式可疑，可能是詐騙網站\n\n網頁標題亂碼顯示，假冒政府機關詐騙。政府機關不會透過LINE要求個資或操作ATM。\n\n請務必確認：\n• 政府機關官網一律以「.gov.tw」結尾\n• 如需辦理政府業務，請直接到官方網站\n• 不要在可疑網站輸入個人資料\n\n📞 如有疑問請撥打165反詐騙專線確認"
             }
     
     return {'is_spoofed': False} 

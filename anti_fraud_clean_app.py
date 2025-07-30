@@ -1812,8 +1812,7 @@ if handler:
             
             reply_text = f"{recovery_prefix}嗨 {display_name}！我是土豆🥜\n你的防詐小助手，記得用土豆呼喚我喔！\n" \
                         f"讓我用4大服務保護你：\n如果沒反應請再叫我一次喔(跪)\n\n" \
-                        f"🔍 文字或網站分析：\n立刻分析假冒文字、詐騙訊息或釣魚網站！\n" \
-                        f"📷 上傳截圖分析：\n不想輸入文字嗎？！直接截圖給我！\n" \
+                        f"🔍 我要查詐：\n智能分析文字、網址或截圖，立刻識破詐騙！\n" \
                         f"🎯 防詐騙測驗：\n玩問答提升你的防詐意識，輕鬆識破詐騙！\n" \
                         f"📚 詐騙案例：\n案例分析分享，了解9大詐騙類型。\n" \
                         f"💬 日常閒聊：\n陪你談天說地 甚至可以輸入：\n土豆 蔥爆牛肉怎麼做😂\n\n" \
@@ -1823,14 +1822,8 @@ if handler:
             quick_reply = QuickReply(items=[
                 QuickReplyButton(
                     action=MessageAction(
-                        label="🔍 文字或網站分析", 
-                        text=f"{bot_trigger_keyword} 請幫我分析這則訊息："
-                    )
-                ),
-                QuickReplyButton(
-                    action=MessageAction(
-                        label="📷 上傳截圖分析", 
-                        text=f"{bot_trigger_keyword} 請幫我分析圖片："
+                        label="🔍 我要查詐", 
+                        text=f"{bot_trigger_keyword} 我要查詐"
                     )
                 ),
                 QuickReplyButton(
@@ -2031,6 +2024,72 @@ if handler:
                         )
                     except Exception as push_error:
                         logger.error(f"圖片分析提示訊息使用push_message也失敗: {push_error}")
+            return
+
+        # 檢查「我要查詐」請求
+        if "我要查詐" in cleaned_message:
+            logger.info(f"檢測到我要查詐請求: {cleaned_message}")
+            
+            current_state["waiting_for_analysis"] = True
+            user_conversation_state[user_id] = current_state
+            
+            # 獲取恢復訊息前綴（如果需要的話）
+            recovery_prefix = _get_recovery_message_prefix(current_state, display_name)
+            user_conversation_state[user_id] = current_state  # 更新狀態
+            
+            prompt_message = f"{recovery_prefix}好的 {display_name}，我會智能分析您提供的內容！\n\n" \
+                           f"請直接把您收到的可疑訊息、網址或截圖傳給我，我會自動判斷類型並進行分析：\n\n" \
+                           f"💡 支援的內容類型：\n" \
+                           f"• 📝 文字訊息（詐騙簡訊、可疑對話等）\n" \
+                           f"• 🌐 網址連結（可疑網站、釣魚網址等）\n" \
+                           f"• 📷 圖片截圖（直接上傳即可）\n" \
+                           f"• 📧 郵件內容（可疑郵件、釣魚郵件等）\n\n" \
+                           f"⏱️ 分析時間約10-15秒，請耐心等待！"
+            
+            try:
+                if v3_messaging_api:
+                    from linebot.v3.messaging import TextMessage as V3TextMessage
+                    from linebot.v3.messaging import ReplyMessageRequest
+                    v3_messaging_api.reply_message(
+                        ReplyMessageRequest(
+                            reply_token=reply_token,
+                            messages=[V3TextMessage(text=prompt_message)]
+                       )
+                    )
+                    logger.info(f"已回覆我要查詐提示訊息: {user_id}")
+                else:
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text=prompt_message))
+                    logger.info(f"已回覆我要查詐提示訊息 (舊版API): {user_id}")
+                
+                # 保存互動記錄到Firebase
+                firebase_manager.save_user_interaction(
+                    user_id, display_name, text_message, "提供我要查詐說明",
+                    is_fraud_related=False
+                )
+            except LineBotApiError as e:
+                logger.error(f"回覆我要查詐提示訊息時發生錯誤: {e}")
+                if "Invalid reply token" in str(e):
+                    try:
+                        if v3_messaging_api:
+                            from linebot.v3.messaging import TextMessage as V3TextMessage
+                            from linebot.v3.messaging import PushMessageRequest
+                            v3_messaging_api.push_message(
+                                PushMessageRequest(
+                                    to=user_id,
+                                    messages=[V3TextMessage(text=prompt_message)]
+                               )
+                            )
+                        else:
+                            line_bot_api.push_message(user_id, TextSendMessage(text=prompt_message))
+                        logger.info(f"我要查詐提示訊息使用push_message成功: {user_id}")
+                        
+                        # 保存互動記錄到Firebase
+                        firebase_manager.save_user_interaction(
+                            user_id, display_name, text_message, "提供我要查詐說明(push)",
+                            is_fraud_related=False
+                        )
+                    except Exception as push_error:
+                        logger.error(f"我要查詐提示訊息使用push_message也失敗: {push_error}")
             return
 
         # 檢查分析請求但沒有內容（修改檢查邏輯，排除包含圖片相關的文本）
@@ -2508,8 +2567,7 @@ if handler:
                 elif action == 'show_main_menu':
                     reply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐小助手，記得用土豆呼喚我喔！\n" \
                                 f"讓我用4大服務保護你：\n如果沒反應請再叫我一次喔(跪)\n\n" \
-                                f"🔍 文字或網站分析：\n立刻分析假冒文字、詐騙訊息或釣魚網站！\n" \
-                                f"📷 上傳截圖分析：\n不想輸入文字嗎？！直接截圖給我！\n" \
+                                f"🔍 我要查詐：\n智能分析文字、網址或截圖，立刻識破詐騙！\n" \
                                 f"🎯 防詐騙測驗：\n玩問答提升你的防詐意識，輕鬆識破詐騙！\n" \
                                 f"📚 詐騙案例：\n案例分析分享，了解9大詐騙類型。\n" \
                                 f"💬 日常閒聊：\n陪你談天說地 甚至可以輸入：\n土豆 蔥爆牛肉怎麼做😂\n\n" \
@@ -2519,14 +2577,8 @@ if handler:
                     quick_reply = QuickReply(items=[
                         QuickReplyButton(
                             action=MessageAction(
-                                label="🔍 文字或網站分析", 
-                                text=f"{bot_trigger_keyword} 請幫我分析這則訊息："
-                            )
-                        ),
-                        QuickReplyButton(
-                            action=MessageAction(
-                                label="📷 上傳截圖分析", 
-                                text=f"{bot_trigger_keyword} 請幫我分析圖片："
+                                label="🔍 我要查詐", 
+                                text=f"{bot_trigger_keyword} 我要查詐"
                             )
                         ),
                         QuickReplyButton(
@@ -2583,6 +2635,18 @@ if handler:
             
             context_message = ""
             analysis_type = "GENERAL"
+            
+            # 檢查是否在「我要查詐」狀態
+            current_state = user_conversation_state.get(user_id, {})
+            waiting_for_analysis = current_state.get("waiting_for_analysis", False)
+            
+            if waiting_for_analysis:
+                # 清除等待分析狀態
+                current_state.pop("waiting_for_analysis", None)
+                user_conversation_state[user_id] = current_state
+                context_message = "用戶透過「我要查詐」功能上傳的圖片"
+                analysis_type = "FRAUD_ANALYSIS"
+                logger.info(f"檢測到我要查詐狀態下的圖片上傳: {user_id}")
             
             user_state = get_user_state(user_id)
             if user_state and "image_analysis_context" in user_state:
