@@ -214,7 +214,7 @@ class FlexMessageService:
                             "contents": [
                                 {
                                     "type": "text",
-                                    "text": "專家建議",
+                                    "text": "土豆建議",
                                     "weight": "bold",
                                     "size": "md",
                                     "margin": "md"
