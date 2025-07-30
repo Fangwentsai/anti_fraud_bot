@@ -1810,8 +1810,7 @@ if handler:
             recovery_prefix = _get_recovery_message_prefix(current_state, display_name)
             user_conversation_state[user_id] = current_state  # 更新狀態
             
-            reply_text = f"{recovery_prefix}嗨 {display_name}！我是土豆🥜\n你的防詐小助手，記得用土豆呼喚我喔！\n" \
-                        f"讓我用4大服務保護你：\n如果沒反應請再叫我一次喔(跪)\n\n" \
+            reply_text = f"{recovery_prefix}嗨 {display_name}！我是土豆🥜\n你的反詐小助手，請提供你想查證的圖片、文字甚至是網址，我都能替你查證👍\n讓我用三大功能保護你！\n\n" \
                         f"🔍 我要查詐：\n智能分析文字、網址或截圖，立刻識破詐騙！\n" \
                         f"🎯 防詐騙測驗：\n玩問答提升你的防詐意識，輕鬆識破詐騙！\n" \
                         f"📚 詐騙案例：\n案例分析分享，了解9大詐騙類型。\n" \
@@ -2565,8 +2564,7 @@ if handler:
                     )
                     
                 elif action == 'show_main_menu':
-                    reply_text = f"嗨 {display_name}！我是土豆🥜\n你的防詐小助手，記得用土豆呼喚我喔！\n" \
-                                f"讓我用4大服務保護你：\n如果沒反應請再叫我一次喔(跪)\n\n" \
+                    reply_text = f"嗨 {display_name}！我是土豆🥜\n你的反詐小助手，請提供你想查證的圖片、文字甚至是網址，我都能替你查證👍\n讓我用三大功能保護你！\n\n" \
                                 f"🔍 我要查詐：\n智能分析文字、網址或截圖，立刻識破詐騙！\n" \
                                 f"🎯 防詐騙測驗：\n玩問答提升你的防詐意識，輕鬆識破詐騙！\n" \
                                 f"📚 詐騙案例：\n案例分析分享，了解9大詐騙類型。\n" \
