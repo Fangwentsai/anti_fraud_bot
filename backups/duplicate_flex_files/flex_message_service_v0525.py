@@ -73,7 +73,8 @@ class FlexMessageService:
                         size='xl'
                     ),
                     safe_text_component(
-                        f"風險等級：{risk_level}",
+                        # 移除重複的風險等級顯示
+                # f"風險等級：{risk_level}",
                         color='#ffffff',
                         size='md'
                     )
@@ -1063,7 +1064,7 @@ class FlexMessageService:
                         )
                     )
                     
-                    summary_text = f"• {fraud_type}風險等級：{risk_level}\n"
+                    summary_text = f"• {fraud_type}分析\n"
                     if common_tactics and len(common_tactics) > 0:
                         summary_text += f"• 常見話術：{len(common_tactics)}種\n"
                     if fraud_process and len(fraud_process) > 0:

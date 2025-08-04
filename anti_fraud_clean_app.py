@@ -2302,7 +2302,7 @@ if handler:
                         explanation = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
                         suggestions = analysis_data.get("suggestions", "請隨時保持警惕。")
                         
-                        text_response = f"🔍 風險分析結果\n\n風險等級：{risk_level}\n詐騙類型：{fraud_type}\n\n說明：{explanation}\n\n建議：{suggestions}"
+                        text_response = f"🔍 風險分析結果\n\n詐騙類型：{fraud_type}\n\n說明：{explanation}\n\n建議：{suggestions}"
                         
                         try:
                             line_bot_api.reply_message(reply_token, TextSendMessage(text=text_response))
@@ -2323,7 +2323,7 @@ if handler:
                     explanation = analysis_data.get("explanation", "分析結果不完整，請謹慎判斷。")
                     suggestions = analysis_data.get("suggestions", "請隨時保持警惕。")
                     
-                    text_response = f"🔍 風險分析結果\n\n風險等級：{risk_level}\n詐騙類型：{fraud_type}\n\n說明：{explanation}\n\n建議：{suggestions}"
+                    text_response = f"🔍 風險分析結果\n\n詐騙類型：{fraud_type}\n\n說明：{explanation}\n\n建議：{suggestions}"
                     
                     try:
                         line_bot_api.reply_message(reply_token, TextSendMessage(text=text_response))
