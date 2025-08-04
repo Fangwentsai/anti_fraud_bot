@@ -57,6 +57,9 @@ SHORT_URL_DOMAINS = [
     # LINE 官方短網址服務
     'lin.ee',
     
+    # 電商平台短網址服務
+    'coupa.ng',  # 酷澎官方短網址服務
+    
     # 中國短網址服務（詐騙常用）
     'dwz.cn', 'suo.im', 'mrw.so', 'url.cn', 'sina.lt',
     't.cn', 'weibo.cn', 'tb.cn', 'tmall.com', 'taobao.com'
