@@ -229,36 +229,36 @@ def start_internal_keep_alive():
 # 在應用啟動時啟動 keep-alive
 start_internal_keep_alive()
 
-# 載入醫美服務和健康知識的白名單
-def load_beauty_health_whitelist():
-    """從beauty_health_whitelist.json文件載入醫美和健康相關的白名單關鍵詞"""
-    try:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        whitelist_path = os.path.join(script_dir, 'beauty_health_whitelist.json')
-        
-        with open(whitelist_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            
-            # 將所有類別的關鍵詞合併為一個扁平列表
-            flattened_whitelist = []
-            for category, keywords in data['categories'].items():
-                flattened_whitelist.extend(keywords)
-            
-            logger.info(f"成功載入 {len(flattened_whitelist)} 個醫美和健康相關關鍵詞")
-            return flattened_whitelist
-    except FileNotFoundError:
-        logger.warning("找不到beauty_health_whitelist.json文件，使用預設的白名單列表")
-        default_whitelist = [
-            "皮秒雷射", "微針", "膠原蛋白", "玻尿酸", "肉毒桿菌", "減肥", "美白",
-            "保濕", "瘦身", "膠原蛋白飲", "中醫美容", "雷射", "電波拉皮"
-        ]
-        return default_whitelist
-    except Exception as e:
-        logger.error(f"載入beauty_health_whitelist.json時發生錯誤: {e}")
-        return []
+# 移除健康產品分析功能
+# def load_beauty_health_whitelist():
+#     """從beauty_health_whitelist.json文件載入醫美和健康相關的白名單關鍵詞"""
+#     try:
+#         script_dir = os.path.dirname(os.path.abspath(__file__))
+#         whitelist_path = os.path.join(script_dir, 'beauty_health_whitelist.json')
+#         
+#         with open(whitelist_path, 'r', encoding='utf-8') as f:
+#             data = json.load(f)
+#             
+#             # 將所有類別的關鍵詞合併為一個扁平列表
+#             flattened_whitelist = []
+#             for category, keywords in data['categories'].items():
+#                 flattened_whitelist.extend(keywords)
+#             
+#             logger.info(f"成功載入 {len(flattened_whitelist)} 個醫美和健康相關關鍵詞")
+#             return flattened_whitelist
+#     except FileNotFoundError:
+#         logger.warning("找不到beauty_health_whitelist.json文件，使用預設的白名單列表")
+#         default_whitelist = [
+#             "皮秒雷射", "微針", "膠原蛋白", "玻尿酸", "肉毒桿菌", "減肥", "美白",
+#             "保濕", "瘦身", "膠原蛋白飲", "中醫美容", "雷射", "電波拉皮"
+#         ]
+#         return default_whitelist
+#     except Exception as e:
+#         logger.error(f"載入beauty_health_whitelist.json時發生錯誤: {e}")
+#         return []
 
-# 載入醫美和健康相關白名單
-BEAUTY_HEALTH_WHITELIST = load_beauty_health_whitelist()
+# 移除健康產品分析功能
+# BEAUTY_HEALTH_WHITELIST = load_beauty_health_whitelist()
 
 # 為了向下兼容，保留舊的變數名稱
 function_inquiry_keywords = FUNCTION_INQUIRY_KEYWORDS
@@ -2165,79 +2165,80 @@ if handler:
         
         # 根據判斷結果執行詐騙分析或閒聊模式
         if perform_fraud_analysis:
+            # 移除健康產品分析功能
             # 檢查是否為產品真偽詢問
-            product_name = extract_health_product(text_message, bot_trigger_keyword)
-            
-            # 檢查是否包含白名單關鍵詞，即使問句格式不標準也可以直接分析
-            if not product_name and bot_trigger_keyword in text_message:
-                for keyword in BEAUTY_HEALTH_WHITELIST:
-                    if keyword in text_message:
-                        logger.info(f"直接從白名單關鍵詞提取產品名: {keyword}")
-                        product_name = keyword
-                        break
-            
-            if product_name:
-                logger.info(f"檢測到產品真偽詢問: {product_name}")
-                
-                # 檢查產品名稱是否足夠具體
-                if len(product_name) >= 2:
-                    logger.info(f"執行健康產品分析: {product_name}")
-                    
-                    analysis_result = analyze_health_product(product_name, display_name, user_id)
-                    
-                    if analysis_result and analysis_result.get("success", False):
-                        analysis_data = analysis_result.get("result", {})
-                        flex_message = create_analysis_flex_message(analysis_data, display_name, text_message, user_id)
-                        
-                        if flex_message:
-                            try:
-                                line_bot_api.reply_message(reply_token, flex_message)
-                                logger.info(f"健康產品分析回覆成功: {user_id}")
-                                
-                                # 保存互動記錄到Firebase
-                                firebase_manager.save_user_interaction(
-                                    user_id, display_name, text_message, f"健康產品分析: {product_name}",
-                                    is_fraud_related=True,
-                                    fraud_type=analysis_data.get("fraud_type"),
-                                    risk_level=analysis_data.get("risk_level")
-                                )
-                            except LineBotApiError as e:
-                                logger.error(f"發送健康產品分析Flex訊息時發生錯誤: {e}")
-                                if "Invalid reply token" in str(e):
-                                    try:
-                                        line_bot_api.push_message(user_id, flex_message)
-                                        logger.info(f"健康產品分析回覆令牌無效，改用push_message成功: {user_id}")
-                                        
-                                        # 保存互動記錄到Firebase
-                                        firebase_manager.save_user_interaction(
-                                            user_id, display_name, text_message, f"健康產品分析: {product_name}",
-                                            is_fraud_related=True,
-                                            fraud_type=analysis_data.get("fraud_type"),
-                                            risk_level=analysis_data.get("risk_level")
-                                        )
-                                    except Exception as push_error:
-                                        logger.error(f"健康產品分析使用push_message也失敗: {push_error}")
-                        else:
-                            # 如果Flex消息創建失敗，發送基本文本消息
-                            text_response = f"🔍 產品分析結果\n\n{analysis_data.get('explanation', '無法解析產品資訊')}\n\n{analysis_data.get('suggestions', '請諮詢專業醫療人員意見')}"
-                            
-                            try:
-                                line_bot_api.reply_message(reply_token, TextSendMessage(text=text_response))
-                                
-                                # 保存互動記錄到Firebase
-                                firebase_manager.save_user_interaction(
-                                    user_id, display_name, text_message, f"健康產品分析(文字): {product_name}",
-                                    is_fraud_related=True,
-                                    fraud_type=analysis_data.get("fraud_type"),
-                                    risk_level=analysis_data.get("risk_level")
-                                )
-                            except Exception as text_error:
-                                logger.error(f"發送健康產品分析文本回覆失敗: {text_error}")
-                        
-                        return
-                    else:
-                        logger.warning(f"健康產品分析失敗: {product_name}")
-                        # 如果健康產品分析失敗，會繼續執行一般詐騙分析
+            # product_name = extract_health_product(text_message, bot_trigger_keyword)
+            # 
+            # # 檢查是否包含白名單關鍵詞，即使問句格式不標準也可以直接分析
+            # if not product_name and bot_trigger_keyword in text_message:
+            #     for keyword in BEAUTY_HEALTH_WHITELIST:
+            #         if keyword in text_message:
+            #             logger.info(f"直接從白名單關鍵詞提取產品名: {keyword}")
+            #             product_name = keyword
+            #             break
+            # 
+            # if product_name:
+            #     logger.info(f"檢測到產品真偽詢問: {product_name}")
+            #     
+            #     # 檢查產品名稱是否足夠具體
+            #     if len(product_name) >= 2:
+            #         logger.info(f"執行健康產品分析: {product_name}")
+            #         
+            #         analysis_result = analyze_health_product(product_name, display_name, user_id)
+            #         
+            #         if analysis_result and analysis_result.get("success", False):
+            #             analysis_data = analysis_result.get("result", {})
+            #             flex_message = create_analysis_flex_message(analysis_data, display_name, text_message, user_id)
+            #             
+            #             if flex_message:
+            #                 try:
+            #                     line_bot_api.reply_message(reply_token, flex_message)
+            #                     logger.info(f"健康產品分析回覆成功: {user_id}")
+            #             
+            #                             # 保存互動記錄到Firebase
+            #                             firebase_manager.save_user_interaction(
+            #                                 user_id, display_name, text_message, f"健康產品分析: {product_name}",
+            #                                 is_fraud_related=True,
+            #                                 fraud_type=analysis_data.get("fraud_type"),
+            #                                 risk_level=analysis_data.get("risk_level")
+            #                             )
+            #                         except LineBotApiError as e:
+            #                             logger.error(f"發送健康產品分析Flex訊息時發生錯誤: {e}")
+            #                             if "Invalid reply token" in str(e):
+            #                                 try:
+            #                                     line_bot_api.push_message(user_id, flex_message)
+            #                                     logger.info(f"健康產品分析回覆令牌無效，改用push_message成功: {user_id}")
+            #                                 
+            #                                     # 保存互動記錄到Firebase
+            #                                     firebase_manager.save_user_interaction(
+            #                                         user_id, display_name, text_message, f"健康產品分析: {product_name}",
+            #                                         is_fraud_related=True,
+            #                                         fraud_type=analysis_data.get("fraud_type"),
+            #                                         risk_level=analysis_data.get("risk_level")
+            #                                     )
+            #                                 except Exception as push_error:
+            #                                     logger.error(f"健康產品分析使用push_message也失敗: {push_error}")
+            #                         else:
+            #                             # 如果Flex消息創建失敗，發送基本文本消息
+            #                             text_response = f"🔍 產品分析結果\n\n{analysis_data.get('explanation', '無法解析產品資訊')}\n\n{analysis_data.get('suggestions', '請諮詢專業醫療人員意見')}"
+            #                             
+            #                             try:
+            #                                 line_bot_api.reply_message(reply_token, TextSendMessage(text=text_response))
+            #                             
+            #                                 # 保存互動記錄到Firebase
+            #                                 firebase_manager.save_user_interaction(
+            #                                     user_id, display_name, text_message, f"健康產品分析(文字): {product_name}",
+            #                                     is_fraud_related=True,
+            #                                     fraud_type=analysis_data.get("fraud_type"),
+            #                                     risk_level=analysis_data.get("risk_level")
+            #                                 )
+            #                             except Exception as text_error:
+            #                                 logger.error(f"發送健康產品分析文本回覆失敗: {text_error}")
+            #                         
+            #                         return
+            #                     else:
+            #                         logger.warning(f"健康產品分析失敗: {product_name}")
+            #                         # 如果健康產品分析失敗，會繼續執行一般詐騙分析
             
             # 執行詐騙分析
             logger.info(f"進入詐騙分析模式: {cleaned_message}")
@@ -2806,13 +2807,14 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
     if len(message_lower) < 5:
         return False
     
-    # 1. 檢查是否為醫美和健康相關白名單關鍵詞的查詢
-    if bot_trigger_keyword in message:
-        # 檢查是否包含醫美健康白名單關鍵詞
-        for keyword in BEAUTY_HEALTH_WHITELIST:
-            if keyword in message:
-                logger.info(f"檢測到醫美健康白名單關鍵詞: {keyword}")
-                return True
+    # 移除健康產品分析功能
+    # # 1. 檢查是否為醫美和健康相關白名單關鍵詞的查詢
+    # if bot_trigger_keyword in message:
+    #     # 檢查是否包含醫美健康白名單關鍵詞
+    #     for keyword in BEAUTY_HEALTH_WHITELIST:
+    #         if keyword in message:
+    #             logger.info(f"檢測到醫美健康白名單關鍵詞: {keyword}")
+    #             return True
     
     # 2. 如果使用者明確請求分析訊息，則直接進行詐騙分析
     explicit_analysis_requests = [
@@ -2831,12 +2833,13 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
         logger.info("檢測到URL，觸發詐騙分析")
         return True
     
-    # 4. 檢查是否為健康產品或醫美療程的真偽詢問
-    if bot_trigger_keyword in message:
-        product_name = extract_health_product(message, bot_trigger_keyword)
-        if product_name:
-            logger.info(f"檢測到健康產品/醫美療程詢問: {product_name}")
-            return True
+    # 移除健康產品分析功能
+    # # 4. 檢查是否為健康產品或醫美療程的真偽詢問
+    # if bot_trigger_keyword in message:
+    #     product_name = extract_health_product(message, bot_trigger_keyword)
+    #     if product_name:
+    #         logger.info(f"檢測到健康產品/醫美療程詢問: {product_name}")
+    #         return True
     
     # 保留原有的簡單檢查，作為備用
     product_query_patterns = [
@@ -3019,332 +3022,335 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
 # 初始化FlexMessageService
 flex_message_service = FlexMessageService()
 
-def extract_health_product(query, bot_trigger_keyword='土豆幫我看'):
-    """
-    從用戶查詢中提取健康產品或醫美療程名稱。
-    
-    參數:
-        query (str): 用戶的查詢文本
-        bot_trigger_keyword (str): 機器人的觸發關鍵詞，預設為'土豆'
-        
-    返回:
-        str: 提取出的產品名稱，如果無法提取則返回None
-    """
-    # 先檢查是否包含白名單關鍵詞，直接返回第一個匹配的關鍵詞
-    if bot_trigger_keyword in query:
-        cleaned_query = query.replace(bot_trigger_keyword, "").strip()
-        for keyword in BEAUTY_HEALTH_WHITELIST:
-            if keyword in cleaned_query:
-                logger.info(f"從白名單直接匹配到產品: {keyword}")
-                return keyword
-    
-    # 終極版正則表達式 - 處理各種複雜的格式問題
-    pattern = re.compile(
-        r'.*?' + re.escape(bot_trigger_keyword) + r'.*?' +  # 匹配觸發詞及其前後文字
-        r'(?:' +  # 開始匹配各種引導詞或前綴
-        r'(?:請問|我想問|我問一下|想了解)?[,，~～\s]*' +  # 問句引導詞
-        r'(?:你知道|知道|了解)?[,，~～\s]*' +  # 知識性引導詞
-        r'(?:那個|這個)?[,，~～\s]*' +  # 指示詞
-        r'(?:什麼|所謂)?[,，~～\s]*' +  # 疑問詞
-        r')?' +
-        r'(.*?)' +  # 捕獲組：產品/療程名稱
-        r'(?:' +  # 開始匹配問句結尾
-        r'是真的嗎|真的假的|是騙人的嗎|' +  # 真偽型問句
-        r'有效果嗎|有用嗎|有效嗎|有人用過嗎|怎麼樣|好用嗎|推薦嗎|效果如何|有沒有用|有沒有效|好不好|' +  # 效果型問句
-        r'真的能\S+嗎|會有效果嗎|真的會\S+嗎' +  # 能力型問句
-        r')' +
-        r'[啊呢吧呀哦]?[?？]?$'  # 語氣詞和問號
-    )
-    
-    match = pattern.search(query)
-    if not match:
-        # 嘗試更寬鬆的模式：包含關鍵詞且有疑問詞
-        loose_pattern = re.compile(
-            r'.*?' + re.escape(bot_trigger_keyword) + r'.*?' +  # 匹配觸發詞
-            r'.*?([\u4e00-\u9fff]{2,10})(?:.*?(?:嗎|呢|怎麼樣|如何|可以|安全|效果)[?？]?)?'  # 匹配2-10個中文字符後跟疑問詞
-        )
-        loose_match = loose_pattern.search(query)
-        if loose_match:
-            potential_product = loose_match.group(1)
-            logger.info(f"使用寬鬆模式匹配到可能的產品: {potential_product}")
-            return clean_product_name(potential_product)
-        return None
-    
-    product_name = match.group(1)
-    return clean_product_name(product_name)
+# 移除健康產品分析功能
+# def extract_health_product(query, bot_trigger_keyword='土豆幫我看'):
+#     """
+#     從用戶查詢中提取健康產品或醫美療程名稱。
+#     
+#     參數:
+#         query (str): 用戶的查詢文本
+#         bot_trigger_keyword (str): 機器人的觸發關鍵詞，預設為'土豆'
+#         
+#     返回:
+#         str: 提取出的產品名稱，如果無法提取則返回None
+#     """
+#     # 先檢查是否包含白名單關鍵詞，直接返回第一個匹配的關鍵詞
+#     if bot_trigger_keyword in query:
+#         cleaned_query = query.replace(bot_trigger_keyword, "").strip()
+#         for keyword in BEAUTY_HEALTH_WHITELIST:
+#             if keyword in cleaned_query:
+#                 logger.info(f"從白名單直接匹配到產品: {keyword}")
+#                 return keyword
+#     
+#     # 終極版正則表達式 - 處理各種複雜的格式問題
+#     pattern = re.compile(
+#         r'.*?' + re.escape(bot_trigger_keyword) + r'.*?' +  # 匹配觸發詞及其前後文字
+#         r'(?:' +  # 開始匹配各種引導詞或前綴
+#         r'(?:請問|我想問|我問一下|想了解)?[,，~～\s]*' +  # 問句引導詞
+#         r'(?:你知道|知道|了解)?[,，~～\s]*' +  # 知識性引導詞
+#         r'(?:那個|這個)?[,，~～\s]*' +  # 指示詞
+#         r'(?:什麼|所謂)?[,，~～\s]*' +  # 疑問詞
+#         r')?' +
+#         r'(.*?)' +  # 捕獲組：產品/療程名稱
+#         r'(?:' +  # 開始匹配問句結尾
+#         r'是真的嗎|真的假的|是騙人的嗎|' +  # 真偽型問句
+#         r'有效果嗎|有用嗎|有效嗎|有人用過嗎|怎麼樣|好用嗎|推薦嗎|效果如何|有沒有用|有沒有效|好不好|' +  # 效果型問句
+#         r'真的能\S+嗎|會有效果嗎|真的會\S+嗎' +  # 能力型問句
+#         r')' +
+#         r'[啊呢吧呀哦]?[?？]?$'  # 語氣詞和問號
+#     )
+#     
+#     match = pattern.search(query)
+#     if not match:
+#         # 嘗試更寬鬆的模式：包含關鍵詞且有疑問詞
+#         loose_pattern = re.compile(
+#             r'.*?' + re.escape(bot_trigger_keyword) + r'.*?' +  # 匹配觸發詞
+#             r'.*?([\u4e00-\u9fff]{2,10})(?:.*?(?:嗎|呢|怎麼樣|如何|可以|安全|效果)[?？]?)?'  # 匹配2-10個中文字符後跟疑問詞
+#         )
+#         loose_match = loose_pattern.search(query)
+#         if loose_match:
+#             potential_product = loose_match.group(1)
+#             logger.info(f"使用寬鬆模式匹配到可能的產品: {potential_product}")
+#             return clean_product_name(potential_product)
+#         return None
+#     
+#     product_name = match.group(1)
+#     return clean_product_name(product_name)
 
-def clean_product_name(text):
-    """
-    清理從用戶查詢中提取的產品名稱，移除不必要的前綴、後綴和干擾詞。
-    
-    參數:
-        text (str): 提取的原始產品名稱文本
-        
-    返回:
-        str: 清理後的產品名稱
-    """
-    if not text:
-        return text
-    
-    # 保存原始文本用於特殊情況處理
-    original_text = text
-    
-    # 移除開頭的標點和空白
-    text = re.sub(r'^[,，~～、\s]+', '', text)
-    
-    # 移除請問、那個、什麼等前綴詞
-    text = re.sub(r'^(?:請問|我想問|那個|這個|什麼|所謂)[,，~～、\s]*', '', text)
-    
-    # 移除「知道」、「了解」等詞
-    text = re.sub(r'^(?:你知道|知道|了解)[,，~～、\s]*', '', text)
-    
-    # 移除「說」、「聽說」等引述詞及其前後內容
-    text = re.sub(r'^.*?(?:說|聽說|告訴我)[,，~～、\s]*', '', text)
-    text = re.sub(r'^的說[,，~～、\s]*', '', text)
-    
-    # 移除描述性片段
-    text = re.sub(r'我昨天看到廣告有一款', '', text)
-    text = re.sub(r'有人跟我說', '', text)
-    
-    # 移除額外的干擾字符
-    text = text.replace('啊，', '').replace('~', '').replace('，', '')
-    
-    # 處理特殊情況
-    if '知道' in text and '提升' in text:
-        text = re.sub(r'知道', '', text)
-    
-    # 處理「我想了解」等前綴
-    text = re.sub(r'^我想了解', '', text)
-    
-    # 處理長句中的產品名稱，通常取前面部分
-    if '可以' in text and len(text) > 15:
-        text = text.split('可以')[0].strip()
-    
-    # 處理「效果」、「功效」等詞
-    text = re.sub(r'效果$', '', text)
-    
-    # 處理「在家裡自己用」等描述
-    text = re.sub(r'在家裡自己用$', '', text)
-    text = re.sub(r'在家裡自己用真的會$', '', text)
-    
-    # 處理「的效果」等後綴
-    text = re.sub(r'的效果$', '', text)
-    
-    # 處理「這個」結尾
-    text = re.sub(r'這個$', '', text)
-    
-    # 處理尾部「真的」等詞
-    text = re.sub(r'真的$', '', text)
-    
-    # 處理超聲刀拉提的 -> 超聲刀拉提
-    text = re.sub(r'的$', '', text)
-    
-    # 處理特殊情況 - 從上下文推斷產品名稱
-    special_cases = {
-        '能祛斑': '光電美容機',
-        '微針滾輪在家裡自己用': '微針滾輪',
-        '微針滾輪在家裡自己用真的會': '微針滾輪'
-    }
-    
-    if text in special_cases:
-        text = special_cases[text]
-    
-    # 如果文本非常短（例如 "能祛斑"），但原始文本包含更多信息，可能需要特殊處理
-    if len(text) < 5 and len(original_text) > 15:
-        # 嘗試提取完整產品名
-        if "光電美容機" in original_text:
-            text = "光電美容機"
-        elif "電波拉皮" in original_text:
-            text = "電波拉皮"
-    
-    # 如果仍然包含「那個什麼」，嘗試移除它
-    text = re.sub(r'^那個什麼', '', text)
-    
-    # 處理「喝」開頭的情況
-    if text.startswith('喝'):
-        text = text[1:]
-    
-    # 處理長句中包含「可以改善」、「可以調理」等
-    if '可以改善' in text:
-        text = text.split('可以改善')[0].strip()
-    elif '可以調理' in text:
-        text = text.split('可以調理')[0].strip()
-    
-    # 如果仍然是未清理的長句，可能需要截取關鍵部分
-    if len(text) > 30:
-        # 嘗試只保留括號前的部分加括號內容
-        if '(' in text and ')' in text:
-            bracket_pos = text.find('(')
-            text_before = text[:bracket_pos].strip()
-            bracket_content = text[bracket_pos:]
-            bracket_end = bracket_content.find(')') + 1
-            if bracket_end > 0:
-                bracket_content = bracket_content[:bracket_end]
-            text = text_before + bracket_content
-    
-    # 最後的修飾和檢查
-    text = text.strip()
-    
-    # 檢查是否有「有助」等詞
-    if '有助' in text:
-        text = text.split('有助')[0].strip()
-    
-    return text
+# 移除健康產品分析功能
+# def clean_product_name(text):
+#     """
+#     清理從用戶查詢中提取的產品名稱，移除不必要的前綴、後綴和干擾詞。
+#     
+#     參數:
+#         text (str): 提取的原始產品名稱文本
+#         
+#     返回:
+#         str: 清理後的產品名稱
+#     """
+#     if not text:
+#         return text
+#     
+#     # 保存原始文本用於特殊情況處理
+#     original_text = text
+#     
+#     # 移除開頭的標點和空白
+#     text = re.sub(r'^[,，~～、\s]+', '', text)
+#     
+#     # 移除請問、那個、什麼等前綴詞
+#     text = re.sub(r'^(?:請問|我想問|那個|這個|什麼|所謂)[,，~～、\s]*', '', text)
+#     
+#     # 移除「知道」、「了解」等詞
+#     text = re.sub(r'^(?:你知道|知道|了解)[,，~～、\s]*', '', text)
+#     
+#     # 移除「說」、「聽說」等引述詞及其前後內容
+#     text = re.sub(r'^.*?(?:說|聽說|告訴我)[,，~～、\s]*', '', text)
+#     text = re.sub(r'^的說[,，~～、\s]*', '', text)
+#     
+#     # 移除描述性片段
+#     text = re.sub(r'我昨天看到廣告有一款', '', text)
+#     text = re.sub(r'有人跟我說', '', text)
+#     
+#     # 移除額外的干擾字符
+#     text = text.replace('啊，', '').replace('~', '').replace('，', '')
+#     
+#     # 處理特殊情況
+#     if '知道' in text and '提升' in text:
+#         text = re.sub(r'知道', '', text)
+#     
+#     # 處理「我想了解」等前綴
+#     text = re.sub(r'^我想了解', '', text)
+#     
+#     # 處理長句中的產品名稱，通常取前面部分
+#     if '可以' in text and len(text) > 15:
+#         text = text.split('可以')[0].strip()
+#     
+#     # 處理「效果」、「功效」等詞
+#     text = re.sub(r'效果$', '', text)
+#     
+#     # 處理「在家裡自己用」等描述
+#     text = re.sub(r'在家裡自己用$', '', text)
+#     text = re.sub(r'在家裡自己用真的會$', '', text)
+#     
+#     # 處理「的效果」等後綴
+#     text = re.sub(r'的效果$', '', text)
+#     
+#     # 處理「這個」結尾
+#     text = re.sub(r'這個$', '', text)
+#     
+#     # 處理尾部「真的」等詞
+#     text = re.sub(r'真的$', '', text)
+#     
+#     # 處理超聲刀拉提的 -> 超聲刀拉提
+#     text = re.sub(r'的$', '', text)
+#     
+#     # 處理特殊情況 - 從上下文推斷產品名稱
+#     special_cases = {
+#         '能祛斑': '光電美容機',
+#         '微針滾輪在家裡自己用': '微針滾輪',
+#         '微針滾輪在家裡自己用真的會': '微針滾輪'
+#     }
+#     
+#     if text in special_cases:
+#         text = special_cases[text]
+#     
+#     # 如果文本非常短（例如 "能祛斑"），但原始文本包含更多信息，可能需要特殊處理
+#     if len(text) < 5 and len(original_text) > 15:
+#         # 嘗試提取完整產品名
+#         if "光電美容機" in original_text:
+#             text = "光電美容機"
+#         elif "電波拉皮" in original_text:
+#             text = "電波拉皮"
+#     
+#     # 如果仍然包含「那個什麼」，嘗試移除它
+#     text = re.sub(r'^那個什麼', '', text)
+#     
+#     # 處理「喝」開頭的情況
+#     if text.startswith('喝'):
+#         text = text[1:]
+#     
+#     # 處理長句中包含「可以改善」、「可以調理」等
+#     if '可以改善' in text:
+#         text = text.split('可以改善')[0].strip()
+#     elif '可以調理' in text:
+#         text = text.split('可以調理')[0].strip()
+#     
+#     # 如果仍然是未清理的長句，可能需要截取關鍵部分
+#     if len(text) > 30:
+#         # 嘗試只保留括號前的部分加括號內容
+#         if '(' in text and ')' in text:
+#             bracket_pos = text.find('(')
+#             text_before = text[:bracket_pos].strip()
+#             bracket_content = text[bracket_pos:]
+#             bracket_end = bracket_content.find(')') + 1
+#             if bracket_end > 0:
+#                 bracket_content = bracket_content[:bracket_end]
+#             text = text_before + bracket_content
+#     
+#     # 最後的修飾和檢查
+#     text = text.strip()
+#     
+#     # 檢查是否有「有助」等詞
+#     if '有助' in text:
+#         text = text.split('有助')[0].strip()
+#     
+#     return text
 
-def analyze_health_product(product_name, display_name="朋友", user_id=None):
-    """專門分析健康產品、減肥產品和美容療程，提供客觀中立的分析"""
-    try:
-        # 拼接專門的分析提示詞
-        analysis_prompt = f"""
-        請以醫學專家和消費者保護專家的角度，對以下產品/療程進行客觀分析：
-        ---
-        {product_name}
-        ---
-        
-        請根據科學證據和醫學研究，按照以下格式回答：
-        
-        產品/療程名稱：[產品或療程的完整名稱]
-        原理描述：[用簡單易懂的語言解釋其聲稱的工作原理]
-        科學依據：[是否有科學研究支持其效果，有哪些研究結果]
-        潛在風險：[使用該產品或療程可能帶來的健康風險]
-        替代方案：[更有科學依據的替代方法]
-        消費建議：[給消費者的客觀建議]
-        風險評級：[低風險/中風險/高風險] - 根據產品安全性和宣傳可信度
-        
-        請使用客觀中立的語氣，不要過度否定或肯定，而是基於已知的科學證據進行分析。
-        如果資訊不足，請明確說明。
-        """
-        
-        if not openai_client:
-            logger.warning("OpenAI客戶端未初始化，使用模擬數據進行產品分析")
-            
-            # 使用模擬數據進行分析
-            mock_analysis = f"""
-            產品/療程名稱：{product_name}
-            原理描述：該產品聲稱通過「超微波」技術直接作用於脂肪細胞，促進脂肪分解和代謝，從而達到減脂效果。
-            科學依據：目前醫學文獻中尚無「超微波」這一特定技術的明確科學證據。大多數非侵入性減脂技術需要長期、系統性的臨床研究支持其有效性和安全性。
-            潛在風險：可能存在皮膚刺激、暫時性不適等問題。過度宣傳效果可能導致消費者不切實際的期望，影響正常的健康管理計劃。
-            替代方案：科學證據支持的減重方法包括均衡飲食、規律運動、生活方式改變，必要時在專業醫生指導下進行。
-            消費建議：建議先諮詢專業醫師意見，不要僅依賴產品宣傳做決定。比較不同減重方法的成本效益，優先選擇有科學依據的方案。
-            風險評級：中風險 - 主要風險來自可能的誇大宣傳和缺乏足夠科學證據，而非產品本身的安全性問題。
-            """
-            
-            parsed_result = parse_health_product_analysis(mock_analysis, display_name)
-            parsed_result["display_name"] = display_name
-            
-            return {
-                "success": True,
-                "message": "模擬分析完成",
-                "result": parsed_result,
-                "raw_result": mock_analysis
-            }
-        
-        chat_response = openai_client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "你是一位專業醫學和消費者保護專家，負責對健康產品、減肥產品和美容療程進行客觀分析。你應該基於科學證據提供分析，語氣要中立客觀，不要過度否定或肯定。你的回應應該幫助消費者做出明智的選擇。"},
-                {"role": "user", "content": analysis_prompt}
-            ],
-            temperature=0.2,
-            max_tokens=1000
-        )
-        
-        if chat_response and chat_response.choices:
-            analysis_result = chat_response.choices[0].message.content.strip()
-            logger.info(f"健康產品分析結果: {analysis_result[:100]}...")
-            
-            # 解析結果
-            parsed_result = parse_health_product_analysis(analysis_result, display_name)
-            parsed_result["display_name"] = display_name
-            
-            return {
-                "success": True,
-                "message": "分析完成",
-                "result": parsed_result,
-                "raw_result": analysis_result
-            }
-        else:
-            logger.error("OpenAI API 返回空結果")
-            return {
-                "success": False,
-                "message": "分析失敗，請稍後再試"
-            }
-            
-    except Exception as e:
-        logger.exception(f"分析健康產品時發生錯誤: {e}")
-        return {
-            "success": False,
-            "message": f"分析過程中發生錯誤: {str(e)}"
-        }
-
-def parse_health_product_analysis(analysis_result, display_name="朋友"):
-    """解析健康產品分析結果"""
-    try:
-        lines = analysis_result.strip().split('\n')
-        result = {
-            "product_name": "未知產品",
-            "principle": "無法解析產品原理。",
-            "scientific_basis": "無法解析科學依據。",
-            "potential_risks": "無法解析潛在風險。",
-            "alternatives": "無法解析替代方案。",
-            "consumer_advice": "無法解析消費建議。",
-            "risk_level": "中風險",
-        }
-        
-        # 將解析結果映射到我們的詐騙分析格式
-        fraud_result = {
-            "risk_level": "低(請依自身狀況評估)",
-            "fraud_type": "健康諮詢",
-            "explanation": "無法解析分析結果。",
-            "suggestions": "建議謹慎處理。",
-            "is_emerging": False,
-            "display_name": display_name
-        }
-        
-        for line in lines:
-            line = line.strip()
-            if "產品/療程名稱：" in line or "產品/療程名稱:" in line:
-                result["product_name"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
-            elif "原理描述：" in line or "原理描述:" in line:
-                result["principle"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
-            elif "科學依據：" in line or "科學依據:" in line:
-                result["scientific_basis"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
-            elif "潛在風險：" in line or "潛在風險:" in line:
-                result["potential_risks"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
-            elif "替代方案：" in line or "替代方案:" in line:
-                result["alternatives"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
-            elif "消費建議：" in line or "消費建議:" in line:
-                result["consumer_advice"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
-            elif "風險評級：" in line or "風險評級:" in line:
-                # 忽略原始分析的風險等級，統一設為低風險
-                pass
-        
-        # 構建精簡的解釋文本
-        explanation = f"「{result['product_name']}」科學分析：\n\n"
-        explanation += f"🔍 原理：{result['principle'][:120]}{'...' if len(result['principle']) > 120 else ''}\n\n"
-        explanation += f"📊 科學依據：{result['scientific_basis'][:120]}{'...' if len(result['scientific_basis']) > 120 else ''}\n\n"
-        explanation += f"⚠️ 潛在風險：{result['potential_risks'][:120]}{'...' if len(result['potential_risks']) > 120 else ''}"
-        
-        fraud_result["explanation"] = explanation
-        
-        # 構建精簡的建議文本
-        suggestions = f"💡 替代方案：{result['alternatives'][:120]}{'...' if len(result['alternatives']) > 120 else ''}\n\n"
-        suggestions += f"🛒 建議：{result['consumer_advice'][:120]}{'...' if len(result['consumer_advice']) > 120 else ''}"
-        
-        fraud_result["suggestions"] = suggestions
-        
-        return fraud_result
-        
-    except Exception as e:
-        logger.error(f"解析健康產品分析結果時發生錯誤: {e}")
-        return {
-            "risk_level": "低(請依自身狀況評估)",
-            "fraud_type": "健康諮詢",
-            "explanation": "此產品/療程可能宣傳效果誇大，請謹慎考慮並諮詢專業醫療人員意見。",
-            "suggestions": "🔍 購買前先查詢相關科學研究\n🛡️ 諮詢專業醫生或相關專家\n⚠️ 警惕誇大的宣傳和效果承諾",
-            "is_emerging": False,
-            "display_name": display_name
-        }
+# 移除健康產品分析功能
+# def analyze_health_product(product_name, display_name="朋友", user_id=None):
+#     """專門分析健康產品、減肥產品和美容療程，提供客觀中立的分析"""
+#     try:
+#         # 拼接專門的分析提示詞
+#         analysis_prompt = f"""
+#         請以醫學專家和消費者保護專家的角度，對以下產品/療程進行客觀分析：
+#         ---
+#         {product_name}
+#         ---
+#         
+#         請根據科學證據和醫學研究，按照以下格式回答：
+#         
+#         產品/療程名稱：[產品或療程的完整名稱]
+#         原理描述：[用簡單易懂的語言解釋其聲稱的工作原理]
+#         科學依據：[是否有科學研究支持其效果，有哪些研究結果]
+#         潛在風險：[使用該產品或療程可能帶來的健康風險]
+#         替代方案：[更有科學依據的替代方法]
+#         消費建議：[給消費者的客觀建議]
+#         風險評級：[低風險/中風險/高風險] - 根據產品安全性和宣傳可信度
+#         
+#         請使用客觀中立的語氣，不要過度否定或肯定，而是基於已知的科學證據進行分析。
+#         如果資訊不足，請明確說明。
+#         """
+#         
+#         if not openai_client:
+#             logger.warning("OpenAI客戶端未初始化，使用模擬數據進行產品分析")
+#             
+#             # 使用模擬數據進行分析
+#             mock_analysis = f"""
+#             產品/療程名稱：{product_name}
+#             原理描述：該產品聲稱通過「超微波」技術直接作用於脂肪細胞，促進脂肪分解和代謝，從而達到減脂效果。
+#             科學依據：目前醫學文獻中尚無「超微波」這一特定技術的明確科學證據。大多數非侵入性減脂技術需要長期、系統性的臨床研究支持其有效性和安全性。
+#             潛在風險：可能存在皮膚刺激、暫時性不適等問題。過度宣傳效果可能導致消費者不切實際的期望，影響正常的健康管理計劃。
+#             替代方案：科學證據支持的減重方法包括均衡飲食、規律運動、生活方式改變，必要時在專業醫生指導下進行。
+#             消費建議：建議先諮詢專業醫師意見，不要僅依賴產品宣傳做決定。比較不同減重方法的成本效益，優先選擇有科學依據的方案。
+#             風險評級：中風險 - 主要風險來自可能的誇大宣傳和缺乏足夠科學證據，而非產品本身的安全性問題。
+#             """
+#             
+#             parsed_result = parse_health_product_analysis(mock_analysis, display_name)
+#             parsed_result["display_name"] = display_name
+#             
+#             return {
+#                 "success": True,
+#                 "message": "模擬分析完成",
+#                 "result": parsed_result,
+#                 "raw_result": mock_analysis
+#             }
+#         
+#         chat_response = openai_client.chat.completions.create(
+#             model="gpt-4o-mini",
+#             messages=[
+#                 {"role": "system", "content": "你是一位專業醫學和消費者保護專家，負責對健康產品、減肥產品和美容療程進行客觀分析。你應該基於科學證據提供分析，語氣要中立客觀，不要過度否定或肯定。你的回應應該幫助消費者做出明智的選擇。"},
+#                 {"role": "user", "content": analysis_prompt}
+#             ],
+#             temperature=0.2,
+#             max_tokens=1000
+#         )
+#         
+#         if chat_response and chat_response.choices:
+#             analysis_result = chat_response.choices[0].message.content.strip()
+#             logger.info(f"健康產品分析結果: {analysis_result[:100]}...")
+#             
+#             # 解析結果
+#             parsed_result = parse_health_product_analysis(analysis_result, display_name)
+#             parsed_result["display_name"] = display_name
+#             
+#             return {
+#                 "success": True,
+#                 "message": "分析完成",
+#                 "result": parsed_result,
+#                 "raw_result": analysis_result
+#             }
+#         else:
+#             logger.error("OpenAI API 返回空結果")
+#             return {
+#                 "success": False,
+#                 "message": "分析失敗，請稍後再試"
+#             }
+#             
+#     except Exception as e:
+#         logger.exception(f"分析健康產品時發生錯誤: {e}")
+#         return {
+#             "success": False,
+#             "message": f"分析過程中發生錯誤: {str(e)}"
+#         }
+# 
+# def parse_health_product_analysis(analysis_result, display_name="朋友"):
+#     """解析健康產品分析結果"""
+#     try:
+#         lines = analysis_result.strip().split('\n')
+#         result = {
+#             "product_name": "未知產品",
+#             "principle": "無法解析產品原理。",
+#             "scientific_basis": "無法解析科學依據。",
+#             "potential_risks": "無法解析潛在風險。",
+#             "alternatives": "無法解析替代方案。",
+#             "consumer_advice": "無法解析消費建議。",
+#             "risk_level": "中風險",
+#         }
+#         
+#         # 將解析結果映射到我們的詐騙分析格式
+#         fraud_result = {
+#             "risk_level": "低(請依自身狀況評估)",
+#             "fraud_type": "健康諮詢",
+#             "explanation": "無法解析分析結果。",
+#             "suggestions": "建議謹慎處理。",
+#             "is_emerging": False,
+#             "display_name": display_name
+#         }
+#         
+#         for line in lines:
+#             line = line.strip()
+#             if "產品/療程名稱：" in line or "產品/療程名稱:" in line:
+#                 result["product_name"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+#             elif "原理描述：" in line or "原理描述:" in line:
+#                 result["principle"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+#             elif "科學依據：" in line or "科學依據:" in line:
+#                 result["scientific_basis"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+#             elif "潛在風險：" in line or "潛在風險:" in line:
+#                 result["potential_risks"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+#             elif "替代方案：" in line or "替代方案:" in line:
+#                 result["alternatives"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+#             elif "消費建議：" in line or "消費建議:" in line:
+#                 result["consumer_advice"] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+#             elif "風險評級：" in line or "風險評級:" in line:
+#                 # 忽略原始分析的風險等級，統一設為低風險
+#                 pass
+#         
+#         # 構建精簡的解釋文本
+#         explanation = f"「{result['product_name']}」科學分析：\n\n"
+#         explanation += f"🔍 原理：{result['principle'][:120]}{'...' if len(result['principle']) > 120 else ''}\n\n"
+#         explanation += f"📊 科學依據：{result['scientific_basis'][:120]}{'...' if len(result['scientific_basis']) > 120 else ''}\n\n"
+#         explanation += f"⚠️ 潛在風險：{result['potential_risks'][:120]}{'...' if len(result['potential_risks']) > 120 else ''}"
+#         
+#         fraud_result["explanation"] = explanation
+#         
+#         # 構建精簡的建議文本
+#         suggestions = f"💡 替代方案：{result['alternatives'][:120]}{'...' if len(result['alternatives']) > 120 else ''}\n\n"
+#         suggestions += f"🛒 建議：{result['consumer_advice'][:120]}{'...' if len(result['consumer_advice']) > 120 else ''}"
+#         
+#         fraud_result["suggestions"] = suggestions
+#         
+#         return fraud_result
+#         
+#     except Exception as e:
+#         logger.error(f"解析健康產品分析結果時發生錯誤: {e}")
+#         return {
+#             "risk_level": "低(請依自身狀況評估)",
+#             "fraud_type": "健康諮詢",
+#             "explanation": "此產品/療程可能宣傳效果誇大，請謹慎考慮並諮詢專業醫療人員意見。",
+#             "suggestions": "🔍 購買前先查詢相關科學研究\n🛡️ 諮詢專業醫生或相關專家\n⚠️ 警惕誇大的宣傳和效果承諾",
+#             "is_emerging": False,
+#             "display_name": display_name
+#         }
 
 def get_website_title(url):
     """獲取網站的標題"""
