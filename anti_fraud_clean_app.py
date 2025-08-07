@@ -267,59 +267,105 @@ fraud_prevention_game_trigger_keywords = FRAUD_PREVENTION_GAME_TRIGGER_KEYWORDS
 bot_trigger_keyword = BOT_TRIGGER_KEYWORD
 analysis_prompts = ANALYSIS_PROMPTS
 
-def expand_short_url(url, max_expansions=3):
-    """嘗試展開短網址，支持多層展開，返回原始URL、最終展開後的URL和網頁標題"""
-    original_url = url
-    current_url = url
-    expansion_count = 0
-    
-    # 擴展短網址域名列表，包含chts.tw
-    short_url_domains = [
-        'bit.ly', 'tinyurl.com', 'goo.gl', 't.co', 'ow.ly', 
-        'is.gd', 'buff.ly', 'adf.ly', 'short.link', 'tiny.cc',
-        'reurl.cc', 'pse.is', 'lihi.io', 'lin.ee', 'cht.tw', 'chts.tw'
-    ]
-    
-    while expansion_count < max_expansions:
-        parsed_url = urlparse(current_url)
-        is_short_url = False
-        for domain in short_url_domains:
-            if domain in parsed_url.netloc:
-                is_short_url = True
-                break
-        
-        if not is_short_url:
-            logger.info(f"URL {current_url} 不是短網址，停止展開")
+def expand_short_url(url):
+    """嘗試展開短網址，返回原始URL、展開後的URL和網頁標題"""
+    parsed_url = urlparse(url)
+    is_short_url = False
+    for domain in SHORT_URL_DOMAINS:
+        if domain in parsed_url.netloc:
+            is_short_url = True
             break
+    
+    if not is_short_url:
+        return url, url, False, False, None
+    
+    try:
+        session = requests.Session()
+        session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        })
         
-        logger.info(f"第 {expansion_count + 1} 層展開: {current_url}")
+        expanded_url = None
+        page_title = None
         
+        # 先嘗試 HEAD 請求
         try:
-            session = requests.Session()
-            session.headers.update({
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            })
-            
-            expanded_url = None
-            page_title = None
-            
-            # 先嘗試 HEAD 請求
+            response = session.head(url, allow_redirects=True, timeout=10, verify=False)
+            expanded_url = response.url
+        except Exception:
+            pass
+        
+        # 如果 HEAD 請求沒有重定向，嘗試 GET 請求並檢查內容
+        if not expanded_url or expanded_url == url:
             try:
-                response = session.head(current_url, allow_redirects=True, timeout=10, verify=False)
+                response = session.get(url, allow_redirects=True, timeout=10, verify=False)
                 expanded_url = response.url
-                logger.info(f"HEAD 請求展開: {current_url} -> {expanded_url}")
-            except Exception as e:
-                logger.warning(f"HEAD 請求失敗: {e}")
-            
-            # 如果 HEAD 請求沒有重定向，嘗試 GET 請求並檢查內容
-            if not expanded_url or expanded_url == current_url:
+                
+                # 如果還是沒有重定向，檢查是否有 JavaScript 重定向或 meta refresh
+                if expanded_url == url and response.status_code == 200:
+                    from bs4 import BeautifulSoup
+                    import re
+                    
+                    soup = BeautifulSoup(response.text, 'html.parser')
+                    
+                    # 獲取頁面標題
+                    title_tag = soup.find('title')
+                    if title_tag:
+                        page_title = title_tag.get_text().strip()
+                        # 解碼HTML實體
+                        import html
+                        page_title = html.unescape(page_title)
+                    
+                    # 檢查 meta refresh
+                    meta_refresh = soup.find('meta', attrs={'http-equiv': 'refresh'})
+                    if meta_refresh:
+                        content = meta_refresh.get('content', '')
+                        url_match = re.search(r'url=(.+)', content, re.IGNORECASE)
+                        if url_match:
+                            expanded_url = url_match.group(1).strip('\'"')
+                            logger.info(f"通過 meta refresh 展開短網址: {url} -> {expanded_url}")
+                            return url, expanded_url, True, True, page_title
+                    
+                    # 檢查隱藏的 input 元素（如 reurl.cc 的做法）
+                    target_input = soup.find('input', {'id': 'target'}) or soup.find('input', {'name': 'target'})
+                    if target_input and target_input.get('value'):
+                        target_url = target_input.get('value')
+                        # 解碼 HTML 實體
+                        import html
+                        target_url = html.unescape(target_url)
+                        expanded_url = target_url
+                        logger.info(f"通過隱藏元素展開短網址: {url} -> {expanded_url}")
+                        return url, expanded_url, True, True, page_title
+                    
+                    # 檢查 JavaScript 重定向
+                    scripts = soup.find_all('script')
+                    for script in scripts:
+                        if script.string:
+                            script_content = script.string
+                            url_patterns = [
+                                r'window\.location\.href\s*=\s*["\']([^"\']+)["\']',
+                                r'window\.location\s*=\s*["\']([^"\']+)["\']',
+                                r'location\.href\s*=\s*["\']([^"\']+)["\']',
+                                r'location\s*=\s*["\']([^"\']+)["\']'
+                            ]
+                            
+                            for pattern in url_patterns:
+                                match = re.search(pattern, script_content)
+                                if match:
+                                    js_url = match.group(1)
+                                    expanded_url = js_url
+                                    logger.info(f"通過 JavaScript 展開短網址: {url} -> {expanded_url}")
+                                    return url, expanded_url, True, True, page_title
+                
+            except requests.exceptions.SSLError as e:
+                logger.warning(f"SSL 錯誤，嘗試不驗證證書: {e}")
+                # 對於 SSL 錯誤，嘗試不驗證證書
                 try:
-                    response = session.get(current_url, allow_redirects=True, timeout=10, verify=False)
+                    response = session.get(url, allow_redirects=True, timeout=10, verify=False)
                     expanded_url = response.url
-                    logger.info(f"GET 請求展開: {current_url} -> {expanded_url}")
                     
                     # 如果還是沒有重定向，檢查是否有 JavaScript 重定向或 meta refresh
-                    if expanded_url == current_url and response.status_code == 200:
+                    if expanded_url == url and response.status_code == 200:
                         from bs4 import BeautifulSoup
                         import re
                         
@@ -333,15 +379,6 @@ def expand_short_url(url, max_expansions=3):
                             import html
                             page_title = html.unescape(page_title)
                         
-                        # 檢查 meta refresh
-                        meta_refresh = soup.find('meta', attrs={'http-equiv': 'refresh'})
-                        if meta_refresh:
-                            content = meta_refresh.get('content', '')
-                            url_match = re.search(r'url=(.+)', content, re.IGNORECASE)
-                            if url_match:
-                                expanded_url = url_match.group(1).strip('\'"')
-                                logger.info(f"通過 meta refresh 展開短網址: {current_url} -> {expanded_url}")
-                        
                         # 檢查隱藏的 input 元素（如 reurl.cc 的做法）
                         target_input = soup.find('input', {'id': 'target'}) or soup.find('input', {'name': 'target'})
                         if target_input and target_input.get('value'):
@@ -350,129 +387,61 @@ def expand_short_url(url, max_expansions=3):
                             import html
                             target_url = html.unescape(target_url)
                             expanded_url = target_url
-                            logger.info(f"通過隱藏元素展開短網址: {current_url} -> {expanded_url}")
-                        
-                        # 檢查 JavaScript 重定向
-                        scripts = soup.find_all('script')
-                        for script in scripts:
-                            if script.string:
-                                script_content = script.string
-                                url_patterns = [
-                                    r'window\.location\.href\s*=\s*["\']([^"\']+)["\']',
-                                    r'window\.location\s*=\s*["\']([^"\']+)["\']',
-                                    r'location\.href\s*=\s*["\']([^"\']+)["\']',
-                                    r'location\s*=\s*["\']([^"\']+)["\']'
-                                ]
-                                
-                                for pattern in url_patterns:
-                                    match = re.search(pattern, script_content)
-                                    if match:
-                                        js_url = match.group(1)
-                                        expanded_url = js_url
-                                        logger.info(f"通過 JavaScript 展開短網址: {current_url} -> {expanded_url}")
-                                        break
+                            logger.info(f"通過隱藏元素展開短網址: {url} -> {expanded_url}")
+                            return url, expanded_url, True, True, page_title
+                except Exception as e2:
+                    logger.warning(f"重試後仍然失敗: {e2}")
+            except Exception as e:
+                logger.warning(f"GET 請求失敗: {e}")
+        
+        # 如果成功展開，獲取目標頁面的標題
+        if expanded_url and expanded_url != url:
+            try:
+                title_response = session.get(expanded_url, timeout=5)
+                if title_response.status_code == 200:
+                    # 使用與 get_website_title 相同的編碼處理邏輯
+                    content = title_response.text
                     
-                except requests.exceptions.SSLError as e:
-                    logger.warning(f"SSL 錯誤，嘗試不驗證證書: {e}")
-                    # 對於 SSL 錯誤，嘗試不驗證證書
-                    try:
-                        response = session.get(current_url, allow_redirects=True, timeout=10, verify=False)
-                        expanded_url = response.url
-                        
-                        # 如果還是沒有重定向，檢查是否有 JavaScript 重定向或 meta refresh
-                        if expanded_url == current_url and response.status_code == 200:
-                            from bs4 import BeautifulSoup
-                            import re
-                            
-                            soup = BeautifulSoup(response.text, 'html.parser')
-                            
-                            # 獲取頁面標題
-                            title_tag = soup.find('title')
-                            if title_tag:
-                                page_title = title_tag.get_text().strip()
-                                # 解碼HTML實體
-                                import html
-                                page_title = html.unescape(page_title)
-                            
-                            # 檢查隱藏的 input 元素（如 reurl.cc 的做法）
-                            target_input = soup.find('input', {'id': 'target'}) or soup.find('input', {'name': 'target'})
-                            if target_input and target_input.get('value'):
-                                target_url = target_input.get('value')
-                                # 解碼 HTML 實體
-                                import html
-                                target_url = html.unescape(target_url)
-                                expanded_url = target_url
-                                logger.info(f"通過隱藏元素展開短網址: {current_url} -> {expanded_url}")
-                    except Exception as e2:
-                        logger.warning(f"重試後仍然失敗: {e2}")
-                except Exception as e:
-                    logger.warning(f"GET 請求失敗: {e}")
-            
-            # 如果成功展開，更新當前URL並繼續下一層展開
-            if expanded_url and expanded_url != current_url:
-                current_url = expanded_url
-                expansion_count += 1
-                logger.info(f"成功展開到第 {expansion_count} 層: {expanded_url}")
-            else:
-                logger.info(f"無法進一步展開: {current_url}")
-                break
-                
-        except requests.exceptions.Timeout:
-            logger.warning(f"展開短網址超時: {current_url}")
-            break
-        except requests.exceptions.ConnectionError:
-            logger.warning(f"展開短網址連接失敗: {current_url}")
-            break
-        except Exception as e:
-            logger.error(f"展開短網址時出錯: {e}")
-            break
-    
-    # 獲取最終目標頁面的標題
-    final_page_title = None
-    if current_url != original_url:
-        try:
-            session = requests.Session()
-            session.headers.update({
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            })
-            
-            title_response = session.get(current_url, timeout=5, verify=False)
-            if title_response.status_code == 200:
-                # 使用與 get_website_title 相同的編碼處理邏輯
-                content = title_response.text
-                
-                # 檢測並修復編碼問題
-                if any(char in content for char in ['â', 'ã', 'Ã', 'å']):
-                    try:
-                        content = title_response.content.decode('utf-8')
-                    except UnicodeDecodeError:
+                    # 檢測並修復編碼問題
+                    if any(char in content for char in ['â', 'ã', 'Ã', 'å']):
                         try:
-                            content = title_response.content.decode('big5')
+                            content = title_response.content.decode('utf-8')
                         except UnicodeDecodeError:
                             try:
-                                content = title_response.content.decode('gb2312')
+                                content = title_response.content.decode('big5')
                             except UnicodeDecodeError:
-                                content = title_response.content.decode('utf-8', errors='ignore')
-                
-                # 只讀取前 1KB 來獲取標題
-                content = content[:1024]
-                title_match = re.search(r'<title[^>]*>([^<]+)</title>', content, re.IGNORECASE)
-                if title_match:
-                    final_page_title = title_match.group(1).strip()
-                    # 解碼HTML實體
-                    import html
-                    final_page_title = html.unescape(final_page_title)
-            title_response.close()
-        except Exception:
-            pass  # 獲取標題失敗不影響主要功能
-    
-    # 返回結果
-    if current_url != original_url:
-        logger.info(f"最終展開結果: {original_url} -> {current_url}")
-        return original_url, current_url, True, True, final_page_title
-    else:
-        logger.warning(f"短網址無法展開或已失效: {original_url}")
-        return original_url, original_url, True, False, final_page_title
+                                try:
+                                    content = title_response.content.decode('gb2312')
+                                except UnicodeDecodeError:
+                                    content = title_response.content.decode('utf-8', errors='ignore')
+                    
+                    # 只讀取前 1KB 來獲取標題
+                    content = content[:1024]
+                    title_match = re.search(r'<title[^>]*>([^<]+)</title>', content, re.IGNORECASE)
+                    if title_match:
+                        page_title = title_match.group(1).strip()
+                        # 解碼HTML實體
+                        import html
+                        page_title = html.unescape(page_title)
+                title_response.close()
+            except Exception:
+                pass  # 獲取標題失敗不影響主要功能
+            
+            logger.info(f"成功展開短網址: {url} -> {expanded_url}")
+            return url, expanded_url, True, True, page_title
+        else:
+            logger.warning(f"短網址無法展開或已失效: {url}")
+            return url, url, True, False, page_title
+            
+    except requests.exceptions.Timeout:
+        logger.warning(f"展開短網址超時: {url}")
+        return url, url, True, False, None
+    except requests.exceptions.ConnectionError:
+        logger.warning(f"展開短網址連接失敗: {url}")
+        return url, url, True, False, None
+    except Exception as e:
+        logger.error(f"展開短網址時出錯: {e}")
+        return url, url, True, False, None
 
 # 載入詐騙話術資料
 anti_fraud_tips = []
@@ -1217,6 +1186,101 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
                             },
                             "raw_result": f"短網址無法展開，存在安全風險：{original_url}"
                         }
+            else:
+                analysis_message = user_message
+        else:
+            analysis_message = user_message
+
+        # 只有在非短網址的情況下才進行網域變形檢測
+        if not is_short_url:
+            spoofing_result = detect_domain_spoofing(analysis_message, SAFE_DOMAINS)
+            if spoofing_result['is_spoofed']:
+                logger.warning(f"檢測到網域變形攻擊: {spoofing_result['spoofed_domain']} 模仿 {spoofing_result['original_domain']}")
+                return {
+                    "success": True,
+                    "message": "分析完成",
+                    "result": {
+                        "risk_level": "極高風險",
+                        "fraud_type": "網域名稱變形攻擊",
+                        "explanation": spoofing_result['risk_explanation'],
+                        "suggestions": f"🚫 立即停止使用這個網站\n⚠️ 不要輸入任何個人資料或密碼\n🔍 如需使用正牌網站，請直接搜尋 {spoofing_result['original_domain']} 或從書籤進入\n📞 將此可疑網址回報給165反詐騙專線",
+                        "is_emerging": False,
+                        "display_name": display_name,
+                        "original_url": original_url,
+                        "expanded_url": expanded_url,
+                        "is_short_url": is_short_url,
+                        "url_expanded_successfully": url_expanded_successfully,
+                        "is_domain_spoofing": True,
+                        "spoofing_result": spoofing_result
+                    },
+                    "raw_result": f"網域變形攻擊檢測：{spoofing_result['spoofing_type']} - {spoofing_result['risk_explanation']}"
+                }
+
+        # 檢查招聘訊息是否為低風險
+        recruitment_keywords = ["招聘", "招募", "徵才", "應徵", "面試", "職缺", "工作機會", "求才", "求職", "人才", "履歷", "人力銀行", "104人力銀行"]
+        is_recruitment_message = any(keyword in user_message for keyword in recruitment_keywords)
+        
+        if is_recruitment_message:
+            # 檢查是否包含正規人力銀行平台
+            has_job_bank = any(platform in user_message for platform in ["104人力銀行", "104", "1111人力銀行", "1111", "518人力銀行", "518", "yes123", "人力銀行"])
+            
+            # 檢查是否有完整公司名稱
+            company_pattern = re.compile(r'[^\s]{2,}(?:股份有限公司|有限公司|公司|企業社|工作室|事務所)')
+            has_company_name = bool(company_pattern.search(user_message))
+            
+            # 檢查是否有合法聯絡方式
+            phone_pattern = re.compile(r'(?:(?:連絡|聯絡|聯繫|電話|手機|聯絡電話|連絡電話)(?:電話)?[:：]?\s*)?(?:\(?\s*(?:0800|0[2-9]|0[2-9]-\d{7}|\d{2}-\d{6,8}|\d{2}\d{8}|09\d{2}[ -]?\d{6}|09\d{8})\)?(?:\s*(?:分機|#|ext|轉)\s*\d{2,5})?)', re.IGNORECASE)
+            has_phone = bool(phone_pattern.search(user_message))
+            
+            # 檢查是否有聯絡人
+            contact_pattern = re.compile(r'(?:(?:連絡|聯絡|聯繫)(?:人|窗口|人員)[:：]?\s*)([\u4e00-\u9fff]{1,3}(?:先生|小姐|專員|經理|主任|組長|店長)?)|(?:([\u4e00-\u9fff]{1,3})(?:先生|小姐|專員|經理|主任))', re.IGNORECASE)
+            has_contact_person = bool(contact_pattern.search(user_message))
+            
+            # 檢查是否有工作內容描述
+            job_description_pattern = re.compile(r'(?:工作內容|職務內容|工作職責|工作描述|工作項目|職務項目)')
+            has_job_description = bool(job_description_pattern.search(user_message))
+            
+            # 檢查是否有薪資資訊
+            salary_pattern = re.compile(r'(?:薪資|待遇|月薪|時薪)(?:：|:|\s)*(?:\d{2,6}[~-至]?(?:\d{2,6})?\s*(?:元|萬元|月|年薪)?)')
+            has_salary_info = bool(salary_pattern.search(user_message))
+            
+            # 檢查是否有面試地點或工作地點
+            location_pattern = re.compile(r'(?:面試地(?:點|址)|工作地(?:點|址)|地(?:點|址)|公司地(?:點|址))[:：]?\s*(?:[\u4e00-\u9fff]+(?:市|縣|區)[\u4e00-\u9fff0-9]+(?:路|街|道)[\u4e00-\u9fff0-9號]+)')
+            has_location = bool(location_pattern.search(user_message))
+            
+            # 檢查是否有明確的工作/面試時間
+            time_pattern = re.compile(r'(?:工作時間|上班時間|出勤時間|面試時間)[:：]?\s*(?:[上下]午|\d{1,2}[.:：]\d{2}[~-至]\d{1,2}[.:：]\d{2}|(?:週|星期)[一二三四五六日])')
+            has_time_info = bool(time_pattern.search(user_message))
+            
+            # 檢查是否有可疑要求
+            suspicious_requests = ["預付", "先付", "支付費用", "繳納保證金", "繳交", "繳費", "保證金", "訂金", "先轉帳", "先匯款", "面試費", "報名費", "資料處理費", "審核費"]
+            has_suspicious_requests = any(request in user_message for request in suspicious_requests)
+            
+            # 檢查是否包含高薪誘餌
+            bait_pattern = re.compile(r'(?:高薪|高額獎金|獎金無上限|輕鬆賺|輕鬆(?:\d{1,2})萬|(?:\d{1,2})萬起)')
+            has_salary_bait = bool(bait_pattern.search(user_message))
+            
+            # 檢查是否為可疑的兼職類型
+            suspicious_part_time_jobs = [
+                "網路兼職", "打字兼職", "刷單", "購物助理", "網購助理", "日結", "日領", "小時工", 
+                "網賺", "網絡賺錢", "在家工作", "零投入", "零門檻", "兼職賺錢", "輕鬆兼職", 
+                "賺外快", "代練", "代購", "代刷", "網店代運營", "點贊", "點擊", "評論", "包養"
+            ]
+            has_suspicious_part_time = any(job_type in user_message for job_type in suspicious_part_time_jobs)
+            
+            # 檢查是否要求添加個人社交媒體帳號
+            social_media_pattern = re.compile(r'(?:加|添加|聯繫|聯絡|私聊)(?:我的?|群主的?|老師的?)?(?:LINE|微信|WeChat|telegram|TG|IG|私人|私聊)', re.IGNORECASE)
+            requires_social_media = bool(social_media_pattern.search(user_message))
+            
+            # 檢查是否包含典型詐騙招聘關鍵詞組合
+            scam_combinations = [
+                (has_salary_bait and has_suspicious_part_time),  # 高薪+可疑兼職類型
+                (has_salary_bait and requires_social_media and not has_job_bank),  # 高薪+要求加LINE等+非正規平台
+                (has_suspicious_part_time and requires_social_media),  # 可疑兼職+要求加LINE等
+                (has_salary_bait and "無需經驗" in user_message),  # 高薪+無需經驗
+                (has_salary_bait and "無經驗" in user_message),  # 高薪+無經驗
+                (has_salary_bait and "兼職" in user_message and "在家" in user_message)  # 高薪+兼職+在家工作
+            ]
             
             is_likely_scam_job = any(scam_combinations)
             
@@ -1282,7 +1346,7 @@ def detect_fraud_with_chatgpt(user_message, display_name="朋友", user_id=None)
             if has_suspicious_requests:
                 recruitment_safety_score -= 5  # 有可疑要求大幅降低安全分數
             if has_salary_bait and not has_job_description:
-                recruitment_safety_score -= 2  # 只有高薪誘騙但無詳細工作內容
+                recruitment_safety_score -= 2  # 只有高薪誘餌但無詳細工作內容
             
             # 若招聘信息安全得分高，判定為低風險
             if recruitment_safety_score >= 5 and not has_suspicious_requests:
@@ -1984,6 +2048,65 @@ if handler:
                 )
                 return
 
+        # 檢查圖片分析請求 (將這部分移到分析請求檢查前面)
+        if "分析圖片" in cleaned_message or "檢查圖片" in cleaned_message or "請幫我分析圖片" in cleaned_message:
+            image_analysis_prompt = f"📷 {display_name}，請點擊左下角鍵盤後上傳您想分析的圖片！\n\n" \
+                                  f"我可以分析以下類型的圖片：\n" \
+                                  f"🔍 可疑網站或購物平台截圖\n" \
+                                  f"💬 可疑LINE對話或通訊軟體截圖\n" \
+                                  f"📱 可疑簡訊或手機通知截圖\n" \
+                                  f"📧 可疑電子郵件或釣魚郵件截圖\n" \
+                                  f"💰 投資廣告、理財方案或兼職廣告截圖\n" \
+                                  f"🎮 遊戲或APP內交易截圖\n" \
+                                  f"🎯 其他任何可疑內容截圖\n\n" \
+                                  f"⏱️ 請直接上傳圖片，分析需要約10-15秒，請耐心等待！"
+            
+            try:
+                if v3_messaging_api:
+                    from linebot.v3.messaging import TextMessage as V3TextMessage
+                    from linebot.v3.messaging import ReplyMessageRequest
+                    v3_messaging_api.reply_message(
+                        ReplyMessageRequest(
+                            reply_token=reply_token,
+                            messages=[V3TextMessage(text=image_analysis_prompt)]
+                       )
+                    )
+                    logger.info(f"已回覆圖片分析提示訊息: {user_id}")
+                else:
+                    line_bot_api.reply_message(reply_token, TextSendMessage(text=image_analysis_prompt))
+                    logger.info(f"已回覆圖片分析提示訊息 (舊版API): {user_id}")
+                
+                # 保存互動記錄到Firebase
+                firebase_manager.save_user_interaction(
+                    user_id, display_name, text_message, "提供圖片分析說明",
+                    is_fraud_related=False
+                )
+            except LineBotApiError as e:
+                logger.error(f"回覆圖片分析提示訊息時發生錯誤: {e}")
+                if "Invalid reply token" in str(e):
+                    try:
+                        if v3_messaging_api:
+                            from linebot.v3.messaging import TextMessage as V3TextMessage
+                            from linebot.v3.messaging import PushMessageRequest
+                            v3_messaging_api.push_message(
+                                PushMessageRequest(
+                                    to=user_id,
+                                    messages=[V3TextMessage(text=image_analysis_prompt)]
+                               )
+                            )
+                        else:
+                            line_bot_api.push_message(user_id, TextSendMessage(text=image_analysis_prompt))
+                        logger.info(f"圖片分析提示訊息使用push_message成功: {user_id}")
+                        
+                        # 保存互動記錄到Firebase
+                        firebase_manager.save_user_interaction(
+                            user_id, display_name, text_message, "提供圖片分析說明(push)",
+                            is_fraud_related=False
+                        )
+                    except Exception as push_error:
+                        logger.error(f"圖片分析提示訊息使用push_message也失敗: {push_error}")
+            return
+
         # 檢查「我要查詐」請求
         if "我要查詐" in cleaned_message:
             logger.info(f"檢測到我要查詐請求: {cleaned_message}")
@@ -2102,6 +2225,82 @@ if handler:
         
         # 根據判斷結果執行詐騙分析或閒聊模式
         if perform_fraud_analysis:
+            # 移除健康產品分析功能
+            # 檢查是否為產品真偽詢問
+            # product_name = extract_health_product(text_message, bot_trigger_keyword)
+            # 
+            # # 檢查是否包含白名單關鍵詞，即使問句格式不標準也可以直接分析
+            # if not product_name and bot_trigger_keyword in text_message:
+            #     for keyword in BEAUTY_HEALTH_WHITELIST:
+            #         if keyword in text_message:
+            #             logger.info(f"直接從白名單關鍵詞提取產品名: {keyword}")
+            #             product_name = keyword
+            #             break
+            # 
+            # if product_name:
+            #     logger.info(f"檢測到產品真偽詢問: {product_name}")
+            #     
+            #     # 檢查產品名稱是否足夠具體
+            #     if len(product_name) >= 2:
+            #         logger.info(f"執行健康產品分析: {product_name}")
+            #         
+            #         analysis_result = analyze_health_product(product_name, display_name, user_id)
+            #         
+            #         if analysis_result and analysis_result.get("success", False):
+            #             analysis_data = analysis_result.get("result", {})
+            #             flex_message = create_analysis_flex_message(analysis_data, display_name, text_message, user_id)
+            #             
+            #             if flex_message:
+            #                 try:
+            #                     line_bot_api.reply_message(reply_token, flex_message)
+            #                     logger.info(f"健康產品分析回覆成功: {user_id}")
+            #             
+            #                             # 保存互動記錄到Firebase
+            #                             firebase_manager.save_user_interaction(
+            #                                 user_id, display_name, text_message, f"健康產品分析: {product_name}",
+            #                                 is_fraud_related=True,
+            #                                 fraud_type=analysis_data.get("fraud_type"),
+            #                                 risk_level=analysis_data.get("risk_level")
+            #                             )
+            #                         except LineBotApiError as e:
+            #                             logger.error(f"發送健康產品分析Flex訊息時發生錯誤: {e}")
+            #                             if "Invalid reply token" in str(e):
+            #                                 try:
+            #                                     line_bot_api.push_message(user_id, flex_message)
+            #                                     logger.info(f"健康產品分析回覆令牌無效，改用push_message成功: {user_id}")
+            #                                 
+            #                                     # 保存互動記錄到Firebase
+            #                                     firebase_manager.save_user_interaction(
+            #                                         user_id, display_name, text_message, f"健康產品分析: {product_name}",
+            #                                         is_fraud_related=True,
+            #                                         fraud_type=analysis_data.get("fraud_type"),
+            #                                         risk_level=analysis_data.get("risk_level")
+            #                                     )
+            #                                 except Exception as push_error:
+            #                                     logger.error(f"健康產品分析使用push_message也失敗: {push_error}")
+            #                         else:
+            #                             # 如果Flex消息創建失敗，發送基本文本消息
+            #                             text_response = f"🔍 產品分析結果\n\n{analysis_data.get('explanation', '無法解析產品資訊')}\n\n{analysis_data.get('suggestions', '請諮詢專業醫療人員意見')}"
+            #                             
+            #                             try:
+            #                                 line_bot_api.reply_message(reply_token, TextSendMessage(text=text_response))
+            #                             
+            #                                 # 保存互動記錄到Firebase
+            #                                 firebase_manager.save_user_interaction(
+            #                                     user_id, display_name, text_message, f"健康產品分析(文字): {product_name}",
+            #                                     is_fraud_related=True,
+            #                                     fraud_type=analysis_data.get("fraud_type"),
+            #                                     risk_level=analysis_data.get("risk_level")
+            #                                 )
+            #                             except Exception as text_error:
+            #                                 logger.error(f"發送健康產品分析文本回覆失敗: {text_error}")
+            #                         
+            #                         return
+            #                     else:
+            #                         logger.warning(f"健康產品分析失敗: {product_name}")
+            #                         # 如果健康產品分析失敗，會繼續執行一般詐騙分析
+            
+            # 執行詐騙分析
             logger.info(f"進入詐騙分析模式: {cleaned_message}")
             analysis_result = detect_fraud_with_chatgpt(cleaned_message, display_name, user_id)
             
@@ -2613,7 +2812,55 @@ if handler:
                             )
                         except Exception as push_error:
                             logger.error(f"圖片錯誤訊息使用push_message也失敗: {push_error}")
+                
+        except LineBotApiError as e:
+            logger.error(f"處理圖片訊息時發生LINE API錯誤: {e}")
+        except Exception as e:
+            logger.exception(f"處理圖片訊息時發生錯誤: {e}")
+            try:
+                error_message = "處理圖片時發生錯誤，請稍後再試。"
+                
+                try:
+                    if v3_messaging_api:
+                        from linebot.v3.messaging import TextMessage as V3TextMessage
+                        from linebot.v3.messaging import ReplyMessageRequest
+                        v3_messaging_api.reply_message(
+                            ReplyMessageRequest(
+                                reply_token=event.reply_token,
+                                messages=[V3TextMessage(text=error_message)]
+                           )
+                        )
+                    else:
+                        line_bot_api.reply_message(reply_token,
+                            TextSendMessage(text=error_message)
+                        )
+                except LineBotApiError as e:
+                    logger.error(f"使用LINE API回覆最終錯誤訊息時發生錯誤: {e}")
+                    if "Invalid reply token" in str(e):
+                        try:
+                            if v3_messaging_api:
+                                from linebot.v3.messaging import TextMessage as V3TextMessage
+                                from linebot.v3.messaging import PushMessageRequest
+                                
+                                v3_messaging_api.push_message(
+                                    PushMessageRequest(
+                                        to=user_id,
+                                        messages=[V3TextMessage(text=error_message)]
+                                   )
+                                )
+                            else:
+                                line_bot_api.push_message(user_id, TextSendMessage(text=error_message))
+                            logger.info(f"最終錯誤訊息回覆令牌無效，改用push_message成功: {user_id}")
+                        except Exception as push_error:
+                            logger.error(f"最終錯誤訊息使用push_message也失敗: {push_error}")
+            except:
+                pass
 
+if handler:
+    # LINE Bot handler 已初始化，可以處理訊息事件
+    pass
+else:
+    logger.warning("LINE Bot handler 未初始化，無法處理訊息事件")
 
 def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
     """判斷是否應該進行詐騙分析"""
@@ -2622,6 +2869,15 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
     # 訊息太短的情況下不做分析
     if len(message_lower) < 5:
         return False
+    
+    # 移除健康產品分析功能
+    # # 1. 檢查是否為醫美和健康相關白名單關鍵詞的查詢
+    # if bot_trigger_keyword in message:
+    #     # 檢查是否包含醫美健康白名單關鍵詞
+    #     for keyword in BEAUTY_HEALTH_WHITELIST:
+    #         if keyword in message:
+    #             logger.info(f"檢測到醫美健康白名單關鍵詞: {keyword}")
+    #             return True
     
     # 2. 如果使用者明確請求分析訊息，則直接進行詐騙分析
     explicit_analysis_requests = [
@@ -2639,6 +2895,14 @@ def should_perform_fraud_analysis(message: str, user_id: str = None) -> bool:
     if url_pattern.search(message):
         logger.info("檢測到URL，觸發詐騙分析")
         return True
+    
+    # 移除健康產品分析功能
+    # # 4. 檢查是否為健康產品或醫美療程的真偽詢問
+    # if bot_trigger_keyword in message:
+    #     product_name = extract_health_product(message, bot_trigger_keyword)
+    #     if product_name:
+    #         logger.info(f"檢測到健康產品/醫美療程詢問: {product_name}")
+    #         return True
     
     # 保留原有的簡單檢查，作為備用
     product_query_patterns = [
@@ -3431,6 +3695,45 @@ def analyze_credit_card_3d_verification(message, display_name="朋友"):
             "analysis_type": "信用卡3D驗證分析"
         }
     }
+
+def is_credit_card_3d_verification(message):
+    """
+    檢測訊息是否為信用卡3D驗證簡訊
+    
+    Args:
+        message: 訊息內容
+        
+    Returns:
+        bool: 是否為3D驗證簡訊
+    """
+    # 3D驗證簡訊的特徵關鍵詞組合
+    verification_indicators = [
+        ('末四碼', '驗證'),
+        ('末四碼', '認證'),
+        ('信用卡', '驗證碼'),
+        ('網路交易', '驗證'),
+        ('刷卡', '驗證碼'),
+        ('交易', '認證碼'),
+        ('消費', '驗證'),
+        ('3D', '驗證'),
+        ('OTP', '驗證')
+    ]
+    
+    # 檢查是否包含金額格式
+    amount_patterns = [
+        r'([A-Z]{3})\$?\d{1,3}(?:,\d{3})*',  # USD$1,200
+        r'NT\$?\d{1,3}(?:,\d{3})*',  # NT$1200
+        r'新台幣\s*\d{1,3}(?:,\d{3})*',  # 新台幣1200
+        r'\d{1,3}(?:,\d{3})*\s*元',  # 1200元
+    ]
+    
+    has_amount = any(re.search(pattern, message) for pattern in amount_patterns)
+    has_verification_keywords = any(
+        all(keyword in message for keyword in keywords) 
+        for keywords in verification_indicators
+    )
+    
+    return has_amount and has_verification_keywords
 
 def analyze_email_fraud(email_content, sender_email=None, display_name="朋友"):
     """
