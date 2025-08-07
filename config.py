@@ -57,6 +57,9 @@ SHORT_URL_DOMAINS = [
     # LINE 官方短網址服務
     'lin.ee',
     
+    # 中華電信官方短網址服務
+    'cht.tw', 'chts.tw',
+    
     # 電商平台短網址服務
     'coupa.ng',  # 酷澎官方短網址服務
     
