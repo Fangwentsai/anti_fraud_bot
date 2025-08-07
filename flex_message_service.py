@@ -367,13 +367,13 @@ class FlexMessageService:
                 spacing='md',
                 contents=[
                     safe_text_component(
-                        "🚨 網域偽裝攻擊警告",
+                        "🚨 高風險警告",
                         weight='bold',
                         color='#ffffff',
                         size='xl'
                     ),
                     safe_text_component(
-                        "檢測到可疑網域",
+                        "網域偽裝攻擊檢測",
                         color='#ffffff',
                         size='md'
                     )

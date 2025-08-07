@@ -66,10 +66,74 @@ def detect_domain_spoofing(url_or_message, safe_domains):
             if domain in normalized_safe_domains or domain_without_www in normalized_safe_domains:
                 continue  # 這是正常的白名單網域，跳過
             
-            # 快速檢測：特別檢查-tw和-taiwan後綴域名（高風險）
+            # 🚨 新增：優先檢查基礎域名相似度（如 cht.tw 與 cht.com.tw）
             domain_parts = domain_without_www.split('.')
             base_domain = domain_parts[0]
             
+            # 檢查是否有相同基礎域名的白名單網域
+            similar_domains = []
+            legitimate_variant_found = False
+            
+            for safe_domain in safe_domains.keys():
+                safe_domain_lower = safe_domain.lower()
+                safe_parts = safe_domain_lower.split('.')
+                safe_base = safe_parts[0]
+                
+                # 處理 www 前綴：如果第一部分是 www，取第二部分作為基礎網域
+                if safe_base == 'www' and len(safe_parts) > 1:
+                    safe_base = safe_parts[1]
+                
+                # 如果基礎域名相同，檢查是否為合法的變體
+                if base_domain == safe_base:
+                    # 檢查是否為合法的域名變體（如 cht.tw 是 cht.com.tw 的變體）
+                    if _is_legitimate_domain_variant(domain_without_www, safe_domain_lower):
+                        legitimate_variant_found = True
+                        continue  # 這是合法的域名變體，跳過
+                    else:
+                        # 基礎域名相同但不是合法變體，記錄為相似域名
+                        site_description = safe_domains.get(safe_domain, "知名網站")
+                        similar_domains.append({
+                            'domain': safe_domain,
+                            'description': site_description,
+                            'type': '基礎域名相同'
+                        })
+            
+            # 如果找到合法變體，跳過檢測
+            if legitimate_variant_found:
+                continue
+            
+            # 如果找到多個相似域名，提供多重警告
+            if len(similar_domains) > 0:
+                if len(similar_domains) == 1:
+                    # 單一相似域名
+                    similar_domain = similar_domains[0]
+                    return {
+                        'is_spoofed': True,
+                        'original_domain': similar_domain['domain'],
+                        'spoofed_domain': domain,
+                        'spoofing_type': "基礎域名變形攻擊",
+                        'risk_explanation': f"⚠️ 高風險警告！\n\n這個網址 {domain} 疑似模仿正牌的 {similar_domain['domain']} ({similar_domain['description']})。\n\n詐騙集團使用相同的基礎域名但不同的後綴來製作假網站。\n\n🚨 千萬不要在這個網站輸入任何個人資料、密碼或信用卡號碼！"
+                    }
+                else:
+                    # 多重相似域名 - 限制最多顯示3個
+                    domain_list = []
+                    # 只取前3個相似域名
+                    for similar in similar_domains[:3]:
+                        domain_list.append(f"{similar['domain']}({similar['description']})")
+                    
+                    # 如果還有更多相似域名，添加提示
+                    if len(similar_domains) > 3:
+                        domain_list.append(f"...等共{len(similar_domains)}個相似網域")
+                    
+                    return {
+                        'is_spoofed': True,
+                        'original_domain': 'multiple',
+                        'spoofed_domain': domain,
+                        'spoofing_type': "多重基礎域名變形攻擊",
+                        'risk_explanation': f"⚠️ 高風險警告！\n\n這個網址 {domain} 可能模仿多個正牌網域：\n\n" + "\n".join([f"• {d}" for d in domain_list]) + f"\n\n這是個可疑的網域，詐騙集團常用相似的網域名稱來混淆視聽，製作假網站騙取個人資料或信用卡資訊。\n\n🚨 千萬不要在這個網站輸入任何個人資料、密碼或信用卡號碼！"
+                    }
+            
+            # 快速檢測：特別檢查-tw和-taiwan後綴域名（高風險）
             for safe_domain in safe_domains.keys():
                 safe_domain_lower = safe_domain.lower()
                 safe_parts = safe_domain_lower.split('.')
@@ -103,6 +167,8 @@ def detect_domain_spoofing(url_or_message, safe_domains):
                     }
             
             # 檢查每個白名單網域是否有相似性
+            similar_domains_advanced = []
+            
             for safe_domain in safe_domains.keys():
                 safe_domain_lower = safe_domain.lower()
                 safe_domain_without_www = safe_domain_lower[4:] if safe_domain_lower.startswith('www.') else safe_domain_lower
@@ -145,12 +211,41 @@ def detect_domain_spoofing(url_or_message, safe_domains):
                 
                 if spoofing_detected:
                     site_description = safe_domains.get(safe_domain, "知名網站")
+                    similar_domains_advanced.append({
+                        'domain': safe_domain,
+                        'description': site_description,
+                        'type': spoofing_type
+                    })
+            
+            # 如果找到多個相似域名，提供多重警告
+            if len(similar_domains_advanced) > 0:
+                if len(similar_domains_advanced) == 1:
+                    # 單一相似域名
+                    similar_domain = similar_domains_advanced[0]
                     return {
                         'is_spoofed': True,
-                        'original_domain': safe_domain,
+                        'original_domain': similar_domain['domain'],
                         'spoofed_domain': domain,
-                        'spoofing_type': spoofing_type,
-                        'risk_explanation': f"⚠️ 高風險警告！\n\n這個網址 {domain} 疑似模仿正牌的 {safe_domain} ({site_description})。\n\n詐騙集團常用這種手法製作假網站來騙取個人資料或信用卡資訊。\n\n🚨 千萬不要在這個網站輸入任何個人資料、密碼或信用卡號碼！"
+                        'spoofing_type': similar_domain['type'],
+                        'risk_explanation': f"⚠️ 高風險警告！\n\n這個網址 {domain} 疑似模仿正牌的 {similar_domain['domain']} ({similar_domain['description']})。\n\n詐騙集團常用這種手法製作假網站來騙取個人資料或信用卡資訊。\n\n🚨 千萬不要在這個網站輸入任何個人資料、密碼或信用卡號碼！"
+                    }
+                else:
+                    # 多重相似域名 - 限制最多顯示3個
+                    domain_list = []
+                    # 只取前3個相似域名
+                    for similar in similar_domains_advanced[:3]:
+                        domain_list.append(f"{similar['domain']}({similar['description']})")
+                    
+                    # 如果還有更多相似域名，添加提示
+                    if len(similar_domains_advanced) > 3:
+                        domain_list.append(f"...等共{len(similar_domains_advanced)}個相似網域")
+                    
+                    return {
+                        'is_spoofed': True,
+                        'original_domain': 'multiple',
+                        'spoofed_domain': domain,
+                        'spoofing_type': "多重變形攻擊",
+                        'risk_explanation': f"⚠️ 高風險警告！\n\n這個網址 {domain} 可能模仿多個正牌網域：\n\n" + "\n".join([f"• {d}" for d in domain_list]) + f"\n\n這是個可疑的網域，詐騙集團常用相似的網域名稱來混淆視聽，製作假網站騙取個人資料或信用卡資訊。\n\n🚨 千萬不要在這個網站輸入任何個人資料、密碼或信用卡號碼！"
                     }
         
         except Exception as e:
@@ -605,3 +700,56 @@ def _detect_government_domain_spoofing(domain):
             }
     
     return {'is_spoofed': False} 
+
+
+def _is_legitimate_domain_variant(suspicious_domain, safe_domain):
+    """
+    檢查是否為合法的域名變體
+    
+    Args:
+        suspicious_domain: 可疑域名（如 cht.tw）
+        safe_domain: 安全域名（如 cht.com.tw）
+        
+    Returns:
+        bool: 是否為合法變體
+    """
+    # 提取基礎域名
+    suspicious_parts = suspicious_domain.split('.')
+    safe_parts = safe_domain.split('.')
+    
+    suspicious_base = suspicious_parts[0]
+    safe_base = safe_parts[0]
+    
+    # 如果基礎域名不同，不是變體
+    if suspicious_base != safe_base:
+        return False
+    
+    # 檢查是否為合法的短域名變體
+    # 例如：cht.tw 是 cht.com.tw 的合法變體
+    if len(suspicious_parts) == 2 and len(safe_parts) == 3:
+        # 檢查是否為 .tw 對 .com.tw 的變體
+        if (suspicious_parts[1] == 'tw' and 
+            safe_parts[1] == 'com' and 
+            safe_parts[2] == 'tw'):
+            return True
+    
+    # 檢查是否為其他常見的合法變體
+    # 例如：example.com 和 example.net 都是同一機構的合法域名
+    legitimate_variants = [
+        # 台灣域名變體
+        ('.tw', '.com.tw'),
+        ('.tw', '.org.tw'),
+        ('.tw', '.net.tw'),
+        # 國際域名變體
+        ('.com', '.net'),
+        ('.com', '.org'),
+        ('.net', '.com'),
+        ('.org', '.com'),
+    ]
+    
+    for variant in legitimate_variants:
+        if (suspicious_domain.endswith(variant[0]) and 
+            safe_domain.endswith(variant[1])):
+            return True
+    
+    return False
