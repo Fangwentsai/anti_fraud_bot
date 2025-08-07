@@ -373,7 +373,7 @@ class FlexMessageService:
                         size='xl'
                     ),
                     safe_text_component(
-                        "網域偽裝攻擊檢測",
+                        "網域偽裝攻擊",
                         color='#ffffff',
                         size='md'
                     )

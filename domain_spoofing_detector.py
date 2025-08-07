@@ -271,6 +271,10 @@ def _is_legitimate_variant(domain, safe_domain, all_safe_domains):
         ('yahoo.com', 'yahoo.com.tw'),
         ('microsoft.com', 'office.com'),
         ('facebook.com', 'instagram.com'),  # 同公司但不同服務
+        # 中華電信官方域名對
+        ('cht.com.tw', 'cht.tw'),
+        ('cht.com.tw', 'chts.tw'),
+        ('cht.tw', 'chts.tw'),
     ]
     
     # 檢查是否為已知的合法對
@@ -540,6 +544,10 @@ def _is_obvious_domain_spoofing(suspicious_base, safe_base):
     """檢查明顯的網域名稱變形攻擊"""
     # 如果完全相同，不是變形攻擊
     if suspicious_base == safe_base:
+        return False
+    
+    # 特殊處理：中華電信官方域名變體
+    if (suspicious_base == 'chts' and safe_base == 'cht') or (suspicious_base == 'cht' and safe_base == 'chts'):
         return False
     
     # 檢查是否包含原始網域名稱作為子字串
